@@ -14,6 +14,7 @@ import com.newoether.agora.api.openai.DeepSeekProvider
 import com.newoether.agora.api.openai.GroqProvider
 import com.newoether.agora.api.openai.OpenAiProvider
 import com.newoether.agora.api.openai.OpenCodeGoProvider
+import com.newoether.agora.api.openai.OpenCodeZenProvider
 import com.newoether.agora.api.openai.OpenRouterProvider
 import com.newoether.agora.api.openai.QwenProvider
 import com.newoether.agora.data.CustomEndpointProtocol
@@ -98,6 +99,9 @@ internal fun CustomEndpointResolution.matches(
         this.configuredBaseUrl.trim().trimEnd('/') == configuredBaseUrl.trim().trimEnd('/') &&
         effectiveBaseUrl.isNotBlank()
 
+/** Built-in providers that serve an anonymous lane and therefore need no API key at all. */
+internal val ANONYMOUS_PROVIDERS: Set<String> = setOf(Constants.PROVIDER_OPENCODE_ZEN)
+
 /** Pure policy boundary used by both production code and JVM tests. Missing providers fail shut. */
 internal fun providerConfigurationIsValid(
     providerName: String,
@@ -111,6 +115,7 @@ internal fun providerConfigurationIsValid(
     !registered -> false
     providerName == DebugProvider.PROVIDER_NAME -> debugProviderEnabled
     providerName == Constants.PROVIDER_LOCAL -> true
+    providerName in ANONYMOUS_PROVIDERS -> true
     !builtIn || providerName == Constants.PROVIDER_OLLAMA -> !effectiveBaseUrl.isNullOrBlank()
     else -> activeKey.isNotBlank()
 }
@@ -143,6 +148,7 @@ class ProviderRegistry(
         Constants.PROVIDER_OLLAMA to OllamaProvider(),
         Constants.PROVIDER_OPEN_ROUTER to OpenRouterProvider(),
         Constants.PROVIDER_OPENCODE_GO to OpenCodeGoProvider(appVersion),
+        Constants.PROVIDER_OPENCODE_ZEN to OpenCodeZenProvider(appVersion),
         Constants.PROVIDER_LOCAL to localProvider
     )
 

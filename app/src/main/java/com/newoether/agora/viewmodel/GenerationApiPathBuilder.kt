@@ -125,8 +125,12 @@ internal class GenerationApiPathBuilder(
                     promptCacheKey = request.conversationId.takeIf {
                         config.providerName == Constants.PROVIDER_OPENAI
                     },
+                    // Zen's free lane refuses any session id that is not in the OpenCode CLI
+                    // shape, so the conversation id is the seed the provider hashes, not the
+                    // id it forwards.
                     sessionId = request.conversationId.takeIf {
-                        config.providerName == Constants.PROVIDER_OPENCODE_GO
+                        config.providerName == Constants.PROVIDER_OPENCODE_GO ||
+                            config.providerName == Constants.PROVIDER_OPENCODE_ZEN
                     },
                     requestResolver = config.requestResolver,
                 ),

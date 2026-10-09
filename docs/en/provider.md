@@ -4,7 +4,7 @@ Open **Settings → Providers**, then select a provider to edit its endpoint, pr
 
 ## Built-in Providers
 
-Agora includes configurations for OpenAI, Anthropic, Google Gemini, DeepSeek, DashScope/Qwen, OpenRouter, OpenCode Go, Groq, Ollama, and Local models. Provider catalogs and endpoint behavior can change independently of the app.
+Agora includes configurations for OpenAI, Anthropic, Google Gemini, DeepSeek, DashScope/Qwen, OpenRouter, OpenCode Go, OpenCode Zen, Groq, Ollama, and Local models. Provider catalogs and endpoint behavior can change independently of the app.
 
 For a remote provider, the Base URL field shows its effective built-in default when no override is stored. Providers without a built-in endpoint may show a placeholder instead. A blank override resolves back to the provider default where one exists. Base URL edits save automatically after a 500 ms pause; there is no separate Save action.
 
@@ -13,6 +13,12 @@ For a remote provider, the Base URL field shows its effective built-in default w
 A custom endpoint can use an OpenAI-compatible, Google, or Anthropic protocol. Configure its Base URL and protocol to match the server. Model synchronization follows the selected protocol, and models can still be added manually when discovery is unavailable.
 
 **Responses API** switches from Chat Completions to the provider's `/responses` endpoint. It is available for the built-in OpenAI provider and custom providers using the OpenAI-compatible protocol.
+
+## OpenCode Zen (anonymous)
+
+**OpenCode Zen** reaches OpenCode's free model lane at `https://opencode.ai/zen/v1` and needs no account: it is ready to use as soon as it is selected, with no API key. Only the free models (ids ending in `-free`) work anonymously; a paid id answers `401`. Storing a real Zen API key for this provider keeps it active, which also unlocks the paid models on the same endpoint.
+
+Agora presents the request as an OpenCode CLI session, which the lane requires: a canonical session id in the correlation headers and an agent-shaped streaming body. The tool names that gate adds exist only to satisfy that check — they are never executed, and a real Agora tool is always offered first when tools are enabled.
 
 ## API Keys
 

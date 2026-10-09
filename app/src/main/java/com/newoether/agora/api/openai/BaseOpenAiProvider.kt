@@ -63,6 +63,31 @@ abstract class BaseOpenAiProvider : LlmProvider {
     protected open fun forwardsAssistantReasoningContent(config: ProviderConfig): Boolean = false
 
     /**
+     * Whether a tool call the model emitted for [toolName] may be handed to Agora's executor.
+     *
+     * The default accepts everything. A provider that has to declare tool names only to satisfy a
+     * transport-level requirement overrides this so those names are dropped here instead of
+     * reaching an executor that has no such tool.
+     */
+    protected open fun acceptsToolCall(toolName: String): Boolean = true
+
+    /**
+     * Headers for model discovery. A provider whose catalog is readable with a credential other
+     * than the user's key (an anonymous lane, for instance) overrides this.
+     *
+     * Open rather than protected: `fetchModels` is part of the public [LlmProvider] contract, and a
+     * provider outside this package (or a test double) cannot override a protected member.
+     */
+    open fun modelFetchHeaders(apiKey: String): Map<String, String> =
+        openAiAuthHeaders(resolveApiKey(apiKey))
+
+    /**
+     * The credential this provider actually sends. The default is the user's key verbatim; a
+     * provider with an anonymous lane substitutes its public credential when no key is configured.
+     */
+    open fun resolveApiKey(apiKey: String): String = apiKey
+
+    /**
      * Parse one OpenAI-compatible delta into native thought and raw answer events.
      * Provider-neutral inline marker recovery is owned by ProviderStreamNormalizer.
      */
@@ -163,6 +188,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
                         presencePenalty = config.presencePenalty,
                         promptCacheKey = config.promptCacheKey,
                     )
+                    // customizeRequest owns the whole request shape, so a provider that must
+                    // rewrite tools or add fields it alone knows about is applied once, here.
                     request = customizeRequest(request, config)
                     request.requireValidWireFormat(name)
                     json.encodeToString(OpenAiChatRequest.serializer(), request)
@@ -179,7 +206,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
             }
 
             val headers = mutableMapOf("Content-Type" to "application/json")
-            if (config.apiKey.isNotBlank()) headers["Authorization"] = "Bearer ${config.apiKey}"
+            val apiKey = resolveApiKey(config.apiKey)
+            if (apiKey.isNotBlank()) headers["Authorization"] = "Bearer $apiKey"
             for ((key, value) in getExtraHeaders(config)) headers[key] = value
 
             val maxAttempts = ProviderRetryPolicy.MAX_ATTEMPTS
@@ -443,8 +471,11 @@ abstract class BaseOpenAiProvider : LlmProvider {
             if (pendingToolCalls.isEmpty()) return
             val pending = pendingToolCalls.values.toList()
             pendingToolCalls.clear()
+            // Transport-only tool names never reach the executor, wherever the stream ended.
+            val executable = pending.filter { acceptsToolCall(it.name) }
+            if (executable.isEmpty()) return
             val seenIds = mutableSetOf<String>()
-            val calls = pending.map { candidate ->
+            val calls = executable.map { candidate ->
                 val callId = candidate.id.ifBlank { candidate.streamKey }
                 val arguments = candidate.args.toString().ifBlank { "{}" }
                 val argumentsAreObject = runCatching {
@@ -558,6 +589,13 @@ abstract class BaseOpenAiProvider : LlmProvider {
                         val pending = pendingToolCalls.getOrPut(index) { PendingToolCall() }
                         tc.id?.takeIf(String::isNotBlank)?.let { pending.id = it }
                         tc.function?.name?.takeIf(String::isNotBlank)?.let { pending.name = it }
+                        // A provider can declare tool names purely to satisfy its transport and
+                        // must never see them executed. The name may arrive after the id, so the
+                        // check runs once it is known and drops the whole call.
+                        if (pending.name.isNotBlank() && !acceptsToolCall(pending.name)) {
+                            pendingToolCalls.remove(index)
+                            return@forEach
+                        }
                         tc.function?.arguments?.let {
                             // Snapshot-tolerant: a relay that resends the whole argument string in
                             // every delta must not produce `{"a":1}{"a":1}`, and an empty
@@ -720,7 +758,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
             "models",
             retryMissingV1BaseUrl,
         )
-        val headers = openAiAuthHeaders(apiKey)
+        val headers = modelFetchHeaders(apiKey)
         var lastFailure: Exception? = null
 
         for ((index, endpointUrl) in endpointUrls.withIndex()) {

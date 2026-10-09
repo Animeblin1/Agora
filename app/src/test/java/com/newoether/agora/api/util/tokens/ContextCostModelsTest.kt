@@ -43,6 +43,11 @@ class ContextCostModelsTest {
             ContextCostFamily.GENERIC,
             familyOf(Constants.PROVIDER_OPENCODE_GO, "opencode/sonic"),
         )
+        // Zen serves many vendors behind one lane, so it carries no family of its own either.
+        assertEquals(
+            ContextCostFamily.GENERIC,
+            familyOf(Constants.PROVIDER_OPENCODE_ZEN, "mimo-v2.6-flash-free"),
+        )
         assertEquals(ContextCostFamily.GENERIC, familyOf(Constants.PROVIDER_UNKNOWN, "mystery-v2"))
     }
 

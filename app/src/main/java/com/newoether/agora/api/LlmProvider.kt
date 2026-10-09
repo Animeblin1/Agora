@@ -188,6 +188,8 @@ data class OpenAiChatRequest(
     val stream: Boolean = true,
     @SerialName("stream_options") val streamOptions: OpenAiStreamOptions? = null,
     val tools: List<ToolDefinition>? = null,
+    /** `auto` / `none` / a named tool. Null leaves the provider's own default in place. */
+    @SerialName("tool_choice") val toolChoice: String? = null,
     @SerialName("reasoning_effort") val reasoningEffort: String? = null,
     @SerialName("thinking") val thinking: OpenAiThinking? = null,
     @SerialName("enable_thinking") val enableThinking: Boolean? = null,

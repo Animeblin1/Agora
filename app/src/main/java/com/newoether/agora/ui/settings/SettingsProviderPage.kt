@@ -66,11 +66,13 @@ fun SettingsProviderPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                     )
                 }
             } else {
-                val builtInNames = listOf(Constants.PROVIDER_GOOGLE, Constants.PROVIDER_OPENAI, Constants.PROVIDER_ANTHROPIC, Constants.PROVIDER_DEEPSEEK, Constants.PROVIDER_QWEN, Constants.PROVIDER_GROQ, Constants.PROVIDER_OLLAMA, Constants.PROVIDER_OPEN_ROUTER, Constants.PROVIDER_OPENCODE_GO)
+                val builtInNames = listOf(Constants.PROVIDER_GOOGLE, Constants.PROVIDER_OPENAI, Constants.PROVIDER_ANTHROPIC, Constants.PROVIDER_DEEPSEEK, Constants.PROVIDER_QWEN, Constants.PROVIDER_GROQ, Constants.PROVIDER_OLLAMA, Constants.PROVIDER_OPEN_ROUTER, Constants.PROVIDER_OPENCODE_GO, Constants.PROVIDER_OPENCODE_ZEN)
 
                 @Composable
                 fun isConfigured(name: String): Boolean = when (name) {
                     Constants.PROVIDER_LOCAL -> localChatModels.isNotEmpty()
+                    // An anonymous lane is ready the moment it is registered: it needs no key.
+                    in com.newoether.agora.viewmodel.ANONYMOUS_PROVIDERS -> true
                     else -> {
                         val isCustom = customProviders.any { it.name == name }
                         if (isCustom || name == Constants.PROVIDER_OLLAMA) !providerBaseUrls[name].isNullOrBlank()
@@ -93,6 +95,12 @@ fun SettingsProviderPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                             Text(
                                                 when {
                                                     name == Constants.PROVIDER_OLLAMA -> providerBaseUrls[name]?.takeIf { it.isNotBlank() } ?: stringResource(R.string.not_configured)
+                                                    name in com.newoether.agora.viewmodel.ANONYMOUS_PROVIDERS ->
+                                                        if (apiKeys.any { it.provider == name }) {
+                                                            stringResource(R.string.provider_keys_summary, apiKeys.count { it.provider == name })
+                                                        } else {
+                                                            stringResource(R.string.provider_anonymous_summary)
+                                                        }
                                                     isConfigured(name) -> stringResource(R.string.provider_keys_summary, apiKeys.count { it.provider == name })
                                                     else -> stringResource(R.string.not_configured)
                                                 }

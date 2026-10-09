@@ -45,6 +45,32 @@ class ProviderFailClosedPolicyTest {
     }
 
     @Test
+    fun anAnonymousLaneIsConfiguredWithoutAnyApiKey() {
+        ANONYMOUS_PROVIDERS.forEach { providerName ->
+            assertTrue(
+                providerName,
+                providerConfigurationIsValid(
+                    providerName = providerName,
+                    activeKey = "",
+                    registered = true,
+                    builtIn = true,
+                    effectiveBaseUrl = null,
+                ),
+            )
+        }
+        // Registration still gates it: an unknown name never becomes valid by being anonymous.
+        assertFalse(
+            providerConfigurationIsValid(
+                providerName = Constants.PROVIDER_OPENCODE_ZEN,
+                activeKey = "",
+                registered = false,
+                builtIn = true,
+                effectiveBaseUrl = null,
+            )
+        )
+    }
+
+    @Test
     fun debugProviderRequiresRegistrationAndItsDeveloperGate() {
         assertFalse(
             providerConfigurationIsValid(

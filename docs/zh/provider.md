@@ -4,7 +4,7 @@
 
 ## 内置提供商
 
-Agora 包含 OpenAI、Anthropic、Google Gemini、DeepSeek、DashScope/通义千问、OpenRouter、OpenCode Go、Groq、Ollama 和本地模型。提供商的模型目录和端点行为可能独立变化。
+Agora 包含 OpenAI、Anthropic、Google Gemini、DeepSeek、DashScope/通义千问、OpenRouter、OpenCode Go、OpenCode Zen、Groq、Ollama 和本地模型。提供商的模型目录和端点行为可能独立变化。
 
 对于远程提供商，未保存覆盖值时，Base URL 输入框会显示当前生效的内置默认值。没有内置端点的提供商可能只显示占位提示；留空时会在存在默认值的情况下回到提供商默认地址。Base URL 编辑会在停止输入 500 ms 后自动保存，没有单独的保存操作。
 
@@ -13,6 +13,12 @@ Agora 包含 OpenAI、Anthropic、Google Gemini、DeepSeek、DashScope/通义千
 自定义端点可选择 OpenAI 兼容、Google 或 Anthropic 协议。请配置与服务器匹配的 Base URL 和协议。模型同步按所选协议执行；无法发现时仍可手动添加模型。
 
 **Responses API**会从 Chat Completions 切换到提供商的 `/responses` 端点。它仅用于内置 OpenAI 提供商，以及使用 OpenAI 兼容协议的自定义提供商。
+
+## OpenCode Zen（匿名）
+
+**OpenCode Zen** 连接 OpenCode 的免费模型通道 `https://opencode.ai/zen/v1`，无需注册账号：选中后即可直接使用，不需要 API Key。只有免费模型（id 以 `-free` 结尾）可匿名使用，付费模型会返回 `401`。若为该提供商保存了真实的 Zen API Key，则会优先使用它，同时解锁同一端点上的付费模型。
+
+Agora 会把请求伪装成 OpenCode CLI 会话——这是该通道的硬性要求：关联请求头中必须带有规范的会话 id，且请求体必须是流式且带工具声明。为满足该校验而加入的工具名仅用于通过检查，永远不会被执行；启用工具时，真实的 Agora 工具始终排在前面。
 
 ## API Key
 

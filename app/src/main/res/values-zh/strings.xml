@@ -358,6 +358,7 @@
     <string name="provider_no_local_models_desc">导入 GGUF 模型以开始使用</string>
     <string name="provider_keys_summary">%1$d 个 API 密钥</string>
     <string name="provider_connection">连接</string>
+    <string name="provider_anonymous_summary">匿名 — 无需 API 密钥</string>
     <string name="local_models_title">本地模型</string>
     <string name="local_model_idle_retention">模型空闲保留时间</string>
     <string name="local_model_idle_retention_desc">本地模型空闲后在卸载前继续驻留内存的时长</string>
