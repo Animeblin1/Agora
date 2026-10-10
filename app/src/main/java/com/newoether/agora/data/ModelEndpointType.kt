@@ -31,8 +31,35 @@ enum class ModelEndpointType(val wireValue: String) {
     companion object {
         val selectable: List<ModelEndpointType> = entries.toList()
 
-        fun fromWireValue(value: String?): ModelEndpointType =
-            entries.firstOrNull { it.wireValue == value?.trim()?.lowercase() } ?: COMPLETIONS
+        /**
+         * Reads a stored value, including the `custom:<path>` spelling.
+         *
+         * A custom endpoint is only useful together with the path it lives at, so the two are
+         * stored as one value rather than in a second map that could drift out of step with the
+         * type it belongs to.
+         */
+        fun fromWireValue(value: String?): ModelEndpointType {
+            val raw = value?.trim()?.lowercase().orEmpty()
+            if (raw.startsWith(CUSTOM_PREFIX)) return CUSTOM
+            return entries.firstOrNull { it.wireValue == raw } ?: COMPLETIONS
+        }
+
+        /** The stored value for a type, with the path folded in for [CUSTOM]. */
+        fun toWireValue(type: ModelEndpointType, customPath: String? = null): String =
+            if (type == CUSTOM) {
+                CUSTOM_PREFIX + customPath?.trim()?.trimStart('/').orEmpty()
+            } else {
+                type.wireValue
+            }
+
+        /** The path carried by a stored `custom:` value. */
+        fun customPathOf(value: String?): String {
+            val raw = value?.trim().orEmpty()
+            if (!raw.startsWith(CUSTOM_PREFIX, ignoreCase = true)) return ""
+            return raw.substring(CUSTOM_PREFIX.length).trim().trimStart('/')
+        }
+
+        private const val CUSTOM_PREFIX = "custom:"
     }
 }
 

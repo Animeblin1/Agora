@@ -362,8 +362,22 @@ internal class SettingsModelPreferenceStore(
         type: ModelEndpointType?,
         questions: String? = null,
     ) {
+        updateModelEndpoint(modelId, type?.wireValue, questions)
+    }
+
+    /**
+     * Stores the endpoint as the raw value that already carries its custom path.
+     *
+     * A `custom:` choice is meaningless without the path it points at, and the path lives inside
+     * the stored string — passing the enum back would silently drop it on the next restart.
+     */
+    suspend fun updateModelEndpoint(
+        modelId: String,
+        wireValue: String?,
+        questions: String? = null,
+    ) {
         dataStore.edit { prefs ->
-            prefs.setModelPreference(MODEL_ENDPOINT_TYPES_JSON, modelId, type?.wireValue)
+            prefs.setModelPreference(MODEL_ENDPOINT_TYPES_JSON, modelId, wireValue?.trim())
             prefs.setModelPreference(MODEL_DECISION_QUESTIONS_JSON, modelId, questions?.trim())
         }
     }

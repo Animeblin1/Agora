@@ -56,7 +56,7 @@ import com.newoether.agora.util.noOpBringIntoView
 import com.newoether.agora.viewmodel.ChatViewModel
 import com.newoether.agora.ui.components.optionClickable
 import com.newoether.agora.data.repository.endpointQuestionsToPersist
-import com.newoether.agora.data.repository.setModelEndpoint
+import com.newoether.agora.data.repository.setModelEndpointWire
 
 // Shape constants matching SettingsGroup's per-position rounding (top / bottom corners by place).
 private val FullRounded   = RoundedCornerShape(24.dp)
@@ -710,7 +710,7 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
         var endpointType by remember(model) {
             mutableStateOf(ModelEndpointType.fromWireValue(modelEndpointTypes[model]))
         }
-        var endpointPath by remember(model) { mutableStateOf("") }
+        var endpointPath by remember(model) { mutableStateOf(ModelEndpointType.customPathOf(modelEndpointTypes[model])) }
         var decisionQuestions by remember(model) { mutableStateOf(modelDecisionQuestions[model].orEmpty()) }
 
         AlertDialog(
@@ -755,8 +755,8 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                         ),
                         showProviderName = showProviderName,
                     )
-                    val persistedQuestions = endpointQuestionsToPersist(endpointType, decisionQuestions)
-                    setModelEndpoint(viewModel.settings, model, endpointType, persistedQuestions)
+                    val persisted = endpointQuestionsToPersist(endpointType, decisionQuestions)
+                    setModelEndpointWire(viewModel.settings, model, ModelEndpointType.toWireValue(endpointType, endpointPath), persisted)
                     showModelAliasDialog = null
                 }) { Text(stringResource(R.string.provider_save)) }
             },

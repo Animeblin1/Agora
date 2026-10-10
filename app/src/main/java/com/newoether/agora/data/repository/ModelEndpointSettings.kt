@@ -23,6 +23,21 @@ fun setModelEndpoint(
     settings.scope.launch { settings.settingsManager.updateModelEndpoint(model, type, questions) }
 }
 
+/**
+ * Applies an endpoint choice given as its stored wire value.
+ *
+ * The wire value is what survives a restart, so it — not the enum — is what a caller that already
+ * has it should pass: `custom:v1/systemone` carries a path the enum alone has lost.
+ */
+fun setModelEndpointWire(
+    settings: SettingsRepository,
+    model: String,
+    wireValue: String?,
+    questions: String? = null,
+) {
+    settings.scope.launch { settings.settingsManager.updateModelEndpoint(model, wireValue, questions) }
+}
+
 /** Reads the endpoint type of one model, falling back to the provider's own transport. */
 fun SettingsRepository.endpointTypeFor(model: String): ModelEndpointType =
     ModelEndpointType.fromWireValue(modelEndpointTypes.value[model])
