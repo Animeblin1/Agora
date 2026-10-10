@@ -303,6 +303,7 @@
     <string name="provider_keys_summary">%1$d 個の API キー</string>
     <string name="provider_connection">接続</string>
     <string name="provider_anonymous_summary">匿名 — API キーは不要です</string>
+    <string name="protocol_decisions_hosts">既知のホスト: %1$s (Jev)、%2$s (Mercury Decide)、%3$s (OpenRouter Decisions)。</string>
     <string name="protocol_decisions">Jev 互換</string>
     <string name="endpoint_type">エンドポイント種別</string>
     <string name="endpoint_type_completions">Completions</string>

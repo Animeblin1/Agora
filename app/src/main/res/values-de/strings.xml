@@ -303,6 +303,7 @@
     <string name="provider_keys_summary">%1$d API-Schlüssel</string>
     <string name="provider_connection">Verbindung</string>
     <string name="provider_anonymous_summary">Anonym — kein API-Schlüssel erforderlich</string>
+    <string name="protocol_decisions_hosts">Bekannte Hosts: %1$s (Jev), %2$s (Mercury Decide), %3$s (OpenRouter Decisions).</string>
     <string name="protocol_decisions">Jev-kompatibel</string>
     <string name="endpoint_type">Endpunkttyp</string>
     <string name="endpoint_type_completions">Completions</string>

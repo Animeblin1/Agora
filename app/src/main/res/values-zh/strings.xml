@@ -359,6 +359,7 @@
     <string name="provider_keys_summary">%1$d 个 API 密钥</string>
     <string name="provider_connection">连接</string>
     <string name="provider_anonymous_summary">匿名 — 无需 API 密钥</string>
+    <string name="protocol_decisions_hosts">已知主机：%1$s (Jev)、%2$s (Mercury Decide)、%3$s (OpenRouter Decisions)。</string>
     <string name="protocol_decisions">Jev 兼容</string>
     <string name="endpoint_type">端点类型</string>
     <string name="endpoint_type_completions">Completions</string>

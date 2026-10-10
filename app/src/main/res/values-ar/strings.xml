@@ -303,6 +303,7 @@
     <string name="provider_keys_summary">%1$d مفتاح API</string>
     <string name="provider_connection">الاتصال</string>
     <string name="provider_anonymous_summary">مجهول — لا حاجة إلى مفتاح API</string>
+    <string name="protocol_decisions_hosts">المضيفون المعروفون: %1$s (Jev)، %2$s (Mercury Decide)، %3$s (OpenRouter Decisions).</string>
     <string name="protocol_decisions">متوافق مع Jev</string>
     <string name="endpoint_type">نوع نقطة النهاية</string>
     <string name="endpoint_type_completions">Completions</string>

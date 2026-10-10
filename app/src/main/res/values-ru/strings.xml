@@ -303,6 +303,7 @@
     <string name="provider_keys_summary">API-ключей: %1$d</string>
     <string name="provider_connection">Подключение</string>
     <string name="provider_anonymous_summary">Анонимно — ключ API не требуется</string>
+    <string name="protocol_decisions_hosts">Известные хосты: %1$s (Jev), %2$s (Mercury Decide), %3$s (OpenRouter Decisions).</string>
     <string name="protocol_decisions">Jev-совместимый</string>
     <string name="endpoint_type">Тип эндпоинта</string>
     <string name="endpoint_type_completions">Completions</string>

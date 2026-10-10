@@ -306,6 +306,7 @@
     <string name="provider_keys_summary">%1$d khóa API</string>
     <string name="provider_connection">Kết nối</string>
     <string name="provider_anonymous_summary">Ẩn danh — không cần khóa API</string>
+    <string name="protocol_decisions_hosts">Các host đã biết: %1$s (Jev), %2$s (Mercury Decide), %3$s (OpenRouter Decisions).</string>
     <string name="protocol_decisions">Tương thích Jev</string>
     <string name="endpoint_type">Loại endpoint</string>
     <string name="endpoint_type_completions">Completions</string>
