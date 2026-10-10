@@ -306,6 +306,11 @@
     <string name="provider_keys_summary">%1$d khóa API</string>
     <string name="provider_connection">Kết nối</string>
     <string name="provider_anonymous_summary">Ẩn danh — không cần khóa API</string>
+    <string name="decision_answer_unknown">Kiểu câu trả lời không mong đợi.</string>
+    <string name="decision_answer_missing">Không có câu trả lời.</string>
+    <string name="decision_answer_confidence">Độ tin cậy %1$s</string>
+    <string name="decision_answer_no">Không</string>
+    <string name="decision_answer_yes">Có</string>
     <string name="decision_question_type_score">Thang đo</string>
     <string name="decision_question_type_choice">Một trong</string>
     <string name="decision_question_type_noul">Có / Không</string>

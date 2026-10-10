@@ -303,6 +303,11 @@
     <string name="provider_keys_summary">API-ключей: %1$d</string>
     <string name="provider_connection">Подключение</string>
     <string name="provider_anonymous_summary">Анонимно — ключ API не требуется</string>
+    <string name="decision_answer_unknown">Неожиданный тип ответа.</string>
+    <string name="decision_answer_missing">Ответ не получен.</string>
+    <string name="decision_answer_confidence">Уверенность %1$s</string>
+    <string name="decision_answer_no">Нет</string>
+    <string name="decision_answer_yes">Да</string>
     <string name="decision_question_type_score">Шкала</string>
     <string name="decision_question_type_choice">Один из</string>
     <string name="decision_question_type_noul">Да / Нет</string>

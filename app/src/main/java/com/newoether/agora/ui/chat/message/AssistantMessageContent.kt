@@ -417,6 +417,10 @@ internal fun AssistantMessageContent(
                         ) { presentedProjection, presentedIsStreaming ->
                             val presentedContent =
                                 presentedProjection?.markdown ?: answerBodyText.orEmpty()
+                            // A decision answer is probabilities, so it gets a card of its own
+                            // rather than the prose a chat model would have written.
+                            val decisionSegment =
+                                mergedSegments.firstOrNull { it.decisionAnswers != null }
                             CitationInlineContentHost(
                                 projection = presentedProjection,
                                 onActivate = onCitationActivate,
@@ -424,7 +428,12 @@ internal fun AssistantMessageContent(
                                 CompositionLocalProvider(
                                     LocalSearchHighlightSpec provides searchHighlight,
                                 ) {
-                                if (compactAnswerAppearanceKey != null) {
+                                if (decisionSegment != null) {
+                                    DecisionAnswersCard(
+                                        segment = decisionSegment,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                } else if (compactAnswerAppearanceKey != null) {
                                     AnimatedTimelineBlockAppearance(
                                         animationKey = compactAnswerAppearanceKey,
                                         appearanceRegistry = segmentAppearanceRegistry,

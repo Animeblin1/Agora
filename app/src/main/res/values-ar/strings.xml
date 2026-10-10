@@ -303,6 +303,11 @@
     <string name="provider_keys_summary">%1$d مفتاح API</string>
     <string name="provider_connection">الاتصال</string>
     <string name="provider_anonymous_summary">مجهول — لا حاجة إلى مفتاح API</string>
+    <string name="decision_answer_unknown">نوع إجابة غير متوقع.</string>
+    <string name="decision_answer_missing">لم يتم إرجاع أي إجابة.</string>
+    <string name="decision_answer_confidence">الثقة %1$s</string>
+    <string name="decision_answer_no">لا</string>
+    <string name="decision_answer_yes">نعم</string>
     <string name="decision_question_type_score">مقياس</string>
     <string name="decision_question_type_choice">أحدها</string>
     <string name="decision_question_type_noul">نعم / لا</string>

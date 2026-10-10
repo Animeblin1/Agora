@@ -15,6 +15,13 @@ import kotlinx.serialization.json.JsonObject
 
 sealed class StreamEvent {
     data class TextChunk(val text: String) : StreamEvent()
+    /**
+     * Typed answers from a decision endpoint, as the raw response body.
+     *
+     * Not a [TextChunk]: these are probabilities, not prose, and the UI presents them as a
+     * structured result rather than as a paragraph the model wrote.
+     */
+    data class DecisionAnswers(val body: String) : StreamEvent()
     data class CitationUpdate(val citation: CitationRecord) : StreamEvent()
     data class ThoughtChunk(val thought: String, val title: String? = null, val signature: String? = null) : StreamEvent()
     data class UsageUpdate(val usage: TokenUsage) : StreamEvent() {

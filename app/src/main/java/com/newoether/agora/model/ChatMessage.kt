@@ -97,6 +97,14 @@ data class MessageSegment(
     val responseOutputItemProvider: String? = null,
     /** Stable semantic cause for terminal error segments. Null keeps old rows backward-compatible. */
     val errorCode: String? = null,
+    /**
+     * Raw decision-endpoint response this segment renders, when it is one.
+     *
+     * Carried on the answer segment rather than as a new segment type so a stored conversation
+     * stays readable by clients that know nothing about decisions: they still see the prose in
+     * [content], and a null here keeps every ordinary message exactly as it was.
+     */
+    val decisionAnswers: String? = null,
     /** In-memory Provider delta boundaries for the active answer; never persisted to Room JSON. */
     @Transient
     val streamingTextDeltas: List<StreamingTextDelta> = emptyList(),

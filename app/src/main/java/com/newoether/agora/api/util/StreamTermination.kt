@@ -140,6 +140,8 @@ private fun Throwable.matchingFailureMessage(
  */
 internal fun StreamEvent.carriesModelOutput(): Boolean = when (this) {
     is StreamEvent.TextChunk -> text.isNotEmpty()
+    // Carried alongside the rendered text, so it must not count twice against a replay.
+    is StreamEvent.DecisionAnswers -> false
     is StreamEvent.CitationUpdate -> false
     is StreamEvent.ThoughtChunk -> thought.isNotEmpty() || signature != null
     is StreamEvent.HostedToolCallUpdate -> true

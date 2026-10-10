@@ -214,6 +214,10 @@ object DeveloperDiagnostics {
             attributes = mapOf("errorType" to error.javaClass.simpleName),
             content = DiagnosticRedactor.captureContent(message),
         )
+        is StreamEvent.DecisionAnswers -> ParsedEventDetails(
+            eventType = "DecisionAnswers",
+            attributes = mapOf("chars" to body.length.toString()),
+        )
         is StreamEvent.HostedToolCallUpdate -> ParsedEventDetails(
             eventType = "HostedToolCallUpdate",
             attributes = mapOf(

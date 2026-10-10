@@ -117,6 +117,9 @@ class DecisionsProvider(
             return@flow
         }
         parsed.usage?.toTokenUsage()?.let { emit(StreamEvent.UsageUpdate(it)) }
+        // The body goes out whole so the UI can present the probabilities as they are; the
+        // rendered text is the fallback a client that knows nothing about decisions still shows.
+        emit(StreamEvent.DecisionAnswers(response.body))
         emit(StreamEvent.TextChunk(parsed.render(questions.keys.toList())))
     }
 
