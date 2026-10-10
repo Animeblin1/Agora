@@ -15,7 +15,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import com.newoether.agora.model.ModelId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -69,62 +68,53 @@ class SettingsModelPreferenceStoreTest {
         assertEquals(before, dataStore.data.first())
     }
     @Test
-    fun aModelEndpointTypeSurvivesRestartAndIsClearedWithTheModel() = runTest {
+    fun aModelEndpointTypeIsStoredAndClearedWithItsQuestions() = runTest {
         val dataStore = InMemoryPreferencesDataStore()
         val store = SettingsModelPreferenceStore(dataStore, testJson)
         store.updateModelEndpoint("OpenAI:gpt", "decisions", """{"q":{"type":"noul"}}""")
-        val restarted = SettingsModelPreferenceStore(dataStore, testJson)
-        assertEquals("decisions", restarted.modelEndpointTypes.first()["OpenAI:gpt"])
-        assertTrue(restarted.modelDecisionQuestions.first()["OpenAI:gpt"].orEmpty().contains("noul"))
+        assertEquals("decisions", store.modelEndpointTypes.first()["OpenAI:gpt"])
+        assertTrue(store.modelDecisionQuestions.first()["OpenAI:gpt"].orEmpty().contains("noul"))
         // A chat model has nowhere to send questions, so moving it back drops them.
-        restarted.updateModelEndpoint("OpenAI:gpt", "completions", null)
-        assertEquals("completions", restarted.modelEndpointTypes.first()["OpenAI:gpt"])
-        assertFalse(restarted.modelDecisionQuestions.first().containsKey("OpenAI:gpt"))
+        store.updateModelEndpoint("OpenAI:gpt", "completions", null)
+        assertEquals("completions", store.modelEndpointTypes.first()["OpenAI:gpt"])
+        assertFalse(store.modelDecisionQuestions.first().containsKey("OpenAI:gpt"))
     }
 
     @Test
-    fun aCustomEndpointKeepsThePathItWasSavedWithAndDropsItWhenTheTypeChanges() = runTest {
+    fun aCustomEndpointKeepsThePathItWasSavedWith() = runTest {
         val dataStore = InMemoryPreferencesDataStore()
         val store = SettingsModelPreferenceStore(dataStore, testJson)
         store.updateModelEndpoint("OpenAI:gpt", "custom:v1/judge")
-        val restarted = SettingsModelPreferenceStore(dataStore, testJson)
-        assertEquals("custom:v1/judge", restarted.modelEndpointTypes.first()["OpenAI:gpt"])
-        assertEquals(ModelEndpointType.CUSTOM, ModelEndpointType.fromWireValue(restarted.modelEndpointTypes.first()["OpenAI:gpt"]))
-        assertEquals("v1/judge", ModelEndpointType.customPathOf(restarted.modelEndpointTypes.first()["OpenAI:gpt"]))
+        val stored = store.modelEndpointTypes.first()["OpenAI:gpt"]
+        assertEquals("custom:v1/judge", stored)
+        assertEquals(ModelEndpointType.CUSTOM, ModelEndpointType.fromWireValue(stored))
+        assertEquals("v1/judge", ModelEndpointType.customPathOf(stored))
     }
 
     @Test
     fun aSavedEndpointTypeFollowsItsModelThroughRename() = runTest {
         val dataStore = InMemoryPreferencesDataStore()
         val store = SettingsModelPreferenceStore(dataStore, testJson)
-        store.saveCustomProviders(listOf(CustomProviderConfig("Relay", CustomEndpointProtocol.DECISIONS)))
-        val providerId = store.customProviders.first().first().providerId
-        val before = ModelId(providerId, "jev-latest").prefixed
-        val after = ModelId(providerId, "jev-2").prefixed
+        val before = "Relay:jev-latest"
+        val after = "Relay:jev-2"
         store.updateModelEndpoint(before, "decisions", """{"q":{"type":"noul"}}""")
         store.replaceCustomModel(before, after, "")
-        val restarted = SettingsModelPreferenceStore(dataStore, testJson)
-        assertEquals("decisions", restarted.modelEndpointTypes.first()[after])
-        assertFalse(restarted.modelEndpointTypes.first().containsKey(before))
-        assertEquals(
-            """{"q":{"type":"noul"}}""",
-            restarted.modelDecisionQuestions.first()[after],
-        )
+        assertEquals("decisions", store.modelEndpointTypes.first()[after])
+        assertFalse(store.modelEndpointTypes.first().containsKey(before))
+        assertEquals("""{"q":{"type":"noul"}}""", store.modelDecisionQuestions.first()[after])
+        assertFalse(store.modelDecisionQuestions.first().containsKey(before))
     }
 
     @Test
-    fun aSavedEndpointTypeIsDroppedWithItsProvider() = runTest {
+    fun aSavedEndpointTypeIsDroppedWithItsModel() = runTest {
         val dataStore = InMemoryPreferencesDataStore()
         val store = SettingsModelPreferenceStore(dataStore, testJson)
-        store.saveCustomProviders(listOf(CustomProviderConfig("Relay", CustomEndpointProtocol.DECISIONS)))
-        val providerId = store.customProviders.first().first().providerId
-        val model = ModelId(providerId, "jev-latest").prefixed
+        val model = "Relay:jev-latest"
         store.updateModelEndpoint(model, "decisions", """{"q":{"type":"noul"}}""")
         assertEquals("decisions", store.modelEndpointTypes.first()[model])
-        store.removeModelAliasesForProvider(providerId)
-        val restarted = SettingsModelPreferenceStore(dataStore, testJson)
-        assertFalse(restarted.modelEndpointTypes.first().containsKey(model))
-        assertFalse(restarted.modelDecisionQuestions.first().containsKey(model))
+        store.replaceCustomModel(model, null, "")
+        assertFalse(store.modelEndpointTypes.first().containsKey(model))
+        assertFalse(store.modelDecisionQuestions.first().containsKey(model))
     }
 
     @Test
