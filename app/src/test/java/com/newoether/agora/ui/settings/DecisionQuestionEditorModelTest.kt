@@ -4,7 +4,6 @@ import com.newoether.agora.api.decisions.DecisionQuestionType
 import com.newoether.agora.api.decisions.DecisionQuestions
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.parseToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -115,7 +114,7 @@ class DecisionQuestionEditorModelTest {
         )
         assertTrue(
             "nothing to ask means nothing to send",
-            json.parseToJsonElement(raw).jsonObject.isEmpty(),
+            Json.parseToJsonElement(raw).jsonObject.isEmpty(),
         )
     }
 
