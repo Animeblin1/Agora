@@ -14,12 +14,13 @@ import com.newoether.agora.data.ModelEndpointType
  * with no questions cannot answer anything, and a chat model carrying stale questions would send
  * them to an endpoint that does not understand them.
  */
-fun SettingsRepository.setModelEndpoint(
+fun setModelEndpoint(
+    settings: SettingsRepository,
     model: String,
     type: ModelEndpointType?,
     questions: String? = null,
 ) {
-    scope.launch { settingsManager.updateModelEndpoint(model, type, questions) }
+    settings.scope.launch { settings.settingsManager.updateModelEndpoint(model, type, questions) }
 }
 
 /** Reads the endpoint type of one model, falling back to the provider's own transport. */
@@ -42,8 +43,8 @@ fun endpointQuestionsToPersist(type: ModelEndpointType, questions: String): Stri
  * without restarting anything, and only for a decisions endpoint — a chat transport would receive
  * a field it does not know.
  */
-fun SettingsRepository.endpointQuestionsFor(model: String): String? {
-    val type = ModelEndpointType.fromWireValue(modelEndpointTypes.value[model])
+fun endpointQuestionsFor(settings: SettingsRepository, model: String): String? {
+    val type = ModelEndpointType.fromWireValue(settings.modelEndpointTypes.value[model])
     if (type != ModelEndpointType.DECISIONS) return null
-    return modelDecisionQuestions.value[model]?.takeIf { it.isNotBlank() }
+    return settings.modelDecisionQuestions.value[model]?.takeIf { it.isNotBlank() }
 }

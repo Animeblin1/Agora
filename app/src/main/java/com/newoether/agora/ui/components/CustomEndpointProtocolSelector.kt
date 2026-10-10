@@ -9,6 +9,7 @@ fun CustomEndpointProtocol.displayName(): String = when (this) {
     CustomEndpointProtocol.OPENAI -> "OpenAI"
     CustomEndpointProtocol.GOOGLE -> "Google"
     CustomEndpointProtocol.ANTHROPIC -> "Anthropic"
+    CustomEndpointProtocol.DECISIONS -> "Jev-Compatible"
     CustomEndpointProtocol.UNKNOWN -> "Unsupported"
 }
 

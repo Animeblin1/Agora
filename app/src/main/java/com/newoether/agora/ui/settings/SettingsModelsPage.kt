@@ -756,7 +756,7 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                         showProviderName = showProviderName,
                     )
                     val persistedQuestions = endpointQuestionsToPersist(endpointType, decisionQuestions)
-                    viewModel.settings.setModelEndpoint(model, endpointType, persistedQuestions)
+                    setModelEndpoint(viewModel.settings, model, endpointType, persistedQuestions)
                     showModelAliasDialog = null
                 }) { Text(stringResource(R.string.provider_save)) }
             },

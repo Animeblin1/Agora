@@ -20,6 +20,7 @@ import com.newoether.agora.data.local.ChatEntity
 import com.newoether.agora.data.local.NewChatPersistEntity
 import com.newoether.agora.data.repository.ConversationRepository
 import com.newoether.agora.data.repository.SettingsRepository
+import com.newoether.agora.data.repository.endpointQuestionsFor
 import com.newoether.agora.model.ModelId
 import com.newoether.agora.model.ModelThinkingCapabilities
 import com.newoether.agora.model.ContextBudget
@@ -531,7 +532,7 @@ class GenerationRequestBuilder(
                 officialProvider = providerName == Constants.PROVIDER_OPENAI,
             ),
             responsesApiEnabled = responsesApiEnabled,
-            decisionQuestions = settings.endpointQuestionsFor(modelId),
+            decisionQuestions = endpointQuestionsFor(settings, modelId),
             openAiWebSearchEnabled =
                 !lowContextModeEnabled &&
                     effectiveSettings.openAiWebSearchEnabled == true && responsesApiEnabled,
