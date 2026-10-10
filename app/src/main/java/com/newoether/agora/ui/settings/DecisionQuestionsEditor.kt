@@ -3,7 +3,10 @@ package com.newoether.agora.ui.settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -41,7 +44,7 @@ fun DecisionQuestionsEditor(
 
     fun commit() = onQuestionsChange(encodeDecisionQuestions(drafts))
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
         Text(
             stringResource(R.string.decision_questions),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
