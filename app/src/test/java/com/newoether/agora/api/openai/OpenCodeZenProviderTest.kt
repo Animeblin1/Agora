@@ -10,6 +10,10 @@ import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.api.ToolFunction
 import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.util.Constants
+import com.newoether.agora.api.openai.OpenCodeZenFreeModels.Verdict
+import com.newoether.agora.api.openai.OpenCodeZenFreeModels.Verdict.DEPRECATED
+import com.newoether.agora.api.openai.OpenCodeZenFreeModels.Verdict.FREE
+import com.newoether.agora.api.openai.OpenCodeZenFreeModels.Verdict.PAID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -139,10 +143,10 @@ class OpenCodeZenProviderTest {
                 "mimo-v2.6-flash-free":{"cost":{"input":0,"output":0}}
             }}}
         """.trimIndent()
-        val free = OpenCodeZenFreeModels.parse(metadata)
-        assertTrue(free.contains("big-pickle"))
-        assertTrue(free.contains("mimo-v2.6-flash-free"))
-        assertFalse(free.contains("claude-opus-5"))
+        val verdicts = OpenCodeZenFreeModels.parse(metadata)
+        assertEquals(FREE, verdicts["big-pickle"])
+        assertEquals(FREE, verdicts["mimo-v2.6-flash-free"])
+        assertEquals(PAID, verdicts["claude-opus-5"])
     }
 
     @Test
@@ -152,7 +156,7 @@ class OpenCodeZenProviderTest {
             {"somevendor":{"models":{"free-thing":{"cost":{"input":0,"output":0}}}},
              "opencode":{"models":{"zen-zero":{"cost":{"input":0,"output":0}}}}}
         """.trimIndent()
-        assertEquals(setOf("zen-zero"), OpenCodeZenFreeModels.parse(metadata))
+        assertEquals(mapOf("zen-zero" to FREE), OpenCodeZenFreeModels.parse(metadata))
     }
 
     @Test
@@ -163,20 +167,71 @@ class OpenCodeZenProviderTest {
                 "output-only":{"cost":{"input":1,"output":0}}
             }}}
         """.trimIndent()
-        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse(metadata))
+        val verdicts = OpenCodeZenFreeModels.parse(metadata)
+        assertEquals(PAID, verdicts["input-only"])
+        assertEquals(PAID, verdicts["output-only"])
+    }
+
+    @Test
+    fun aDeprecatedModelIsRefusedEvenAtZeroCost() {
+        // grok-code costs nothing upstream but the lane answers 401 "not supported"; deprecation is
+        // the only published signal that separates it from a zero-cost model that does answer.
+        val metadata = """
+            {"opencode":{"models":{
+                "groq-code":{"cost":{"input":0,"output":0},"status":"deprecated"},
+                "retired":{"cost":{"input":0,"output":0},"status":"retired"},
+                "flagged":{"cost":{"input":0,"output":0},"deprecated":true},
+                "dated":{"cost":{"input":0,"output":0},"retirement_date":"2026-01-01"},
+                "big-pickle":{"cost":{"input":0,"output":0}}
+            }}}
+        """.trimIndent()
+        val verdicts = OpenCodeZenFreeModels.parse(metadata)
+        assertEquals(DEPRECATED, verdicts["groq-code"])
+        assertEquals(DEPRECATED, verdicts["retired"])
+        assertEquals(DEPRECATED, verdicts["flagged"])
+        assertEquals(DEPRECATED, verdicts["dated"])
+        assertEquals(FREE, verdicts["big-pickle"])
     }
 
     @Test
     fun anEntryWithoutACostIsNotAssumedFree() {
         val metadata = """{"opencode":{"models":{"mystery":{"limit":{"context":8000}}}}}"""
-        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse(metadata))
+        assertEquals(emptyMap<String, Verdict>(), OpenCodeZenFreeModels.parse(metadata))
+    }
+
+    @Test
+    fun verifiedIdsCoverTheCatalogWhenTheMetadataCannotSpeak() {
+        // A dead metadata host must cost breadth, not the whole provider.
+        val fallback = OpenCodeZenFreeModels.verifiedFallback()
+        assertTrue(fallback.contains("big-pickle"))
+        assertTrue(fallback.contains("mimo-v2.6-flash-free"))
+        assertFalse(fallback.contains("claude-opus-5"))
+    }
+
+    @Test
+    fun aVerifiedIdOutranksDeprecationButNeverAPrice() {
+        // muse-spark-1.2-contributor-free is flagged deprecated upstream yet still answers; the
+        // verified roster is confirmed against the lane itself, so it wins over the flag.
+        val metadata = """
+            {"opencode":{"models":{
+                "muse-spark-1.2-contributor-free":{"cost":{"input":0,"output":0},"status":"deprecated"},
+                "big-pickle":{"cost":{"input":5,"output":25}}
+            }}}
+        """.trimIndent()
+        val verdicts = OpenCodeZenFreeModels.parse(metadata)
+        assertEquals(DEPRECATED, verdicts["muse-spark-1.2-contributor-free"])
+        assertEquals(PAID, verdicts["big-pickle"])
+        assertTrue(
+            OpenCodeZenFreeModels.verifiedFallback()
+                .contains("muse-spark-1.2-contributor-free"),
+        )
     }
 
     @Test
     fun unreadableMetadataYieldsNothingRatherThanEverything() {
         // A truncated or unexpected document must not promote the whole paid catalog to "free".
-        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse("not json"))
-        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse("{}"))
+        assertEquals(emptyMap<String, Verdict>(), OpenCodeZenFreeModels.parse("not json"))
+        assertEquals(emptyMap<String, Verdict>(), OpenCodeZenFreeModels.parse("{}"))
     }
 
     @Test
