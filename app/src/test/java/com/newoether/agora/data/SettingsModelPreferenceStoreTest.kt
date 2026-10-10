@@ -97,6 +97,7 @@ class SettingsModelPreferenceStoreTest {
         val store = SettingsModelPreferenceStore(dataStore, testJson)
         val before = "Relay:jev-latest"
         val after = "Relay:jev-2"
+        store.saveCustomModels(setOf(before))
         store.updateModelEndpoint(before, "decisions", """{"q":{"type":"noul"}}""")
         store.replaceCustomModel(before, after, "")
         assertEquals("decisions", store.modelEndpointTypes.first()[after])
@@ -110,6 +111,7 @@ class SettingsModelPreferenceStoreTest {
         val dataStore = InMemoryPreferencesDataStore()
         val store = SettingsModelPreferenceStore(dataStore, testJson)
         val model = "Relay:jev-latest"
+        store.saveCustomModels(setOf(model))
         store.updateModelEndpoint(model, "decisions", """{"q":{"type":"noul"}}""")
         assertEquals("decisions", store.modelEndpointTypes.first()[model])
         store.replaceCustomModel(model, null, "")
