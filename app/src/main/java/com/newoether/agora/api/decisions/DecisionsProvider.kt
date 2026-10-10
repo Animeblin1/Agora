@@ -75,11 +75,11 @@ class DecisionsProvider(
         }
 
         val url = endpointUrl(config)
-        DebugLog.d("AgoraAPI", "[$name] request decisions model=${config.modelId} url=$url")
+        DebugLog.d("AgoraAPI", "[$name] request decisions model=${config.modelId}")
         val response = try {
             HttpClient.postTextResponse(url, body, headers)
         } catch (e: Exception) {
-            DebugLog.w("AgoraAPI", "[$name] decisions request failed: ${e.localizedMessage}")
+            DebugLog.w("AgoraAPI", "[$name] decisions request failed")
             emit(
                 StreamEvent.Error(
                     GenerationError.Network(
