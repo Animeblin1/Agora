@@ -304,7 +304,7 @@
     <string name="provider_connection">Connexion</string>
     <string name="provider_anonymous_summary">Anonyme — aucune clé API requise</string>
     <string name="decision_question_type_score">Échelle</string>
-    <string name="decision_question_type_choice">L'un de</string>
+    <string name="decision_question_type_choice">L\'un de</string>
     <string name="decision_question_type_noul">Oui / Non</string>
     <string name="decision_questions_add_option">Ajouter une option</string>
     <string name="decision_questions_add">Ajouter une question</string>
@@ -591,7 +591,7 @@
     <string name="shell_confirm_setting">Confirmer les actions du shell distant</string>
     <string name="shell_confirm_setting_desc">Demander avant que l\'assistant n\'exécute des commandes ou n\'écrive des fichiers sur des serveurs SSH/Conch distants</string>
     <string name="shell_confirm_notification_channel">Approbation des commandes</string>
-    <string name="shell_confirm_notification_desc">Demande à autoriser ou refuser une commande distante pendant qu\'Agora est en arrière-plan</string>
+    <string name="shell_confirm_notification_desc">Demande à autoriser ou refuser une commande distante pendant qu\'Agora est en arrière-plan</string>
     <string name="ask_user_title">L\'assistant vous demande</string>
     <string name="ask_user_send">Envoyer</string>
     <string name="ask_user_next">Suivant</string>
@@ -694,7 +694,7 @@
     <string name="thinking_segment_display_card">Carte</string>
     <string name="thinking_segment_display_bottom_sheet">Panneau inférieur</string>
     <string name="thinking_segments_title">Segments de réflexion</string>
-    <string name="context_usage_messages">~%1$s / %2$s jetons</string>
+    <string name="context_usage_messages">~%1$s / %2$s jetons</string>
     <string name="context_part_system">Invite système</string>
     <string name="context_part_tools">Outils</string>
     <string name="context_part_messages">Messages</string>

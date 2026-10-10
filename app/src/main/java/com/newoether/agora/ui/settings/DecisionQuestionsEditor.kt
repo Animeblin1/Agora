@@ -122,8 +122,13 @@ private fun QuestionCard(
             }
         }
         val types = DecisionQuestionDraft.TYPES
+        val labels = listOf(
+            stringResource(R.string.decision_question_type_noul),
+            stringResource(R.string.decision_question_type_choice),
+            stringResource(R.string.decision_question_type_score),
+        )
         PillTabSwitcher(
-            tabs = types.map { typeLabel(it) },
+            tabs = labels,
             selectedIndex = types.indexOf(draft.type).coerceAtLeast(0),
             onSelect = { index ->
                 types.getOrNull(index)?.let { onChange(draft.copy(type = it)) }
@@ -193,12 +198,3 @@ private fun OptionsEditor(
         }
     }
 }
-
-@Composable
-private fun typeLabel(type: String): String = stringResource(
-    when (type) {
-        DecisionQuestionType.CHOICE -> R.string.decision_question_type_choice
-        DecisionQuestionType.SCORE -> R.string.decision_question_type_score
-        else -> R.string.decision_question_type_noul
-    },
-)

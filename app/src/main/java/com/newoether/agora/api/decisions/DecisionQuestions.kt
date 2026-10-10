@@ -13,7 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * arbitrary structure, so the document is validated structurally and carried through as raw
  * elements rather than mapped onto a Kotlin model that would have to guess at that variety.
  */
-internal object DecisionQuestions {
+object DecisionQuestions {
 
     private val json = Json { ignoreUnknownKeys = true }
 
