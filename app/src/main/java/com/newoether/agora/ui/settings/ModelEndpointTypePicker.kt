@@ -64,13 +64,10 @@ fun ModelEndpointTypePicker(
             )
         }
         if (selected == ModelEndpointType.DECISIONS) {
-            OutlinedTextField(
-                value = questions,
-                onValueChange = onQuestionsChange,
-                minLines = 4,
-                label = { Text(stringResource(R.string.decision_questions)) },
-                supportingText = { Text(stringResource(R.string.decision_questions_desc)) },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            DecisionQuestionsEditor(
+                questions = questions,
+                onQuestionsChange = onQuestionsChange,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
     }

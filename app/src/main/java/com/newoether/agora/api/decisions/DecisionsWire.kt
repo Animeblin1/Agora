@@ -80,7 +80,7 @@ data class DecisionAnswer(
 )
 
 /** Question type names as the wire spells them. */
-internal object DecisionQuestionType {
+object DecisionQuestionType {
     const val NOUL = "noul"
     const val CHOICE = "choice"
     const val SCORE = "score"

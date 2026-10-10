@@ -303,6 +303,16 @@
     <string name="provider_keys_summary">API-ключей: %1$d</string>
     <string name="provider_connection">Подключение</string>
     <string name="provider_anonymous_summary">Анонимно — ключ API не требуется</string>
+    <string name="decision_question_type_score">Шкала</string>
+    <string name="decision_question_type_choice">Один из</string>
+    <string name="decision_question_type_noul">Да / Нет</string>
+    <string name="decision_questions_add_option">Добавить вариант</string>
+    <string name="decision_questions_add">Добавить вопрос</string>
+    <string name="decision_question_levels">Уровни, от низшего</string>
+    <string name="decision_question_options">Варианты</string>
+    <string name="decision_question_instructions_desc">Вопрос, на который модель отвечает, обычным языком.</string>
+    <string name="decision_question_instructions">Что решить</string>
+    <string name="decision_question_name">Имя</string>
     <string name="protocol_decisions_hosts">Известные хосты: %1$s (Jev), %2$s (Mercury Decide), %3$s (OpenRouter Decisions).</string>
     <string name="protocol_decisions">Jev-совместимый</string>
     <string name="endpoint_type">Тип эндпоинта</string>

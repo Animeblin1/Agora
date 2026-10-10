@@ -359,6 +359,16 @@
     <string name="provider_keys_summary">%1$d 个 API 密钥</string>
     <string name="provider_connection">连接</string>
     <string name="provider_anonymous_summary">匿名 — 无需 API 密钥</string>
+    <string name="decision_question_type_score">量表</string>
+    <string name="decision_question_type_choice">其中之一</string>
+    <string name="decision_question_type_noul">是 / 否</string>
+    <string name="decision_questions_add_option">添加选项</string>
+    <string name="decision_questions_add">添加问题</string>
+    <string name="decision_question_levels">等级（从低到高）</string>
+    <string name="decision_question_options">选项</string>
+    <string name="decision_question_instructions_desc">用通俗语言描述模型要回答的问题。</string>
+    <string name="decision_question_instructions">要判定的内容</string>
+    <string name="decision_question_name">名称</string>
     <string name="protocol_decisions_hosts">已知主机：%1$s (Jev)、%2$s (Mercury Decide)、%3$s (OpenRouter Decisions)。</string>
     <string name="protocol_decisions">Jev 兼容</string>
     <string name="endpoint_type">端点类型</string>

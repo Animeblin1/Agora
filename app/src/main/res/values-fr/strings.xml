@@ -303,6 +303,16 @@
     <string name="provider_keys_summary">%1$d clé(s) d\'API</string>
     <string name="provider_connection">Connexion</string>
     <string name="provider_anonymous_summary">Anonyme — aucune clé API requise</string>
+    <string name="decision_question_type_score">Échelle</string>
+    <string name="decision_question_type_choice">L'un de</string>
+    <string name="decision_question_type_noul">Oui / Non</string>
+    <string name="decision_questions_add_option">Ajouter une option</string>
+    <string name="decision_questions_add">Ajouter une question</string>
+    <string name="decision_question_levels">Niveaux, du plus bas au plus haut</string>
+    <string name="decision_question_options">Options</string>
+    <string name="decision_question_instructions_desc">La question à laquelle le modèle répond, en langage clair.</string>
+    <string name="decision_question_instructions">Quoi décider</string>
+    <string name="decision_question_name">Nom</string>
     <string name="protocol_decisions_hosts">Hôtes connus : %1$s (Jev), %2$s (Mercury Decide), %3$s (OpenRouter Decisions).</string>
     <string name="protocol_decisions">Compatible Jev</string>
     <string name="endpoint_type">Type de point de terminaison</string>

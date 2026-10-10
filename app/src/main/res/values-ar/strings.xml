@@ -303,6 +303,16 @@
     <string name="provider_keys_summary">%1$d مفتاح API</string>
     <string name="provider_connection">الاتصال</string>
     <string name="provider_anonymous_summary">مجهول — لا حاجة إلى مفتاح API</string>
+    <string name="decision_question_type_score">مقياس</string>
+    <string name="decision_question_type_choice">أحدها</string>
+    <string name="decision_question_type_noul">نعم / لا</string>
+    <string name="decision_questions_add_option">إضافة خيار</string>
+    <string name="decision_questions_add">إضافة سؤال</string>
+    <string name="decision_question_levels">المستويات، من الأدنى</string>
+    <string name="decision_question_options">الخيارات</string>
+    <string name="decision_question_instructions_desc">السؤال الذي يجيب عنه النموذج، بلغة واضحة.</string>
+    <string name="decision_question_instructions">ما يجب تحديده</string>
+    <string name="decision_question_name">الاسم</string>
     <string name="protocol_decisions_hosts">المضيفون المعروفون: %1$s (Jev)، %2$s (Mercury Decide)، %3$s (OpenRouter Decisions).</string>
     <string name="protocol_decisions">متوافق مع Jev</string>
     <string name="endpoint_type">نوع نقطة النهاية</string>
