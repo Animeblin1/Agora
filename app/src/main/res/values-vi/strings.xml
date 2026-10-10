@@ -327,7 +327,7 @@
     <string name="endpoint_path">Đường dẫn endpoint</string>
     <string name="endpoint_path_desc">Được nối vào URL cơ sở, ví dụ v1/decisions.</string>
     <string name="decision_questions">Câu hỏi quyết định</string>
-    <string name="decision_questions_desc">JSON các câu hỏi có kiểu (noul, choice, score) mà mô hình này trả lời.</string>
+    <string name="decision_questions_desc">Mô hình này cần quyết định điều gì. Mỗi câu hỏi là có/không, lựa chọn hoặc thang đo.</string>
     <string name="decision_questions_empty">Cần ít nhất một câu hỏi.</string>
     <string name="decision_questions_bad_type">Câu hỏi \"%1$s\" có kiểu không xác định; hãy dùng noul, choice hoặc score.</string>
     <string name="import_model_chat">Nhập mô hình GGUF</string>

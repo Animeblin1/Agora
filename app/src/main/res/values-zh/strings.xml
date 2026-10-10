@@ -380,7 +380,7 @@
     <string name="endpoint_path">端点路径</string>
     <string name="endpoint_path_desc">附加到基础 URL 之后，例如 v1/decisions。</string>
     <string name="decision_questions">决策问题</string>
-    <string name="decision_questions_desc">该模型回答的类型化问题（noul、choice、score）的 JSON。</string>
+    <string name="decision_questions_desc">该模型要判定的内容。每个问题可以是是否、选择或量表。</string>
     <string name="decision_questions_empty">至少需要一个问题。</string>
     <string name="decision_questions_bad_type">问题“%1$s”的类型未知；请使用 noul、choice 或 score。</string>
     <string name="local_models_title">本地模型</string>

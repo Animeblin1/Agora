@@ -324,7 +324,7 @@
     <string name="endpoint_path">Caminho do endpoint</string>
     <string name="endpoint_path_desc">Adicionado à URL base, ex.: v1/decisions.</string>
     <string name="decision_questions">Perguntas de decisão</string>
-    <string name="decision_questions_desc">JSON das perguntas tipadas (noul, choice, score) que este modelo responde.</string>
+    <string name="decision_questions_desc">O que este modelo deve decidir. Cada pergunta é um sim/não, uma escolha ou uma escala.</string>
     <string name="decision_questions_empty">É necessária pelo menos uma pergunta.</string>
     <string name="decision_questions_bad_type">A pergunta \"%1$s\" tem um tipo desconhecido; use noul, choice ou score.</string>
     <string name="import_model_chat">Importar modelo GGUF</string>

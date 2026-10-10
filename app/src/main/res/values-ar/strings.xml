@@ -324,7 +324,7 @@
     <string name="endpoint_path">مسار نقطة النهاية</string>
     <string name="endpoint_path_desc">يُلحق بعنوان URL الأساسي، مثل v1/decisions.</string>
     <string name="decision_questions">أسئلة القرار</string>
-    <string name="decision_questions_desc">JSON لأسئلة مكتوبة (noul، choice، score) يجيب عنها هذا النموذج.</string>
+    <string name="decision_questions_desc">ما يجب أن يحدده هذا النموذج. كل سؤال هو نعم/لا، أو اختيار، أو مقياس.</string>
     <string name="decision_questions_empty">يلزم سؤال واحد على الأقل.</string>
     <string name="decision_questions_bad_type">السؤال \"%1$s\" له نوع غير معروف؛ استخدم noul أو choice أو score.</string>
     <string name="import_model_chat">استيراد نموذج GGUF</string>

@@ -324,7 +324,7 @@
     <string name="endpoint_path">엔드포인트 경로</string>
     <string name="endpoint_path_desc">기본 URL 뒤에 붙습니다(예: v1/decisions).</string>
     <string name="decision_questions">판단 질문</string>
-    <string name="decision_questions_desc">이 모델이 답하는 형식 지정 질문(noul, choice, score)의 JSON입니다.</string>
+    <string name="decision_questions_desc">이 모델이 판단할 내용. 각 질문은 예/아니오, 선택, 척도 중 하나입니다.</string>
     <string name="decision_questions_empty">질문을 하나 이상 지정해야 합니다.</string>
     <string name="decision_questions_bad_type">질문 \"%1$s\"의 형식을 알 수 없습니다. noul, choice, score 중 하나를 사용하세요.</string>
     <string name="import_model_chat">GGUF 모델 가져오기</string>

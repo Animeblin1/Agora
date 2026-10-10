@@ -324,7 +324,7 @@
     <string name="endpoint_path">エンドポイントのパス</string>
     <string name="endpoint_path_desc">ベース URL に追加されます（例: v1/decisions）。</string>
     <string name="decision_questions">判定質問</string>
-    <string name="decision_questions_desc">このモデルが答える型付き質問（noul、choice、score）の JSON。</string>
+    <string name="decision_questions_desc">このモデルに判定させたい内容。各質問ははい/いいえ、選択、または段階です。</string>
     <string name="decision_questions_empty">質問を 1 つ以上指定してください。</string>
     <string name="decision_questions_bad_type">質問 \"%1$s\" の型が不明です。noul、choice、score を使用してください。</string>
     <string name="import_model_chat">GGUF モデルをインポート</string>

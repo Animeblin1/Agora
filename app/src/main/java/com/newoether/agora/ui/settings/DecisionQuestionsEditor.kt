@@ -14,11 +14,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -41,7 +38,6 @@ fun DecisionQuestionsEditor(
     modifier: Modifier = Modifier,
 ) {
     val drafts = remember(questions) { mutableStateListOf(*decodeDecisionQuestions(questions).toTypedArray()) }
-    var expandedIndex by remember { mutableStateOf(-1) }
 
     fun commit() = onQuestionsChange(encodeDecisionQuestions(drafts))
 
@@ -67,24 +63,18 @@ fun DecisionQuestionsEditor(
         drafts.forEachIndexed { index, draft ->
             QuestionCard(
                 draft = draft,
-                expanded = expandedIndex == index,
-                onExpand = { expandedIndex = if (expandedIndex == index) -1 else index },
                 onChange = { updated ->
                     drafts[index] = updated
                     commit()
                 },
                 onRemove = {
                     drafts.removeAt(index)
-                    expandedIndex = -1
                     commit()
                 },
             )
         }
         TextButton(
-            onClick = {
-                drafts.add(DecisionQuestionDraft())
-                expandedIndex = drafts.lastIndex
-            },
+            onClick = { drafts.add(DecisionQuestionDraft()) },
             modifier = Modifier.align(Alignment.Start),
         ) {
             Icon(Icons.Default.Add, contentDescription = null)
@@ -96,8 +86,6 @@ fun DecisionQuestionsEditor(
 @Composable
 private fun QuestionCard(
     draft: DecisionQuestionDraft,
-    expanded: Boolean,
-    onExpand: () -> Unit,
     onChange: (DecisionQuestionDraft) -> Unit,
     onRemove: () -> Unit,
 ) {

@@ -324,7 +324,7 @@
     <string name="endpoint_path">Путь эндпоинта</string>
     <string name="endpoint_path_desc">Добавляется к базовому URL, например v1/decisions.</string>
     <string name="decision_questions">Вопросы для решения</string>
-    <string name="decision_questions_desc">JSON с типизированными вопросами (noul, choice, score), на которые отвечает модель.</string>
+    <string name="decision_questions_desc">Что эта модель должна решить. Каждый вопрос — да/нет, выбор или шкала.</string>
     <string name="decision_questions_empty">Нужен хотя бы один вопрос.</string>
     <string name="decision_questions_bad_type">У вопроса «%1$s» неизвестный тип; используйте noul, choice или score.</string>
     <string name="import_model_chat">Импортировать модель GGUF</string>

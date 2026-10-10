@@ -371,7 +371,7 @@
     <string name="endpoint_path">端點路徑</string>
     <string name="endpoint_path_desc">附加在基礎 URL 之後，例如 v1/decisions。</string>
     <string name="decision_questions">決策問題</string>
-    <string name="decision_questions_desc">此模型所回答的具型別問題（noul、choice、score）的 JSON。</string>
+    <string name="decision_questions_desc">此模型要判定的內容。每個問題可以是是否、選擇或量表。</string>
     <string name="decision_questions_empty">至少需要一個問題。</string>
     <string name="decision_questions_bad_type">問題「%1$s」的類型未知；請使用 noul、choice 或 score。</string>
     <string name="local_models_title">本機模型</string>
