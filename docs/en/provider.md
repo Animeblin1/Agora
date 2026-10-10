@@ -16,7 +16,7 @@ A custom endpoint can use an OpenAI-compatible, Google, or Anthropic protocol. C
 
 ## OpenCode Zen (anonymous)
 
-**OpenCode Zen** reaches OpenCode's free model lane at `https://opencode.ai/zen/v1` and needs no account: it is ready to use as soon as it is selected, with no API key. Only the free models (ids ending in `-free`) work anonymously; a paid id answers `401`. Storing a real Zen API key for this provider keeps it active, which also unlocks the paid models on the same endpoint.
+**OpenCode Zen** reaches OpenCode's free model lane at `https://opencode.ai/zen/v1` and needs no account: it is ready to use as soon as it is selected, with no API key. Only models priced at zero by OpenCode's model metadata are offered — `/v1/models` publishes no price, and a paid id answers `401` without a real Zen API key, so it is kept out of the catalog rather than failing on first use. The id is not treated as a signal: a zero-cost model such as `big-pickle` carries no `-free` hint in its name.
 
 Agora presents the request as an OpenCode CLI session, which the lane requires: a canonical session id in the correlation headers and an agent-shaped streaming body. The tool names that gate adds exist only to satisfy that check — they are never executed, and a real Agora tool is always offered first when tools are enabled.
 

@@ -129,6 +129,57 @@ class OpenCodeZenProviderTest {
     }
 
     @Test
+    fun aZeroCostModelIsFreeEvenWithoutAFreeHintInItsId() {
+        // big-pickle costs nothing upstream but carries no "-free" hint in its id, so only the
+        // metadata cost — not the name — can let it stay in the catalog.
+        val metadata = """
+            {"opencode":{"models":{
+                "big-pickle":{"cost":{"input":0,"output":0}},
+                "claude-opus-5":{"cost":{"input":5,"output":25}},
+                "mimo-v2.6-flash-free":{"cost":{"input":0,"output":0}}
+            }}}
+        """.trimIndent()
+        val free = OpenCodeZenFreeModels.parse(metadata)
+        assertTrue(free.contains("big-pickle"))
+        assertTrue(free.contains("mimo-v2.6-flash-free"))
+        assertFalse(free.contains("claude-opus-5"))
+    }
+
+    @Test
+    fun theMetadataIsReadFromTheOpenCodeSectionOnly() {
+        // Hundreds of vendors are listed; a zero-cost model from another one is not a Zen model.
+        val metadata = """
+            {"somevendor":{"models":{"free-thing":{"cost":{"input":0,"output":0}}}},
+             "opencode":{"models":{"zen-zero":{"cost":{"input":0,"output":0}}}}}
+        """.trimIndent()
+        assertEquals(setOf("zen-zero"), OpenCodeZenFreeModels.parse(metadata))
+    }
+
+    @Test
+    fun aPriceThatIsNotZeroInEitherDirectionIsPaid() {
+        val metadata = """
+            {"opencode":{"models":{
+                "input-only":{"cost":{"input":0,"output":1}},
+                "output-only":{"cost":{"input":1,"output":0}}
+            }}}
+        """.trimIndent()
+        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse(metadata))
+    }
+
+    @Test
+    fun anEntryWithoutACostIsNotAssumedFree() {
+        val metadata = """{"opencode":{"models":{"mystery":{"limit":{"context":8000}}}}}"""
+        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse(metadata))
+    }
+
+    @Test
+    fun unreadableMetadataYieldsNothingRatherThanEverything() {
+        // A truncated or unexpected document must not promote the whole paid catalog to "free".
+        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse("not json"))
+        assertEquals(emptySet<String>(), OpenCodeZenFreeModels.parse("{}"))
+    }
+
+    @Test
     fun reasoningArrivesOnceWhetherStructuredOrBare() {
         // Zen repeats the same text in reasoning_details and in the bare `reasoning` string.
         assertEquals(

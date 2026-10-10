@@ -16,7 +16,7 @@ Agora 包含 OpenAI、Anthropic、Google Gemini、DeepSeek、DashScope/通义千
 
 ## OpenCode Zen（匿名）
 
-**OpenCode Zen** 连接 OpenCode 的免费模型通道 `https://opencode.ai/zen/v1`，无需注册账号：选中后即可直接使用，不需要 API Key。只有免费模型（id 以 `-free` 结尾）可匿名使用，付费模型会返回 `401`。若为该提供商保存了真实的 Zen API Key，则会优先使用它，同时解锁同一端点上的付费模型。
+**OpenCode Zen** 连接 OpenCode 的免费模型通道 `https://opencode.ai/zen/v1`，无需注册账号：选中后即可直接使用，不需要 API Key。只提供 OpenCode 模型元数据中标价为零的模型——`/v1/models` 不返回价格，而付费模型没有真实 Zen API Key 时会返回 `401`，因此它会被排除在列表之外，而不是等到首次调用才失败。模型 id 不作为判断依据：像 `big-pickle` 这样的零成本模型，名称里并没有 `-free` 提示。
 
 Agora 会把请求伪装成 OpenCode CLI 会话——这是该通道的硬性要求：关联请求头中必须带有规范的会话 id，且请求体必须是流式且带工具声明。为满足该校验而加入的工具名仅用于通过检查，永远不会被执行；启用工具时，真实的 Agora 工具始终排在前面。
 

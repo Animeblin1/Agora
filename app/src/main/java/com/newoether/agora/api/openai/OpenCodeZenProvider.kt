@@ -67,6 +67,18 @@ class OpenCodeZenProvider(
     override fun modelFetchHeaders(apiKey: String): Map<String, String> =
         super.modelFetchHeaders(apiKey) + mapOf("x-opencode-client" to "cli")
 
+    /**
+     * Only models priced at zero stay in the catalog.
+     *
+     * Zen publishes no price in `/v1/models`, so the cost comes from the OpenCode model metadata;
+     * [OpenCodeZenFreeModels] caches that lookup. A paid id would answer `401 AuthError` the first
+     * time it was used, so it is kept out of the list rather than offered and then rejected.
+     */
+    override suspend fun fetchModels(apiKey: String, baseUrl: String?): List<String> =
+        super.fetchModels(apiKey, baseUrl).filter { id ->
+            OpenCodeZenFreeModels.isFree(id)
+        }
+
     internal companion object {
         /** The anonymous credential. Zen's free lane rejects any other value as unauthenticated. */
         const val ANONYMOUS_KEY = "public"
