@@ -140,6 +140,10 @@ data class ProviderConfig(
     val sessionId: String? = null,
     /** Resolves ordinary-generation prompt variables and rollout immediately before dispatch. */
     val requestResolver: ProviderRequestResolver? = null,
+    /**
+     * Raw JSON of the typed questions a decision endpoint answers. Only decision models read it.
+     */
+    val decisionQuestions: String? = null,
 )
 
 @Serializable

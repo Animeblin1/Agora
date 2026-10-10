@@ -113,12 +113,13 @@ class SettingsRepository(
     val enabledModels: StateFlow<Set<String>> = hot(settingsManager.enabledModels, emptySet())
     val modelAliases: StateFlow<Map<String, String>> = hot(settingsManager.modelAliases, emptyMap())
     val modelProviderNames: StateFlow<Map<String, Boolean>> = hot(settingsManager.modelProviderNames, emptyMap())
+    val modelEndpointTypes: StateFlow<Map<String, String>> = hot(settingsManager.modelEndpointTypes, emptyMap())
+    val modelDecisionQuestions: StateFlow<Map<String, String>> = hot(settingsManager.modelDecisionQuestions, emptyMap())
     val apiKeys: StateFlow<List<ApiKeyEntry>> = hot(settingsManager.apiKeys, emptyList())
     val activeApiKeyIds: StateFlow<Map<String, String>> = hot(settingsManager.activeApiKeyIds, emptyMap())
     val systemPrompts: StateFlow<List<SystemPromptEntry>> = hot(settingsManager.systemPrompts, emptyList())
     val activeSystemPromptId: StateFlow<String?> = hot(settingsManager.activeSystemPromptId, null)
-    val maxContextWindow: StateFlow<Int> =
-        hot(settingsManager.maxContextWindow, ContextBudget.DEFAULT_TOKENS)
+    val maxContextWindow: StateFlow<Int> = hot(settingsManager.maxContextWindow, ContextBudget.DEFAULT_TOKENS)
     val visualizeContextRollout: StateFlow<Boolean> = hot(settingsManager.visualizeContextRollout, false)
     val contextCompactEnabled: StateFlow<Boolean> = hot(
         settingsManager.contextCompactEnabled,

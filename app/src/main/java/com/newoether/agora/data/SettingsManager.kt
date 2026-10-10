@@ -40,13 +40,14 @@ class SettingsManager(private val context: Context) {
     suspend fun updateCustomProviderCache(providerId: String, enabled: Boolean? = null, ttl: String? = null) =
         modelPreferenceStore.updateCustomProviderCache(providerId, enabled, ttl)
     val providerBaseUrls: Flow<Map<String, String>> = modelPreferenceStore.providerBaseUrls
-    val customEndpointResolutions: Flow<Map<String, CustomEndpointResolution>> =
-        modelPreferenceStore.customEndpointResolutions
+    val customEndpointResolutions: Flow<Map<String, CustomEndpointResolution>> = modelPreferenceStore.customEndpointResolutions
     val availableModels: Flow<Map<String, List<String>>> = modelPreferenceStore.availableModels
     val customModels: Flow<Set<String>> = modelPreferenceStore.customModels
     val enabledModels: Flow<Set<String>> = modelPreferenceStore.enabledModels
     val modelAliases: Flow<Map<String, String>> = modelPreferenceStore.modelAliases
     val modelProviderNames: Flow<Map<String, Boolean>> = modelPreferenceStore.modelProviderNames
+    val modelEndpointTypes: Flow<Map<String, String>> = modelPreferenceStore.modelEndpointTypes
+    val modelDecisionQuestions: Flow<Map<String, String>> = modelPreferenceStore.modelDecisionQuestions
     val apiKeys: Flow<List<ApiKeyEntry>> = modelPreferenceStore.apiKeys
     val activeApiKeyIds: Flow<Map<String, String>> = modelPreferenceStore.activeApiKeyIds
 
@@ -300,6 +301,15 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveModelProviderNames(values: Map<String, Boolean>, replace: Boolean = true) =
         modelPreferenceStore.saveModelProviderNames(values, replace)
+
+    suspend fun updateModelEndpoint(modelId: String, type: ModelEndpointType?, questions: String? = null) =
+        modelPreferenceStore.updateModelEndpoint(modelId, type, questions)
+
+    suspend fun saveModelEndpointTypes(values: Map<String, String>, replace: Boolean = true) =
+        modelPreferenceStore.saveModelEndpointTypes(values, replace)
+
+    suspend fun saveModelDecisionQuestions(values: Map<String, String>, replace: Boolean = true) =
+        modelPreferenceStore.saveModelDecisionQuestions(values, replace)
 
     suspend fun synchronizeLocalModelAliases(aliases: Map<String, String>) =
         modelPreferenceStore.synchronizeLocalModelAliases(aliases)

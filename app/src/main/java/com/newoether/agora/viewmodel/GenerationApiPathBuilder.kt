@@ -110,6 +110,7 @@ internal class GenerationApiPathBuilder(
                     thinkingBudgetTokens = config.thinkingBudgetTokens,
                     openAiServiceTier = config.openAiServiceTier,
                     responsesApiEnabled = config.responsesApiEnabled,
+                    decisionQuestions = config.decisionQuestions,
                     anthropicCacheEnabled = config.anthropicCacheEnabled,
                     anthropicCacheTtl = config.anthropicCacheTtl,
                     openAiWebSearchEnabled = config.openAiWebSearchEnabled,

@@ -293,6 +293,10 @@ internal class SettingsModelPreferenceStore(
             if (newModelId != null) visibility[newModelId] = showProviderName ?: previousVisibility
             prefs[MODEL_PROVIDER_NAMES_JSON] = json.encodeToString(visibility)
 
+            // An endpoint choice belongs to the model, so it follows a rename and dies with a
+            // delete exactly the way the model's visibility does.
+            prefs.carryModelPreferences(oldModelId, newModelId)
+
             if (prefs[SELECTED_MODEL] == oldModelId) {
                 prefs[SELECTED_MODEL] =
                     newModelId ?: updatedEnabled.firstOrNull().orEmpty()
@@ -332,6 +336,95 @@ internal class SettingsModelPreferenceStore(
 
     val modelProviderNames: Flow<Map<String, Boolean>> = dataStore.data.map { pref ->
         json.decodeFromString(pref[MODEL_PROVIDER_NAMES_JSON] ?: "{}")
+    }
+
+    /** Per-model endpoint type, keyed by "Provider:model". Absent means the provider default. */
+    val modelEndpointTypes: Flow<Map<String, String>> = dataStore.data.map { pref ->
+        runCatching { json.decodeFromString<Map<String, String>>(pref[MODEL_ENDPOINT_TYPES_JSON] ?: "{}") }
+            .getOrDefault(emptyMap())
+    }
+
+    /** Per-model decision questions, keyed the same way. Only meaningful for a decisions endpoint. */
+    val modelDecisionQuestions: Flow<Map<String, String>> = dataStore.data.map { pref ->
+        runCatching {
+            json.decodeFromString<Map<String, String>>(pref[MODEL_DECISION_QUESTIONS_JSON] ?: "{}")
+        }.getOrDefault(emptyMap())
+    }
+
+    /**
+     * Sets the endpoint type of one model.
+     *
+     * The type and the questions are written in one transaction: a decisions model without
+     * questions, or a chat model still carrying them, would be a half-configured model.
+     */
+    suspend fun updateModelEndpoint(
+        modelId: String,
+        type: ModelEndpointType?,
+        questions: String? = null,
+    ) {
+        dataStore.edit { prefs ->
+            prefs.setModelPreference(MODEL_ENDPOINT_TYPES_JSON, modelId, type?.wireValue)
+            prefs.setModelPreference(MODEL_DECISION_QUESTIONS_JSON, modelId, questions?.trim())
+        }
+    }
+
+    suspend fun saveModelEndpointTypes(values: Map<String, String>, replace: Boolean = true) {
+        dataStore.edit { prefs ->
+            val current = if (replace) {
+                emptyMap()
+            } else {
+                runCatching {
+                    json.decodeFromString<Map<String, String>>(prefs[MODEL_ENDPOINT_TYPES_JSON] ?: "{}")
+                }.getOrDefault(emptyMap())
+            }
+            prefs[MODEL_ENDPOINT_TYPES_JSON] = json.encodeToString(current + values)
+        }
+    }
+
+    suspend fun saveModelDecisionQuestions(values: Map<String, String>, replace: Boolean = true) {
+        dataStore.edit { prefs ->
+            val current = if (replace) {
+                emptyMap()
+            } else {
+                runCatching {
+                    json.decodeFromString<Map<String, String>>(
+                        prefs[MODEL_DECISION_QUESTIONS_JSON] ?: "{}",
+                    )
+                }.getOrDefault(emptyMap())
+            }
+            prefs[MODEL_DECISION_QUESTIONS_JSON] = json.encodeToString(current + values)
+        }
+    }
+
+    /** Writes or clears one per-model string preference. A null [value] removes the entry. */
+    private fun MutablePreferences.setModelPreference(
+        key: androidx.datastore.preferences.core.Preferences.Key<String>,
+        modelId: String,
+        value: String?,
+    ) {
+        val map = runCatching {
+            json.decodeFromString<MutableMap<String, String>>(this[key] ?: "{}")
+        }.getOrDefault(mutableMapOf())
+        if (value.isNullOrBlank()) map.remove(modelId) else map[modelId] = value
+        this[key] = json.encodeToString(map)
+    }
+
+    /**
+     * Moves every per-model setting from [oldModelId] to [newModelId], or drops it when the model
+     * is being deleted.
+     *
+     * A saved endpoint type that outlived its model would silently steer a later model that
+     * happens to reuse the id, so this is part of the same transaction as the model itself.
+     */
+    private fun MutablePreferences.carryModelPreferences(oldModelId: String, newModelId: String?) {
+        for (key in listOf(MODEL_ENDPOINT_TYPES_JSON, MODEL_DECISION_QUESTIONS_JSON)) {
+            val map = runCatching {
+                json.decodeFromString<MutableMap<String, String>>(this[key] ?: "{}")
+            }.getOrDefault(mutableMapOf())
+            val previous = map.remove(oldModelId) ?: continue
+            if (newModelId != null) map[newModelId] = previous
+            this[key] = json.encodeToString(map)
+        }
     }
 
     /**
@@ -401,6 +494,19 @@ internal class SettingsModelPreferenceStore(
             )
             visibility.keys.removeAll { it.startsWith(prefix) }
             prefs[MODEL_PROVIDER_NAMES_JSON] = json.encodeToString(visibility)
+            prefs.dropModelPreferencesWithPrefix(prefix)
+        }
+    }
+
+    /** Purges every per-model setting whose key belongs to [prefix]. */
+    private fun MutablePreferences.dropModelPreferencesWithPrefix(prefix: String) {
+        for (key in listOf(MODEL_ENDPOINT_TYPES_JSON, MODEL_DECISION_QUESTIONS_JSON)) {
+            val map = runCatching {
+                json.decodeFromString<MutableMap<String, String>>(this[key] ?: "{}")
+            }.getOrDefault(mutableMapOf())
+            if (map.keys.removeAll { it.startsWith(prefix) }) {
+                this[key] = json.encodeToString(map)
+            }
         }
     }
 
@@ -577,6 +683,24 @@ internal class SettingsModelPreferenceStore(
                     activeProviderIds = normalization.providers.mapTo(linkedSetOf()) { it.providerId },
                 ),
             )
+            // Per-model settings are keyed the same way as aliases, so a custom-provider identity
+            // migration has to rewrite them too or every saved endpoint type loses its model.
+            for (key in listOf(MODEL_ENDPOINT_TYPES_JSON, MODEL_DECISION_QUESTIONS_JSON)) {
+                val map = runCatching {
+                    json.decodeFromString<Map<String, String>>(prefs[key] ?: "{}")
+                }.getOrDefault(emptyMap())
+                if (map.isEmpty()) continue
+                prefs[key] = json.encodeToString(
+                    repairOrphanedCustomProviderPreferenceKeys(
+                        aliases = remapModelPreferenceKeys(map, migrationMap),
+                        knownModelReferences = customModels + enabledModels + transcriptionModels +
+                            scalarModels + remappedCatalogs.orEmpty().values.flatten(),
+                        activeProviderIds = normalization.providers.mapTo(linkedSetOf()) {
+                            it.providerId
+                        },
+                    ),
+                )
+            }
             if (
                 providersChanged || modelReferencesChanged ||
                 repairedAliases != aliases

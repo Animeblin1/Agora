@@ -39,6 +39,8 @@ data class GenerationConfig(
     val thinkingBudgetTokens: Int = 4096,
     val openAiServiceTier: String? = null,
     val responsesApiEnabled: Boolean = false,
+    /** Typed questions for a decision model; null for any ordinary chat model. */
+    val decisionQuestions: String? = null,
     val anthropicCacheEnabled: Boolean = true,
     val anthropicCacheTtl: String = "1h",
     val openAiWebSearchEnabled: Boolean = false,

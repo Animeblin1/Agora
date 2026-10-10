@@ -531,6 +531,7 @@ class GenerationRequestBuilder(
                 officialProvider = providerName == Constants.PROVIDER_OPENAI,
             ),
             responsesApiEnabled = responsesApiEnabled,
+            decisionQuestions = settings.endpointQuestionsFor(modelId),
             openAiWebSearchEnabled =
                 !lowContextModeEnabled &&
                     effectiveSettings.openAiWebSearchEnabled == true && responsesApiEnabled,
