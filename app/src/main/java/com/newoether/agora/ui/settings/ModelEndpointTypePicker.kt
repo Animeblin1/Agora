@@ -12,7 +12,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.ModelEndpointType
-import com.newoether.agora.ui.components.PillTabSwitcher
 
 @Composable
 fun ModelEndpointType.displayName(): String = when (this) {

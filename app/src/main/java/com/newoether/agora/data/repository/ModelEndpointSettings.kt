@@ -1,6 +1,7 @@
 package com.newoether.agora.data.repository
 
 import com.newoether.agora.data.ModelEndpointType
+import kotlinx.coroutines.launch
 
 /**
  * Per-model endpoint settings, exposed as extensions so the repository itself stays within the
@@ -13,23 +14,11 @@ import com.newoether.agora.data.ModelEndpointType
  * The type and its questions are saved together because they are one decision: a decisions model
  * with no questions cannot answer anything, and a chat model carrying stale questions would send
  * them to an endpoint that does not understand them.
+ *
+ * The type travels as the stored wire value, which already carries a custom path; the enum alone
+ * would lose it on the next restart.
  */
 fun setModelEndpoint(
-    settings: SettingsRepository,
-    model: String,
-    type: ModelEndpointType?,
-    questions: String? = null,
-) {
-    settings.scope.launch { settings.settingsManager.updateModelEndpoint(model, type, questions) }
-}
-
-/**
- * Applies an endpoint choice given as its stored wire value.
- *
- * The wire value is what survives a restart, so it — not the enum — is what a caller that already
- * has it should pass: `custom:v1/systemone` carries a path the enum alone has lost.
- */
-fun setModelEndpointWire(
     settings: SettingsRepository,
     model: String,
     wireValue: String?,

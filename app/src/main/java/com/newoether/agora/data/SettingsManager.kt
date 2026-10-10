@@ -302,8 +302,8 @@ class SettingsManager(private val context: Context) {
     suspend fun saveModelProviderNames(values: Map<String, Boolean>, replace: Boolean = true) =
         modelPreferenceStore.saveModelProviderNames(values, replace)
 
-    suspend fun updateModelEndpoint(modelId: String, type: ModelEndpointType?, questions: String? = null) =
-        modelPreferenceStore.updateModelEndpoint(modelId, type, questions)
+    suspend fun updateModelEndpoint(modelId: String, wireValue: String?, questions: String? = null) =
+        modelPreferenceStore.updateModelEndpoint(modelId, wireValue, questions)
 
     suspend fun saveModelEndpointTypes(values: Map<String, String>, replace: Boolean = true) =
         modelPreferenceStore.saveModelEndpointTypes(values, replace)

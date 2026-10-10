@@ -357,16 +357,8 @@ internal class SettingsModelPreferenceStore(
      * The type and the questions are written in one transaction: a decisions model without
      * questions, or a chat model still carrying them, would be a half-configured model.
      */
-    suspend fun updateModelEndpoint(
-        modelId: String,
-        type: ModelEndpointType?,
-        questions: String? = null,
-    ) {
-        updateModelEndpoint(modelId, type?.wireValue, questions)
-    }
-
     /**
-     * Stores the endpoint as the raw value that already carries its custom path.
+     * Stores the endpoint as the raw value, which already carries its custom path.
      *
      * A `custom:` choice is meaningless without the path it points at, and the path lives inside
      * the stored string — passing the enum back would silently drop it on the next restart.
