@@ -665,6 +665,11 @@ export function Shell({ onSignedOut }) {
   }, [sideBySide, reduceMotion]);
   // ChatTopBar falls back to the brand while the title is blank.
   const openTitle = state.conversations.find((c) => c.id === state.openId)?.title?.trim() || null;
+  // ChatTopBar stacks the token subtitle under a conversation title and hides it with the brand
+  // title, or while there is nothing in the window yet (`contextAvailable = totalTokens > 0`). The
+  // figure is the composer ring's own: this connection's projection, kept while the next one prices.
+  const contextSubtitle = openTitle && (state.context?.estimatedTokens ?? 0) > 0
+    ? t.contextUsage(state.context.estimatedLabel, state.context.budgetLabel) : null;
 
   useLayoutEffect(() => {
     // The chat is inert until the closed state renders, so focus returns to the menu button here.
@@ -717,7 +722,7 @@ export function Shell({ onSignedOut }) {
       </aside>
       <div class="scrim" aria-hidden="true" onClick=${() => settleDrawer(false)}></div>
       <main class=${`chat ${composerExpanded ? "chat-composer-expanded" : ""}`} inert=${modalOpen}>
-        <${TopBar} title=${openTitle} conversationId=${state.openId} drawerOpen=${drawerOpen} menuButton=${menuButton} reduceMotion=${reduceMotion} onSignedOut=${onSignedOut} connected=${state.connected}
+        <${TopBar} title=${openTitle} subtitle=${contextSubtitle} conversationId=${state.openId} drawerOpen=${drawerOpen} menuButton=${menuButton} reduceMotion=${reduceMotion} onSignedOut=${onSignedOut} connected=${state.connected}
           generating=${!!state.generating}
           search=${state.conversationSearch}
           onSystemPrompt=${() => openPageAction("system_prompt")}

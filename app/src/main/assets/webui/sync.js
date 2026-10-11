@@ -141,11 +141,16 @@ function receive(event, size) {
         text: event.editRevision >= editRevision ? event.text : state.text,
         pendingAction: event.actionId >= state.pendingAction ? 0 : state.pendingAction });
       break;
-    case "context":
+    case "context": {
       // Only this connection's own target: two browsers, and the phone, price their own windows.
       if ((event.conversationId ?? null) !== state.openId || event.seq !== openSeq) return;
-      update({ context: event });
+      // ChatApp reads `contextProjection.usage` directly, so the figure of the conversation just
+      // left stays on the ring and under the title until the new one is priced; an event without a
+      // figure never blanks it. A failed projection has no figure to keep, as on the phone.
+      const keepLastFigure = event.estimatedTokens == null && !event.failed && state.context;
+      update({ context: keepLastFigure ? state.context : event });
       break;
+    }
     case "snackbar":
       update({ snackbar: { id: ++noticeId, message: event.message } });
       break;

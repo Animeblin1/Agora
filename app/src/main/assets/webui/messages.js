@@ -349,13 +349,17 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
             ${attachments.map(item => {
               const index = media.findIndex(current => current.index === item.index);
               const failed = item.unavailable || failedImages.has(item.index);
-              return html`<button key=${item.index} class="user-attachment" type="button" title=${item.fileName}
+              // AttachmentThumbnailItem captions only its file, pdf and unavailable branches; an image
+              // or a video is the thumbnail alone, and the rounded clip that shapes the picture is the
+              // same clip the press wave takes.
+              const captioned = item.type === "file" || item.type === "pdf" || item.unavailable;
+              return html`<button key=${item.index} class=${`user-attachment${captioned ? " captioned" : ""}`} type="button" title=${item.fileName}
                 aria-label=${item.fileName || t.attachments} disabled=${failed || index < 0}
                 onClick=${() => setPreview(index)}>
                 ${!failed && index >= 0 ? html`<img src=${media[index].url} alt=${item.fileName || t.attachments}
                   onError=${() => setFailedImages(current => new Set([...current, item.index]))} />`
                   : html`<span class="attachment-missing">${icon(ICON_IMAGE)}</span>`}
-                <span class="user-attachment-name">${item.fileName}</span>
+                ${captioned ? html`<span class="user-attachment-name">${item.fileName}</span>` : null}
               </button>`;
             })}
           </div>`}
@@ -869,7 +873,10 @@ export function MessageList({ state, label, onPageAction }) {
     previousOpenId.current = state.openId;
     expansion.current.clear();
     expansionController.current.reset();
-    appearances.current.clear();
+    // SegmentAppearanceRegistry is session-scoped and lives above the list, so a segment that has
+    // already entered once never replays its appearance - not when the list is rebuilt and not when
+    // the same conversation is opened again. Keys carry the message id, so conversations never
+    // collide and nothing is cleared on a switch.
     glyphBirths.current.clear();
   }, [state.openId]);
 

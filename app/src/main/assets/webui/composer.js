@@ -57,11 +57,16 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   const [editor, setEditor] = useState(null);
   const controls = state.composer?.controls;
   // One connection's own context window, priced on the phone by ConversationContextProjector.
+  // ChatApp takes it as `projection.usage ?: ContextWindowUsage(0, contextWindow, 0, false)`: a known
+  // window always leaves the indicator clickable and a figure that has not landed yet reads as zero,
+  // while the figure of the conversation just left is kept by the sync owner until the new one lands.
   const context = state.context;
-  const contextReady = !!context && context.estimatedLabel != null && context.tokenBudget > 0;
-  const contextFraction = contextReady ? Math.min(1, Math.max(0, context.estimatedTokens / context.tokenBudget)) : 0;
-  const contextUsage = contextReady ? t.contextUsage(context.estimatedLabel, context.budgetLabel) : null;
-  const contextPercent = contextReady ? `${contextUsagePercent(context.estimatedTokens, context.tokenBudget)}%` : null;
+  const contextBudget = context?.tokenBudget ?? 0;
+  const contextEstimated = context?.estimatedTokens ?? 0;
+  const contextReady = contextBudget > 0;
+  const contextFraction = contextReady ? Math.min(1, Math.max(0, contextEstimated / contextBudget)) : 0;
+  const contextUsage = contextReady ? t.contextUsage(context.estimatedLabel ?? "0", context.budgetLabel) : null;
+  const contextPercent = contextReady ? `${contextUsagePercent(contextEstimated, contextBudget)}%` : null;
   const composerReady = state.connected && !!sync.attachmentTarget();
   const settingsEditable = composerReady && !!controls && !state.pendingAction;
   const capabilityEnabled = settingsEditable && !controls?.lowContextModeEnabled;
@@ -199,7 +204,11 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   const busy = state.pendingAction || phase !== "IDLE" || state.composer?.stopping;
   const stop = state.generating && !state.text.trim() && !attachments.length;
   const canDrain = !state.generating && !state.text.trim() && !attachments.length && state.composer?.queue?.length;
-  const editable = composerReady && !state.pendingAction && phase === "IDLE";
+  // ChatBottomBar gates the attachment row and the add menu on nothing but the submission freeze, and
+  // isFrozen is the send transaction (`phase != IDLE`) - not generation, not a model switch - so a
+  // switch in flight keeps these controls live. The tools IconButton is gated on nothing at all
+  // (`menuAnchor(enabled = true)`); only the items inside its menu carry their own gates.
+  const editable = composerReady && phase === "IDLE";
   useEffect(() => { if (!editable) setAddOpen(false); }, [editable]);
   useEffect(() => { setAddOpen(false); }, [state.openId, state.connectionId]);
   const viewedId = viewer?.file?.id ?? viewer?.items?.[viewer.index]?.id;
@@ -434,7 +443,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
         </div>
         <div class="composer-controls">
           <div class="control-group">
-            <button ref=${addButton} class="control-icon" type="button" aria-label=${t.addAttachment} disabled=${!editable || !state.connectionId}
+            <button ref=${addButton} class="control-icon" type="button" aria-label=${t.addAttachment} disabled=${!editable}
               aria-haspopup="menu" aria-expanded=${addOpen} onClick=${() => { setRetainedAdd(true); setAddOpen(!addOpen); }}>
               ${icon(ICON_ADD)}
             </button>
@@ -455,7 +464,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
               onClick=${() => { if (contextReady) { setRetainedContext(true); setContextOpen(!contextOpen); } }}>
               <${CircularProgress} size=${20} stroke=${2.5} value=${contextFraction} />
             </button>
-            <button ref=${toolsButton} class="control-icon" type="button" aria-label=${t.tools} disabled=${!settingsEditable}
+            <button ref=${toolsButton} class="control-icon" type="button" aria-label=${t.tools}
               aria-haspopup="menu" aria-expanded=${toolsOpen} onClick=${() => { setRetainedTools(true); setToolsOpen(!toolsOpen); }}>
               ${icon(ICON_MORE_VERT)}
             </button>

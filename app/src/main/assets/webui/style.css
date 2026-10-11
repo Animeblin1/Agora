@@ -648,15 +648,20 @@ mark[data-search-key].active { background: #ffa000; }
 }
 /* An open conversation's title uses ChatType.conversationTitleSolo 17/22 bold. */
 .conversation-bar-title { font-size: 17px; line-height: 22px; }
-/* With the token subtitle stacked below, the title drops to ChatType.conversationTitle 15/20 and
-   the pair centres as one 35 px block in the capsule; the subtitle is ChatType.micro 11/15 medium
-   at 70 % onSurfaceVariant. */
-.conversation-bar-title.has-subtitle { font-size: 15px; line-height: 20px; transform: translateY(calc(-50% - 7.5px)); }
+/* With the token subtitle stacked below, the pair is the phone's Column: the title drops to
+   ChatType.conversationTitle 15/20, the subtitle is ChatType.micro 11/15 medium at 70 %
+   onSurfaceVariant, and the column's own width - the wider of its two lines, capped by the 180 dp
+   column - is the content width the capsule measures. */
+.conversation-bar-title.has-subtitle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 20px;
+}
+.conversation-bar-title .title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .conversation-subtitle {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translateY(calc(-50% + 10px));
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -679,7 +684,10 @@ mark[data-search-key].active { background: #ffa000; }
 .dropdown {
   position: absolute;
   z-index: 4;
-  min-width: 180px;
+  /* MenuDefaults.MinWidth / MenuDefaults.MaxWidth: a menu is content-sized between 112 dp and 280 dp,
+     never the 180 dp floor it used to carry, which made every short menu read far too wide. */
+  min-width: 112px;
+  max-width: min(280px, calc(100vw - 16px));
   padding: 8px 0;
   border-radius: 24px;
   background: var(--md-surface-container);
@@ -822,10 +830,19 @@ mark[data-search-key].active { background: #ffa000; }
 }
 .user-attachments { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; margin-bottom: 8px; }
 .user-attachment { flex: none; width: 120px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: start; }
+/* AttachmentThumbnailItem's image and video branches are `Modifier.clip(shape).combinedClickable`
+   around the 120 x 90 thumbnail alone, so the button is the picture itself and its 15 dp corner
+   clip (USER_BUBBLE_ATTACHMENT_CORNER) is what bounds the press wave. Only the file, pdf and
+   unavailable branches are a column with a caption, and theirs is an unrounded click box. */
+.user-attachment:not(.captioned) { height: 90px; border-radius: 15px; }
+.user-attachment.captioned { width: 72px; }
 .user-attachment img, .attachment-missing { display: block; width: 120px; height: 90px; border-radius: 15px; object-fit: cover; background: var(--md-secondary-container); }
+/* The captioned column is the phone's `Column(Modifier.width(72.dp))` over a 64 dp FileThumbnail,
+   with the name in labelSmall 11/16 and 2 dp above it. */
+.user-attachment.captioned .attachment-missing { width: 64px; height: 64px; margin: 0 auto; }
+.user-attachment-name { display: block; max-width: 72px; padding-top: 2px; font-size: 11px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-missing { display: grid; place-items: center; }
 .attachment-missing svg { width: 24px; height: 24px; fill: currentColor; }
-.user-attachment-name { display: block; max-width: 120px; font-size: 11px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-attachment:disabled { cursor: default; }
 /* Assistant content: 8 dp in from the list edges, onSurface on the background. */
 .model-message { padding: 0 8px; color: var(--md-on-surface); }
@@ -867,12 +884,18 @@ mark[data-search-key].active { background: #ffa000; }
   background: var(--tonal-2);
   transition: width 400ms cubic-bezier(0, 0, 0.2, 1);
 }
+/* generationLifecycleAppearanceModifier owns the first appearance: the draw layer's alpha rides the
+   raw linear progress over SEGMENT_ENTER_DURATION_MS (420) while the scale runs that same progress
+   through LinearOutSlowInEasing from SEGMENT_ENTER_INITIAL_SCALE (0.90), so one `linear` shorthand
+   cannot serve both halves. A tool card is forceOpaque: it scales without ever going transparent. */
 .info-group.entering .info-group-surface,
-.info-card.entering .info-card-surface { animation: card-enter 420ms linear both; }
+.info-card.entering .info-card-surface {
+  animation: card-enter-alpha 420ms linear both, card-enter-scale 420ms cubic-bezier(0, 0, 0.2, 1) both;
+}
 .info-group.has-tool.entering .info-group-surface,
-.info-card.has-tool.entering .info-card-surface { animation-name: card-enter-opaque; }
-@keyframes card-enter { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-@keyframes card-enter-opaque { from { transform: scale(0.9); } to { transform: scale(1); } }
+.info-card.has-tool.entering .info-card-surface { animation: card-enter-scale 420ms cubic-bezier(0, 0, 0.2, 1) both; }
+@keyframes card-enter-alpha { from { opacity: 0; } to { opacity: 1; } }
+@keyframes card-enter-scale { from { transform: scale(0.9); } to { transform: scale(1); } }
 .info-group.expanded .info-group-surface { width: 100%; }
 .info-group-header {
   display: flex;
@@ -975,6 +998,11 @@ mark[data-search-key].active { background: #ffa000; }
 .shell[data-reduce-motion="true"] :is(.info-group-surface, .info-disclosure svg, .info-card-surface) {
   transition: none !important;
   animation: none !important;
+}
+/* AllowSpatialTransitions=false removes only the scale half of a first appearance: the draw layer
+   still fades in over SEGMENT_ENTER_DURATION_MS, as generationLifecycleAppearanceModifier does. */
+.shell[data-reduce-motion="true"] :is(.info-group.entering .info-group-surface, .info-card.entering .info-card-surface) {
+  animation: card-enter-alpha 420ms linear both !important;
 }
 .shell[data-reduce-motion="true"] .info-group-reveal { transition: opacity 400ms; }
 /* The shared Thinking sheet sits above the drawer and the chat, at the 0.45/0.94 anchors. */
@@ -1506,7 +1534,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   pointer-events: none;
 }
 .model-button[data-valid="true"] { color: var(--md-primary); }
-.composer-menu { max-width: calc(100vw - 16px); max-height: min(480px, 50dvh); overflow-y: auto; }
+.composer-menu { max-height: min(480px, 50dvh); overflow-y: auto; }
 .composer-menu .dropdown-item { height: auto; min-height: 48px; white-space: normal; overflow-wrap: anywhere; }
 .composer-menu .dropdown-item > span:last-child { min-width: 0; }
 /*
