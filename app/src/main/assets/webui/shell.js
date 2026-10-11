@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/preact-hooks.mjs";
 import { html } from "./html.js";
 import { CircularProgress } from "./material/progress.js";
+import { attachScrollbar } from "./material/scrollbar.js";
 import { t } from "./i18n.js";
 import {
   icon, ICON_ADD,
@@ -66,9 +67,12 @@ function ConversationRow({ conversation, selected, onSelect, onMenu }) {
 function DrawerContent({ conversations, openId, onSelect, connected, loading, hasMore, reduceMotion,
   searchQuery, searchResults, searchLoading, searchFailed }) {
   const searching = !!searchQuery.trim();
-  const list = useRef(null), focusIndex = useRef(null);
+  const list = useRef(null), bar = useRef(null), focusIndex = useRef(null);
   const [viewport, setViewport] = useState({ top: 0, height: 500 });
   const [menu, setMenu] = useState(null), [menuOpen, setMenuOpen] = useState(false);
+  // Chrome runs no CSS transition on its own scrollbar, so this list draws its bar beside the native
+  // gutter through the same owner the chat uses. The gutter itself stays and keeps every hit target.
+  useEffect(() => attachScrollbar(list.current, bar.current), []);
   const rows = useMemo(() => {
     const pinned = conversations.filter(item => item.isPinned);
     const ordinary = conversations.filter(item => !item.isPinned);
@@ -162,6 +166,7 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
       ${loading && html`<div class="drawer-list-progress"><${CircularProgress} size=${32} stroke=${3} label=${t.loading} /></div>`}
       `}
     </div>
+    <div class="scrollbar-overlay drawer" ref=${bar} aria-hidden="true"><span></span></div>
     ${menu && html`<${MoreMenu} expanded=${menuOpen} reduceMotion=${reduceMotion} anchor=${{ current: menu.anchor }}
       onClose=${() => setMenuOpen(false)} onExited=${() => setMenu(null)}>
       <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected}

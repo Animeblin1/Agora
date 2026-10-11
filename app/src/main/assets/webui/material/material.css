@@ -17,7 +17,10 @@
  * properties are what make the wave animatable, and because nothing is inserted into the control, no
  * control needs a wrapper, a stacking context, a containing block or overflow clipping. Material 3
  * tints both with contentColor, which is currentColor here. material/ripple.js supplies the wave's
- * geometry and ends it when the press does, so keep the two lists in step. */
+ * geometry and ends it when the press does, so keep the two lists in step. The state layer fades in
+ * and out rather than switching, because a hover that arrives on a single frame is not a fade, and
+ * the wave's play state rides a data attribute, because every control renders its own `class` and a
+ * control that gains a selected class would otherwise wipe a wave already running underneath it. */
 @property --md-state { syntax: "<number>"; inherits: false; initial-value: 0; }
 /* Where the wave has got to: how far its radius has travelled, how far its centre has drifted, and
  * how opaque it is. The three animate on their own clocks, so they get three properties. */
@@ -26,36 +29,41 @@
 @property --md-wave-alpha { syntax: "<number>"; inherits: false; initial-value: 0; }
 
 /* The press geometry inside the control's own box, set by material/ripple.js: the press point, the
- * centre the wave drifts to, and the start and end radii it interpolates between. */
+ * centre the wave drifts to, and the start and end radii it interpolates between. The state layer
+ * rides this transition and fades in and out over 150ms, the duration this frame already spends on a
+ * hover reveal; the 15ms it used was a single frame, so a hover arrived as a snap. */
 :is(.shell, .sign-in-page) :is(button, [role="button"], [role="menuitem"], .conversation-row,
     .info-item.sheet-item, .info-group-header, .queued-message, .tool-search-result,
     .interaction-option, .prompt-option, .interaction-trust):not(:disabled):not([aria-disabled="true"]):not(:has(input:disabled)) {
-  transition: --md-state var(--md-state-duration, 15ms) linear, var(--md-component-transition, color 0s);
+  transition: --md-state var(--md-state-duration, 150ms) linear, var(--md-component-transition, color 0s);
   --md-wave-ox: 50%;
   --md-wave-oy: 50%;
   --md-wave-cx: 50%;
   --md-wave-cy: 50%;
   --md-wave-r0: 0px;
   --md-wave-r1: 0px;
+  /* A Material 3 wave is a gradient pulse and not an outline that grows: the tint sits under the
+   * press and thins to nothing by the wave's edge, so the press reads as a soft pulse that swells
+   * and fades rather than as a hard disc sweeping across the control. */
   background-image:
     radial-gradient(
       circle calc(var(--md-wave-r0) + (var(--md-wave-r1) - var(--md-wave-r0)) * var(--md-wave-grow))
       at calc(var(--md-wave-ox) + (var(--md-wave-cx) - var(--md-wave-ox)) * var(--md-wave-move))
         calc(var(--md-wave-oy) + (var(--md-wave-cy) - var(--md-wave-oy)) * var(--md-wave-move)),
-      rgb(from currentColor r g b / var(--md-wave-alpha)) 0 100%, transparent 100%),
+      rgb(from currentColor r g b / var(--md-wave-alpha)) 0 52%, transparent 100%),
     linear-gradient(rgb(from currentColor r g b / var(--md-state)), rgb(from currentColor r g b / var(--md-state)));
 }
 /* RippleAnimation.kt: a wave's alpha arrives over 75ms linear, its radius travels over 225ms
  * FastOutSlowIn, and its centre drifts from the press point to the control's centre over the same
  * 225ms linear. It then holds, because Compose only ever fades a wave out on a release. */
-:is(.shell, .sign-in-page) .md-wave-in {
+:is(.shell, .sign-in-page) [data-md-wave="in"] {
   animation:
     md-wave-in 75ms linear forwards,
     md-wave-grow 225ms cubic-bezier(0, 0, 0.2, 1) forwards,
     md-wave-move 225ms linear forwards;
 }
 /* The release: 150ms linear fade of whatever the wave grew to, at its grown radius and centre. */
-:is(.shell, .sign-in-page) .md-wave-out {
+:is(.shell, .sign-in-page) [data-md-wave="out"] {
   --md-wave-grow: 1;
   --md-wave-move: 1;
   animation: md-wave-out 150ms linear forwards;
@@ -83,7 +91,7 @@
 .shell[data-reduce-motion="true"] { --md-state-duration: 0ms; }
 .shell[data-reduce-motion="true"] :focus-visible { --md-state-duration: 0ms !important; }
 /* App Reduce Motion stops the wave; material/ripple.js never starts one there either. */
-.shell[data-reduce-motion="true"] :is(.md-wave-in, .md-wave-out) { animation: none; }
+.shell[data-reduce-motion="true"] [data-md-wave] { animation: none; }
 
 /* ---- Progress: one circular indicator, one rotation ----------------------------------------- */
 /* material/progress.js renders this and nothing else draws a circular indicator, so the phone's

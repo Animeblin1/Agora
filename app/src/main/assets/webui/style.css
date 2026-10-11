@@ -470,7 +470,9 @@ p {
   letter-spacing: 0.5px;
   text-align: start;
   cursor: pointer;
-  --md-component-transition: background-color 250ms, color 250ms;
+  /* Hover fades this row's trailing action in over 200 ms and the row gives it room at the same
+   * moment; a padding change that snaps on the same hover reads wrong next to a fade. */
+  --md-component-transition: background-color 250ms, color 250ms, padding-right 200ms linear;
 }
 .conversation-row.selected {
   background: var(--md-secondary-container);
@@ -1670,20 +1672,35 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   transition: width 150ms cubic-bezier(.2, 0, 0, 1), left 150ms cubic-bezier(.2, 0, 0, 1), background-color 150ms linear;
 }
 :is(.scrollbar-overlay.hover, .scrollbar-overlay.scrolling, .scrollbar-overlay.dragging) { --scrollbar-size: 7px; }
+/* The drawer's conversation list is navigation, and a bar that stands there permanently is furniture
+   rather than information: the owner asked for it only while the pointer is over that list. Scroll and
+   drag still size the pill, they simply cannot reveal it on their own here. */
+.scrollbar-overlay.drawer:not(.hover):not(.dragging) { opacity: 0; }
 .scrollbar-overlay:is(.hover, .scrolling) > span {
   background: color-mix(in srgb, var(--md-outline) 68%, transparent);
 }
 .scrollbar-overlay.dragging > span { background: color-mix(in srgb, var(--md-outline) 92%, transparent); }
 .shell[data-reduce-motion="true"] .scrollbar-overlay > span { transition: none; }
-/* The DOM bar replaces the native one over the chat only; every other surface keeps the CSS bar. */
+/* The DOM bar replaces the native one over the chat and over the drawer's conversation list; every
+   other surface keeps the CSS bar. Both gutters stay in the layout so the native thumb, the track page
+   jump, the wheel and the keyboard keep working under the drawn pill. */
 @supports selector(::-webkit-scrollbar) {
   @media (pointer: fine) {
     .messages::-webkit-scrollbar-thumb,
     .messages::-webkit-scrollbar-thumb:hover,
-    .messages::-webkit-scrollbar-thumb:active { background: transparent; }
+    .messages::-webkit-scrollbar-thumb:active,
+    .drawer-list::-webkit-scrollbar-thumb,
+    .drawer-list::-webkit-scrollbar-thumb:hover,
+    .drawer-list::-webkit-scrollbar-thumb:active { background: transparent; }
   }
 }
-@supports not selector(::-webkit-scrollbar) { .scrollbar-overlay { display: none; } }
+@supports not selector(::-webkit-scrollbar) {
+  .scrollbar-overlay { display: none; }
+  /* No DOM bar here, so the native one carries the same rule and can do it on its own: an engine
+     without the WebKit pseudo-element can still fade scrollbar-color, which Chrome cannot. */
+  .drawer-list { scrollbar-color: transparent transparent; transition: scrollbar-color 150ms linear; }
+  .drawer-list:hover { scrollbar-color: color-mix(in srgb, var(--md-outline) 60%, transparent) transparent; }
+}
 
 /* ---- Row furniture: source label, action line, compact pill --------------------------------- */
 /* MessageSourceLabel: a 14 dp icon and labelSmall 4 dp above an automatic user bubble. */

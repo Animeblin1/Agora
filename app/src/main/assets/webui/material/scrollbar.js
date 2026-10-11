@@ -60,13 +60,29 @@ export function attachScrollbar(host, bar) {
   window.addEventListener("pointerup", released);
   const observer = new ResizeObserver(() => { place(); paint(); });
   observer.observe(host);
+  /* The scroll box alone is not enough. A list that grows inside a box that keeps its own size never
+   * resizes, so a bar watching only the box stays sized for the list that was there when it mounted.
+   * Watch the content too, and re-arm when the host hands over a different content element. */
+  let content = null;
+  const watchContent = () => {
+    const next = host.firstElementChild;
+    if (next === content) return;
+    if (content) observer.unobserve(content);
+    content = next;
+    if (content) observer.observe(content);
+    paint();
+  };
+  const children = new MutationObserver(watchContent);
+  children.observe(host, { childList: true });
   place();
   paint();
+  watchContent();
   return () => {
     host.removeEventListener("scroll", wake);
     host.removeEventListener("pointerdown", pressed);
     window.removeEventListener("pointerup", released);
     clearTimeout(idleTimer);
+    children.disconnect();
     observer.disconnect();
   };
 }

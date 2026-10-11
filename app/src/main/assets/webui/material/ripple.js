@@ -19,6 +19,12 @@
 //                       press holds the wave; the state layer only ever carries hover, focus and
 //                       drag, and never a press.
 //
+// The wave's play state is a data attribute and never a class. Every control here renders its own
+// `class` from component state, so a control whose class changes the moment it is selected - a
+// conversation row gaining `selected`, for instance - would rewrite the attribute Preact owns and
+// erase a wave still running underneath it. A wave can therefore only end two ways, exactly as in
+// Compose: a new press on that same control, or that control's own release.
+//
 // The selector here and the one in material.css's ripple section are the same list: a control
 // either has the layer and the wave, or it is not clickable and has neither.
 const HOSTS = [
@@ -36,11 +42,18 @@ const HOSTS = [
 const DEAD = "[disabled], [aria-disabled=\"true\"]";
 /** RippleAnimation.kt's extra reach for a bounded wave, in dp (= px here). */
 const BOUNDED_EXTRA_RADIUS = 10;
+/** The wave's play state: `in` while the press holds it, `out` while it fades away. */
+const WAVE = "data-md-wave";
 // App Reduce Motion: the state layer stays and changes instantly, the wave does not run at all.
 const reduced = () => document.querySelector(".shell")?.dataset.reduceMotion === "true";
 
-/** Controls with a wave that has not faded out yet, so the release anywhere ends every one of them. */
-const active = new Set();
+/**
+ * The controls whose wave is in one state.
+ *
+ * Read straight off the DOM instead of a module-level set: a wave whose host is unmounted mid-exit
+ * never reports its own animation end, so a set here would only ever grow.
+ */
+const waving = (state) => [...document.querySelectorAll(`[${WAVE}=\"${state}\"]`)];
 
 /** Grows a wave from the press point and holds it there until the press ends. */
 function press(host, x, y) {
@@ -57,27 +70,21 @@ function press(host, x, y) {
   style.setProperty("--md-wave-oy", `${y - box.top}px`);
   style.setProperty("--md-wave-cx", `${box.width / 2}px`);
   style.setProperty("--md-wave-cy", `${box.height / 2}px`);
-  // Restart cleanly when the same control is pressed twice, or when a wave is still fading out.
-  host.classList.remove("md-wave-in", "md-wave-out");
+  // A press on a control that is still waving is a new wave and restarts from the new press point;
+  // every other control keeps the wave it is already running.
+  host.removeAttribute(WAVE);
   void host.offsetWidth;
-  host.classList.add("md-wave-in");
-  active.add(host);
+  host.setAttribute(WAVE, "in");
 }
 /** The release: stop growing and fade whatever is left over RippleAnimation's own 150ms. */
 function release() {
-  if (!active.size) return;
-  for (const host of active) {
-    if (!host.classList.contains("md-wave-in")) continue;
-    host.classList.remove("md-wave-in");
-    host.classList.add("md-wave-out");
-  }
+  for (const host of waving("in")) host.setAttribute(WAVE, "out");
 }
 function settled(host) {
-  host.classList.remove("md-wave-out");
+  host.removeAttribute(WAVE);
   for (const property of ["--md-wave-r0", "--md-wave-r1", "--md-wave-ox", "--md-wave-oy", "--md-wave-cx", "--md-wave-cy"]) {
     host.style.removeProperty(property);
   }
-  active.delete(host);
 }
 /** One delegated listener per interaction keeps every list, menu and dialog covered without wiring. */
 export function installTouchFeedback() {
