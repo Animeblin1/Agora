@@ -38,6 +38,9 @@ let state = {
   pageAction: null,
   pageResult: null,
   shareText: null,
+  /** This connection's own drawer-row delete: the command in flight and the answer it got. */
+  conversationDelete: null,
+  conversationDeleteResult: null,
   interactions: [],
   interactionPending: 0,
   snackbar: null,
@@ -151,6 +154,13 @@ function receive(event, size) {
           event.actionId !== state.pageAction?.actionId || event.action !== state.pageAction.type) return;
       update({ pageAction: null, pageResult: event, shareText: event.action === "share" && event.success ? event.text : null });
       break;
+    case "conversation_delete":
+      // Only the request this browser sent settles its own dialog. A delete started by another
+      // client arrives as a shorter list, and as Deleted when it took the open conversation.
+      if (!state.conversationDelete || event.actionId !== state.conversationDelete.actionId ||
+          event.conversationId !== state.conversationDelete.conversationId) return;
+      update({ conversationDelete: null, conversationDeleteResult: event });
+      break;
     case "conversations":
       update({ conversations: event.items, listLoading: false, listHasMore: !!event.hasMore,
         listLimit: event.limit || event.items.length });
@@ -211,6 +221,7 @@ function connect() {
     if (socket !== ws || !running) return;
     retryMs = 1_000;
     update({ connected: true, composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, connectionId: null,
+      conversationDelete: null, conversationDeleteResult: null,
       listLoading: true, listLimit: 0, interactions: [], interactionPending: 0 });
     update({ searchQuery: "", searchResults: [], searchLoading: false, searchFailed: false });
     update({ conversationSearch: null });
@@ -228,6 +239,7 @@ function connect() {
     socket = null;
     uploads.forEach(controller => controller.abort());
     update({ connected: false, composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, connectionId: null,
+      conversationDelete: null, conversationDeleteResult: null,
       interactions: [], interactionPending: 0,
       conversationSearch: null,
       searchQuery: "", searchResults: [], searchLoading: false, searchFailed: false,
@@ -309,6 +321,20 @@ export const sync = {
     if (send({ type: "list_more", tokens: state.listLimit })) update({ listLoading: true });
   },
   pin(conversationId, enabled) { send({ type: "pin", conversationId, enabled }); },
+  renameConversation(conversationId, title) {
+    return send({ type: "conversation_rename", conversationId, text: title });
+  },
+  /**
+   * Ask the phone's conversation owner to delete one drawer row. The list it sends back is the
+   * success signal; the returned command is what settles the dialog through its own result.
+   */
+  deleteConversation(conversationId) {
+    if (!state.connected || state.conversationDelete) return null;
+    const command = { type: "conversation_delete", conversationId, actionId: ++nextAction };
+    if (!send(command)) return null;
+    update({ conversationDelete: command, conversationDeleteResult: null });
+    return command;
+  },
   start(sessionEnded) {
     running = true;
     onSessionEnded = sessionEnded;

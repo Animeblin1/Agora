@@ -80,6 +80,14 @@ internal sealed interface WebSyncEvent {
     @Serializable @SerialName("deleted")
     data class Deleted(val conversationId: String) : WebSyncEvent
 
+    /**
+     * How the phone's conversation owner answered this connection's delete request. [actionId]
+     * echoes the request so only the browser that asked settles its own dialog; a delete that
+     * another client started reaches this browser as [Deleted] and a shorter list instead.
+     */
+    @Serializable @SerialName("conversation_delete")
+    data class ConversationDelete(val conversationId: String, val actionId: Long, val success: Boolean) : WebSyncEvent
+
     /** The phone's display settings and live-timer strings; sent first and on each change. */
     @Serializable @SerialName("display")
     data class Display(

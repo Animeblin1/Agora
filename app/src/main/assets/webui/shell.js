@@ -6,6 +6,7 @@ import { t } from "./i18n.js";
 import {
   icon, ICON_ADD,
   ICON_MENU, ICON_MORE_VERT, ICON_REPEAT, ICON_SEARCH, ICON_PIN,
+  ICON_DELETE, ICON_EDIT,
   ICON_ARROW_BACK, ICON_CHEVRON_DOWN,
 } from "./icons.js";
 import { MoreMenu } from "./menu.js";
@@ -65,7 +66,7 @@ function ConversationRow({ conversation, selected, onSelect, onMenu }) {
 
 /** ChatDrawerContent: title, search, Tasks, New Chat, then the conversation list. */
 function DrawerContent({ conversations, openId, onSelect, connected, loading, hasMore, reduceMotion,
-  searchQuery, searchResults, searchLoading, searchFailed }) {
+  searchQuery, searchResults, searchLoading, searchFailed, onRequestRename, onRequestDelete }) {
   const searching = !!searchQuery.trim();
   const list = useRef(null), bar = useRef(null), focusIndex = useRef(null);
   const [viewport, setViewport] = useState({ top: 0, height: 500 });
@@ -172,6 +173,14 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
       <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected}
         onClick=${() => { sync.pin(menu.conversation.id, !menu.conversation.isPinned); setMenuOpen(false); }}>
         ${icon(ICON_PIN)}<span>${menu.conversation.isPinned ? t.unpin : t.pin}</span>
+      </button>
+      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected}
+        onClick=${() => { onRequestRename({ conversationId: menu.conversation.id, title: menu.conversation.title, anchor: menu.anchor }); setMenuOpen(false); }}>
+        ${icon(ICON_EDIT)}<span>${t.rename}</span>
+      </button>
+      <button class="dropdown-item destructive" role="menuitem" type="button" disabled=${!connected}
+        onClick=${() => { onRequestDelete({ conversationId: menu.conversation.id, title: menu.conversation.title, anchor: menu.anchor }); setMenuOpen(false); }}>
+        ${icon(ICON_DELETE)}<span>${t.delete}</span>
       </button>
     </${MoreMenu}>`}`;
 }
@@ -397,6 +406,64 @@ function ConversationDialog({ state, request, onClose }) {
     </section></dialog>`;
 }
 
+/**
+ * ChatRenameDialog: the field opens on the stored title and an untouched Save keeps it, so a title
+ * the browser never edited is never written back over the stored one.
+ */
+function ConversationRenameDialog({ conversation, onClose }) {
+  const dialog = useRef(null);
+  const field = useRef(null);
+  const edited = useRef(false);
+  useLayoutEffect(() => {
+    const node = dialog.current;
+    node.showModal();
+    field.current.value = conversation.title;
+    field.current.focus();
+    return () => {
+      node.close();
+      if (conversation.anchor?.isConnected) conversation.anchor.focus();
+    };
+  }, []);
+  function save() {
+    if (edited.current) sync.renameConversation(conversation.conversationId, field.current.value);
+    onClose();
+  }
+  return html`<dialog ref=${dialog} class="attachment-editor page-dialog" aria-label=${t.renameChat}
+    onCancel=${event => { event.preventDefault(); onClose(); }}
+    onClick=${event => { if (event.target === dialog.current) onClose(); }} onKeyDown=${event => event.stopPropagation()}>
+    <section><h2>${t.renameChat}</h2>
+      <input class="rename-field" type="text" ref=${field} aria-label=${t.renameChat}
+        onInput=${() => { edited.current = true; }}
+        onKeyDown=${event => { if (event.key === "Enter") { event.preventDefault(); save(); } }} />
+      <footer><button type="button" onClick=${onClose}>${t.cancel}</button>
+        <button type="button" onClick=${save}>${t.save}</button></footer>
+    </section></dialog>`;
+}
+
+/**
+ * ChatDeleteConfirmDialog: CONFIRM, then PENDING while the phone's owner runs its transaction, then
+ * FAILED when it refuses. A pending delete cannot be dismissed, so the dialog cannot outlive it.
+ */
+function ConversationDeleteDialog({ pending, failed, onConfirm, onClose }) {
+  const dialog = useRef(null);
+  useLayoutEffect(() => {
+    const node = dialog.current;
+    node.showModal();
+    return () => node.close();
+  }, []);
+  function close() { if (!pending) onClose(); }
+  return html`<dialog ref=${dialog} class="attachment-editor page-dialog" aria-label=${t.deleteChat}
+    onCancel=${event => { event.preventDefault(); close(); }}
+    onClick=${event => { if (event.target === dialog.current) close(); }} onKeyDown=${event => event.stopPropagation()}>
+    <section><h2>${t.deleteChat}</h2><p>${t.deleteChatConfirm}</p>
+      ${failed && html`<p class="dialog-failure" role="alert">${t.toolStateFailed}</p>`}
+      <footer><button type="button" disabled=${pending} onClick=${close}>${t.cancel}</button>
+        <button class="destructive" type="button" disabled=${pending} onClick=${onConfirm}>
+          ${pending ? html`<${CircularProgress} size=${20} label=${t.loading} />` : failed ? t.retry : t.delete}
+        </button></footer>
+    </section></dialog>`;
+}
+
 export function Shell({ onSignedOut }) {
   const state = useSync();
   useEffect(() => {
@@ -407,6 +474,14 @@ export function Shell({ onSignedOut }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pageDialog, setPageDialog] = useState(null);
+  // The drawer row menu's own dialogs, held here as on the phone they outlive the drawer itself.
+  const [rowDialog, setRowDialog] = useState(null);
+  const deleteResult = state.conversationDeleteResult;
+  useEffect(() => {
+    if (rowDialog?.actionId != null && deleteResult?.actionId === rowDialog.actionId && deleteResult.success) {
+      setRowDialog(null);
+    }
+  }, [deleteResult]);
   useEffect(() => { setPageDialog(null); }, [state.connectionId, state.openId]);
   useEffect(() => { if (pageDialog?.type === "share" && !state.pageAction && !state.shareText) setPageDialog(null); }, [state.pageAction, state.shareText]);
   // A row names the message it forks or shares; the top bar names none and so acts on the whole
@@ -578,7 +653,7 @@ export function Shell({ onSignedOut }) {
         ?.focus();
     }
     const onKey = (event) => {
-      if (event.defaultPrevented || shell.current.querySelector(".detail-sheet-layer, .dropdown")) return;
+      if (event.defaultPrevented || shell.current.querySelector(".detail-sheet-layer, .dropdown, dialog[open]")) return;
       if (event.key === "Escape") { event.preventDefault(); settleDrawer(false); }
       if (event.key === "Tab") {
         const controls = [...drawer.current.querySelectorAll("input:not([disabled]), button:not([disabled])")];
@@ -612,6 +687,8 @@ export function Shell({ onSignedOut }) {
         <${DrawerContent} conversations=${state.conversations} openId=${state.openId}
           connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion}
           searchQuery=${state.searchQuery} searchResults=${state.searchResults} searchLoading=${state.searchLoading} searchFailed=${state.searchFailed}
+          onRequestRename=${(request) => setRowDialog({ ...request, type: "rename" })}
+          onRequestDelete=${(request) => setRowDialog({ ...request, type: "delete" })}
           onSelect=${(id) => { sync.open(id); if (!sideBySide) settleDrawer(false); }} />
       </aside>
       <div class="scrim" aria-hidden="true" onClick=${() => settleDrawer(false)}></div>
@@ -629,5 +706,15 @@ export function Shell({ onSignedOut }) {
         ${state.snackbar && html`<div class="chat-snackbar" role="status">${state.snackbar.message}</div>`}
         ${pageDialog && html`<${ConversationDialog} state=${state} request=${pageDialog} onClose=${() => setPageDialog(null)} />`}
       </main>
+      ${rowDialog?.type === "rename" && html`<${ConversationRenameDialog} conversation=${rowDialog} onClose=${() => setRowDialog(null)} />`}
+      ${rowDialog?.type === "delete" && html`<${ConversationDeleteDialog}
+        pending=${rowDialog.actionId != null && state.conversationDelete?.actionId === rowDialog.actionId}
+        failed=${rowDialog.failed === true ||
+          (rowDialog.actionId != null && deleteResult?.actionId === rowDialog.actionId && !deleteResult.success)}
+        onConfirm=${() => {
+          const command = sync.deleteConversation(rowDialog.conversationId);
+          setRowDialog(command ? { ...rowDialog, actionId: command.actionId, failed: false } : { ...rowDialog, failed: true });
+        }}
+        onClose=${() => setRowDialog(null)} />`}
     </div>`;
 }

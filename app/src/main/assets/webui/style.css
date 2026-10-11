@@ -1731,6 +1731,10 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .shell[data-reduce-motion="true"] .row-action { transition: none; }
 .dropdown-item.destructive, .dropdown-item.destructive svg { color: var(--md-error); fill: var(--md-error); }
 .page-dialog footer button.destructive { color: var(--md-error); }
+/* ChatRenameDialog's OutlinedTextField and ChatDeleteConfirmDialog's failure line. */
+.page-dialog .rename-field { width: 100%; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--md-outline); border-radius: 16px; background: transparent; color: var(--md-on-surface); font: inherit; font-size: 16px; line-height: 23px; }
+.page-dialog .rename-field:focus-visible { border-color: var(--md-primary); outline: 2px solid var(--md-primary); outline-offset: -2px; }
+.page-dialog .dialog-failure { color: var(--md-error); }
 /* ContextCompactPill: 42 dp tall, fully rounded, a 32 dp mark slot and one labelLarge line. */
 .compact-row { display: flex; align-items: center; gap: 7px; min-height: 42px; }
 .compact-pill {
