@@ -790,6 +790,11 @@ function Row({ entry, body, wrap, display, expansion, expansionController, appea
  * alpha and reaches full alpha 420 ms later, while the complete string owns the layout throughout.
  * Every glyph is a real span here, so one CSS animation per glyph carries the same curve and the
  * line never re-wraps mid-typing.
+ *
+ * The entrance is not this component's policy. chatMainContentTransition plays it through
+ * AnimatedContent on every arrival at New Chat, while newChatMotionPolicy only decides whether the
+ * typewriter runs; the two shared one class here, which left a second and every later switch to New
+ * Chat with no transition at all.
  */
 const WELCOME_GLYPH_STEP_MS = 100;
 // newChatMotionPolicy: newChatEntryId == 1L, so the phone types the welcome once per session and
@@ -797,14 +802,15 @@ const WELCOME_GLYPH_STEP_MS = 100;
 let welcomeTyped = false;
 
 function ChatWelcome({ reduceMotion }) {
-  const animate = !reduceMotion && !welcomeTyped;
+  const typing = !reduceMotion && !welcomeTyped;
   welcomeTyped = true;
   // role="img" keeps the glyph-split spans out of the accessibility tree as one name.
   return html`
-    <div class=${`chat-welcome ${animate ? "welcome-animates" : ""}`} role="img" aria-label=${t.welcome}>
+    <div class=${`chat-welcome welcome-enters ${typing ? "welcome-typing" : ""}`} role="img"
+      aria-label=${t.welcome}>
       <span class="welcome-mark">${icon(ICON_AGORA, "0 0 240 240")}</span>
       <span class="welcome-text">${[...t.welcome].map((glyph, index) => html`<span
-        class="welcome-glyph" style=${animate
+        class="welcome-glyph" style=${typing
           ? { animationDelay: `${(index + 1) * WELCOME_GLYPH_STEP_MS}ms` }
           : null}>${glyph}</span>`)}</span>
     </div>`;
@@ -1224,6 +1230,45 @@ export function MessageList({ state, label, onPageAction }) {
     };
   }, [switching]);
 
+  // chatMainContentTransition replaces one page frame with the other: the frame being left fades out
+  // over tween(300) while the new one enters, and a switch between two existing conversations plays
+  // nothing at all. The outgoing frame is a frozen snapshot rather than a live subtree, because
+  // AnimatedContent stops recomposing an exiting target the moment it is not the current one - a live
+  // copy would keep watching rows and reporting sizes for content the user has already left.
+  const frameKind = showWelcome ? "welcome" : "thread";
+  const exiting = useRef(null);
+  const enterFrame = useRef(false);
+  const lastFrameKind = useRef(frameKind);
+  const exitHost = useRef(null);
+  if (lastFrameKind.current !== frameKind) {
+    // Read while the DOM still holds the frame being replaced: the render body runs before the patch.
+    const live = scroller.current?.firstElementChild;
+    exiting.current = live
+      ? { node: live.cloneNode(true), top: scroller.current.scrollTop } : null;
+    enterFrame.current = frameKind === "thread";
+    lastFrameKind.current = frameKind;
+  }
+  useLayoutEffect(() => {
+    const host = exitHost.current;
+    const leaving = exiting.current;
+    exiting.current = null;
+    if (host && leaving) {
+      host.replaceChildren(leaving.node);
+      host.style.top = `${leaving.top}px`;
+      host.style.height = `${scroller.current?.clientHeight ?? 0}px`;
+      const fade = host.animate([{ opacity: 1 }, { opacity: 0 }],
+        { duration: 300, easing: "linear", fill: "forwards" });
+      fade.onfinish = () => { host.replaceChildren(); fade.cancel(); };
+    }
+    // Returning from New Chat to an existing conversation is fadeIn(tween(300)).
+    if (enterFrame.current) {
+      enterFrame.current = false;
+      scroller.current?.firstElementChild?.animate?.([{ opacity: 0 }, { opacity: 1 }],
+        { duration: 300, easing: "linear" });
+    }
+    return undefined;
+  }, [frameKind]);
+
   return html`
     <section class="messages" ref=${scroller} aria-label=${label} aria-busy=${covered} inert=${covered}>
       ${showWelcome ? html`<${ChatWelcome} reduceMotion=${!!state.display?.reduceMotion} />`
@@ -1240,6 +1285,7 @@ export function MessageList({ state, label, onPageAction }) {
             stopping=${!!state.composer?.stopping}
             body=${state.streaming?.id === entry.id ? state.streaming : state.bodies.get(entry.id)} />`)}
       </div>`}
+      <div class="chat-frame-exits" ref=${exitHost} aria-hidden="true"></div>
     </section>
     <div class="scrollbar-overlay" ref=${bar} aria-hidden="true"><span></span></div>
     ${covered && html`<div class="conversation-loading-cover" ref=${cover}

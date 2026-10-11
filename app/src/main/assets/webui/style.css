@@ -785,21 +785,34 @@ mark[data-search-key].active { background: #ffa000; }
   padding-bottom: calc(var(--chat-bottom-inset) - var(--chat-top-inset) / 2);
   color: var(--md-on-background);
 }
-.welcome-mark { flex: none; width: 72px; height: 72px; }
+/* The launcher mark. The phone's ChatWelcomeContent has no mark at all, so this is the WebUI's own
+ * brand block and its size is the owner's call: 112 dp, up from the 72 dp that read as too small
+ * beside the 28 sp wordmark. */
+.welcome-mark { flex: none; width: 112px; height: 112px; }
 .welcome-mark svg { display: block; width: 100%; height: 100%; fill: currentColor; }
-/* headlineMedium (28 sp / 36 sp) at FontWeight.Bold. */
-.welcome-text { font-size: 28px; line-height: 36px; font-weight: 700; white-space: pre-wrap; }
-/* chatMainContentTransition: fadeIn(500) together with scaleIn(0.6, 700, 0.2 / 0.8 / 0.2 / 1). */
-.welcome-animates {
+/* headlineMedium (28 sp / 35 sp) at FontWeight.Bold. */
+.welcome-text { font-size: 28px; line-height: 35px; font-weight: 700; white-space: pre-wrap; }
+/* chatMainContentTransition: entering New Chat is fadeIn(tween(500)) together with
+ * scaleIn(0.6, tween(700, 0.2 / 0.8 / 0.2 / 1)) and it plays on every entry, because the AnimatedContent
+ * transition owns it. Only the typewriter belongs to newChatMotionPolicy, so the two are separate
+ * classes here: gating the whole entrance on the typing pass was what left a later switch to New Chat
+ * with no animation at all. The paired 300 ms fades (the frame being replaced, and the plain fade that
+ * brings an existing conversation back) are driven by messages.js with the Web Animations API, because
+ * they run once per transition and not once per mount. */
+.welcome-enters {
   transform-origin: 50% 50%;
   animation: welcome-fade 500ms linear both, welcome-scale 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @keyframes welcome-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes welcome-scale { from { transform: scale(0.6); } to { transform: scale(1); } }
 /* typingGlyphAlpha: nothing before a glyph's reveal, 0.16 at the reveal, solid 420 ms later. */
-.welcome-animates .welcome-glyph { animation: welcome-glyph 420ms linear both; }
+.welcome-typing .welcome-glyph { animation: welcome-glyph 420ms linear both; }
 @keyframes welcome-glyph { 0% { opacity: 0; } 0.02% { opacity: 0.16; } 100% { opacity: 1; } }
-.shell[data-reduce-motion="true"] :is(.welcome-animates, .welcome-glyph) { animation: none; }
+/* The frame the transition is replacing, pinned over the thread it is leaving. */
+.chat-frame-exits { position: absolute; left: 0; right: 0; pointer-events: none; }
+/* AllowSpatialTransitions off keeps the fade and drops the scale, exactly as the composable does. */
+.shell[data-reduce-motion="true"] .welcome-enters { animation: welcome-fade 500ms linear both; }
+.shell[data-reduce-motion="true"] .welcome-typing .welcome-glyph { animation: none; }
 /* Layout only: an unloaded row keeps a one-line height so only rows near the screen are watched. */
 .row-placeholder { min-height: 54px; }
 /* UserMessageBubble: at the end, UserBubbleShape (27 dp corners, a 6 dp bottom-end tail). */
@@ -941,8 +954,10 @@ mark[data-search-key].active { background: #ffa000; }
 .info-group.sheet-mode .info-disclosure svg { transform: rotate(-90deg); }
 .info-group-reveal { display: grid; width: var(--card-expanded-width, 100%); grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 400ms, opacity 400ms; }
 .info-group.expanded .info-group-reveal { grid-template-rows: 1fr; opacity: 1; }
-.info-group-items { min-height: 0; overflow: hidden; padding: 0 10px; }
-.info-group.expanded .info-group-items { padding: 2px 10px 12px; }
+/* The expanded column carries no padding of its own. Compose puts a 2 dp Spacer above the segments
+ * and every segment then owns its own 10 / 8 dp padding inside its 18 dp clip, so a container pad
+ * here only ever doubled what the segment already supplies. */
+.info-group-items { min-height: 0; overflow: hidden; padding: 2px 0 0; }
 /* CompactSegmentBlock clips each full-width option to 18 dp before its 10 / 8 dp padding. */
 .info-group :is(.timeline-item, .compact-item) {
   width: 100%;
@@ -1012,12 +1027,13 @@ mark[data-search-key].active { background: #ffa000; }
   inset: 0;
   width: 100%;
   border: 0;
-  /* SmoothBottomSheet dims with 0.32 * fraction: 0.14 at the 0.45 partial anchor, 0.30 at 0.94. */
+  /* SmoothBottomSheet dims with 0.32 * fraction: 0.14 at the 0.45 partial anchor, 0.30 at 0.94. The
+   * scrim stays a flat translucent black: a Compose bottom sheet raises a scrim whose alpha follows
+   * the sheet's own progression and blurs nothing behind it, so a backdrop blur here was an effect the
+   * phone never had. detail-sheet.js owns the alpha and writes it from the same fraction. */
   background: rgb(0 0 0 / 0.14);
-  backdrop-filter: blur(4px);
   cursor: default;
 }
-.shell[data-blur-effects="false"] .detail-sheet-backdrop { backdrop-filter: none; }
 .detail-sheet {
   position: absolute;
   bottom: 0;
@@ -1862,3 +1878,14 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 
 button.info-item:focus-visible { outline: none; }
 .info-card .timeline-item, .detail-sheet-list-row .timeline-item { border-radius: 8px; overflow: hidden; }
+
+/* ---- Focus indication: drawn inside the control, never clipped, never a second border --------- */
+/* Compose draws a focus indicator inside the component's own shape, so it cannot be cut by a scroll
+ * container and it is concentric with the control's border by construction. The frame used to ask for
+ * a 2 px ring *outside* the control, which the drawer list's `overflow: auto` sliced in half and which
+ * sat off the row's 20 dp corner radius; drawing it inset fixes both at once, for every control. */
+.shell :focus-visible { outline: 2px solid var(--md-primary); outline-offset: -2px; }
+/* No text field on the phone carries a native resize handle, and the ones that grow do so with their
+ * content. The affordance is dropped for the whole frame rather than field by field, so a control
+ * cannot gain one by being added later. */
+.shell textarea { resize: none; }
