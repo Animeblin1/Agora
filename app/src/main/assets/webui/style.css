@@ -308,7 +308,12 @@ p {
   height: 100dvh;
   overflow: hidden;
   background: var(--md-background);
+  /* Compose text blocks own selection: a drag started inside the chat can never paint chrome
+     (the title bar, the composer, the drawer) blue, only the message and sheet text below. */
+  user-select: none;
 }
+.markdown, .user-text, .detail-sheet-markdown, .welcome-text, .chat-snackbar { user-select: text; }
+.shell input, .shell textarea { user-select: text; }
 .chat {
   position: absolute;
   inset: 0;
@@ -408,9 +413,6 @@ p {
   cursor: pointer;
 }
 .drawer-button svg { width: 20px; height: 20px; fill: currentColor; }
-/* Standalone disabled Tasks button; no paired Remote destination in the WebUI. */
-.drawer-button.tonal { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
-.drawer-button.tasks { height: 46px; margin-bottom: 10px; border-radius: 23px; }
 .drawer-button.new-chat {
   height: 42px;
   margin-bottom: 16px;
@@ -646,6 +648,25 @@ mark[data-search-key].active { background: #ffa000; }
 }
 /* An open conversation's title uses ChatType.conversationTitleSolo 17/22 bold. */
 .conversation-bar-title { font-size: 17px; line-height: 22px; }
+/* With the token subtitle stacked below, the title drops to ChatType.conversationTitle 15/20 and
+   the pair centres as one 35 px block in the capsule; the subtitle is ChatType.micro 11/15 medium
+   at 70 % onSurfaceVariant. */
+.conversation-bar-title.has-subtitle { font-size: 15px; line-height: 20px; transform: translateY(calc(-50% - 7.5px)); }
+.conversation-subtitle {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(calc(-50% + 10px));
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--md-on-surface-variant) 70%, transparent);
+}
 .title-labels h1[aria-hidden="true"] { pointer-events: none; user-select: none; }
 /* AgoraDropdownMenu on surfaceContainer: 24 dp corners, 48 dp items, highlight inset 8 dp. */
 .menu-popup-layer {
@@ -1212,14 +1233,13 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   border-radius: 8px;
   background: color-mix(in srgb, var(--md-on-background) 2%, transparent);
 }
+/* Owner asked for no row rules in markdown tables: the faint surface alone separates the rows. */
 .markdown th, .markdown td {
   min-width: 160px;
   padding: 16px;
-  border-bottom: 1px solid var(--md-outline-variant);
   text-align: start;
   vertical-align: top;
 }
-.markdown tr:last-child td { border-bottom: 0; }
 /* Display math scrolls sideways instead of widening the message. */
 .markdown .katex-display { margin: 0; overflow-x: auto; overflow-y: hidden; }
 /* Fenced code: 8 dp above and below, codeBackground with 8 dp corners, 8 dp code padding. */
@@ -1369,57 +1389,91 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .composer-expanded .composer-field textarea { height: 100%; max-height: none; }
 .composer-expanded .expand-button { top: 12px; right: 8px; }
 .chat-composer-expanded .messages { mask-image: none; }
-/* Controls row: 6 dp above, 10 dp from the card sides. */
+/* Controls row: 6 dp above, 10 dp from the card sides. The 14 dp gap is COMPOSER_SEND_BUTTON_GAP,
+   the Spacer the phone emits after the controls group, so the group can never grow into the send
+   button and its own room stays what the row leaves it (weight(1f, fill = false)). */
 .composer-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 14px;
   padding: 6px 6px 0;
 }
-/* ComposerControlGroup: 48 dp capsule at 8 dp tonal elevation, 8 dp side padding. */
+/* ComposerControlGroup: 48 dp capsule at 8 dp tonal elevation, 8 dp side padding. It takes its
+   width from its content and may shrink to nothing, exactly as a weighted non-filling Row child. */
 .control-group {
   display: flex;
   min-width: 0;
-  max-width: calc(100% - 62px);
   align-items: center;
   height: 48px;
   padding: 0 8px;
   border-radius: 24px;
   background: var(--tonal-8);
 }
+/* The three end buttons of ComposerControlGroup are IconButton(size 32.dp) with an 18 dp icon
+   tinted onSurfaceVariant; only the model selector is 38 dp tall, and the Row centers it. */
 .control-icon {
   flex: none;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--md-on-surface);
+  color: var(--md-on-surface-variant);
 }
-.control-icon svg { width: 20px; height: 20px; fill: currentColor; }
+.control-icon svg { width: 18px; height: 18px; fill: currentColor; }
 .control-icon:disabled { color: color-mix(in srgb, var(--md-on-surface) 38%, transparent); }
-/* ComposerModelSelector: 38 dp, 8 dp padding, labelMedium at 13 sp; no model reads at 50%. */
+/* ComposerModelSelector: a start-anchored clip moves over the whole button, ripple included, at the
+   animated identity width; the button itself keeps its measured target width and each label keeps
+   its own width inside, fading through the moving edge. 38 dp tall, 8 dp padding, labelMedium 13 sp;
+   an unset model reads at 50 %. */
 .model-selector {
+  flex: none;
+  position: relative;
+  width: 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   height: 38px;
-  padding: 0 8px;
-  border: 0;
+  overflow: hidden;
   border-radius: 19px;
+}
+.model-button {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 38px;
+  display: block;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: color-mix(in srgb, var(--md-on-surface) 50%, transparent);
   font: inherit;
   font-size: 13px;
   line-height: 16px;
   font-weight: 500;
+  text-align: start;
+  cursor: pointer;
+}
+.model-button:disabled { cursor: default; }
+.model-label {
+  /* wrapContentWidth(unbounded = true).widthIn(max = labelMaxWidth): the label takes the intrinsic
+     width of its own text, is capped only by the room the group leaves, and ellipsizes at that cap.
+     --model-label-room is the measured room the script hands down, never a second width owner. */
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 8px;
+  width: max-content;
+  max-width: var(--model-label-room, 100%);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* ComposerSendButton: 48 dp circle; surfaceVariant with a 24 dp arrow while it cannot send. */
 .send-button {
+  flex: none;
   display: grid;
   place-items: center;
   width: 48px;
@@ -1451,7 +1505,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   overflow-wrap: anywhere;
   pointer-events: none;
 }
-.model-selector[data-valid="true"] { color: var(--md-primary); }
+.model-button[data-valid="true"] { color: var(--md-primary); }
 .composer-menu { max-width: calc(100vw - 16px); max-height: min(480px, 50dvh); overflow-y: auto; }
 .composer-menu .dropdown-item { height: auto; min-height: 48px; white-space: normal; overflow-wrap: anywhere; }
 .composer-menu .dropdown-item > span:last-child { min-width: 0; }
@@ -1637,8 +1691,13 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 :is(.interaction-option, .prompt-option, .interaction-trust) input:is(:hover, :focus-visible):not(:disabled) {
   box-shadow: 0 0 0 9px color-mix(in srgb, var(--md-on-surface) 8%, transparent);
 }
-:is(.interaction-option, .prompt-option, .interaction-trust) input:checked:not(:disabled) {
+:is(.interaction-option, .prompt-option, .interaction-trust) input[type="checkbox"]:checked:not(:disabled) {
   border-color: var(--md-primary); background: var(--md-primary);
+}
+/* M3 keeps the radio ring open: the 10 dp dot sits inside the 2 dp ring with a gap all round,
+   never filling the box, so selection reads as dot-in-ring rather than a solid chip. */
+:is(.interaction-option, .prompt-option, .interaction-trust) input[type="radio"]:checked:not(:disabled) {
+  border-color: var(--md-primary);
 }
 /* The check is the phone's 10 x 5 glyph; the radio keeps a 10 dp dot inside its ring. */
 :is(.interaction-option, .interaction-trust) input[type="checkbox"]:checked:not(:disabled)::after {
@@ -1735,23 +1794,33 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .page-dialog .rename-field { width: 100%; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--md-outline); border-radius: 16px; background: transparent; color: var(--md-on-surface); font: inherit; font-size: 16px; line-height: 23px; }
 .page-dialog .rename-field:focus-visible { border-color: var(--md-primary); outline: 2px solid var(--md-primary); outline-offset: -2px; }
 .page-dialog .dialog-failure { color: var(--md-error); }
-/* ContextCompactPill: 42 dp tall, fully rounded, a 32 dp mark slot and one labelLarge line. */
-.compact-row { display: flex; align-items: center; gap: 7px; min-height: 42px; }
+/* ContextCompactPill: MessageItem centres the pill in the row. The Surface owns the click, so the
+   whole pill is the ripple host and its wave is cut by the pill radius; the trailing IconButton keeps
+   Compose's 32 dp box with an 18 dp icon and rides the Surface content colour, never primary. */
+.compact-row { display: flex; justify-content: center; }
+.compact-pill-box {
+  position: relative; display: inline-flex;
+  --compact-on: var(--md-on-secondary-container);
+}
+.compact-pill-box.error { --compact-on: color-mix(in srgb, var(--md-on-surface-variant) 80%, transparent); }
 .compact-pill {
-  display: flex; align-items: center; gap: 7px; min-height: 42px; padding: 0 7px; border-radius: 100px;
-  background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+  display: flex; align-items: center; gap: 7px; min-height: 42px;
+  /* 7 dp leading, the 32 dp mark, 7 dp, the label, then the 7 dp gap plus the 32 dp detail slot. */
+  padding: 0 46px 0 7px; border: 0; border-radius: 100px; cursor: pointer; text-align: start;
+  font: inherit;
+  background: var(--md-secondary-container); color: var(--compact-on);
   transition: background-color 240ms linear, color 240ms linear;
 }
-.compact-pill.error {
-  background: color-mix(in srgb, var(--md-surface-variant) 40%, transparent);
-  color: color-mix(in srgb, var(--md-on-surface-variant) 80%, transparent);
-}
+.compact-pill.error { background: color-mix(in srgb, var(--md-surface-variant) 40%, transparent); }
 .compact-mark { flex: none; width: 32px; height: 32px; display: grid; place-content: center; }
 .compact-mark svg { width: 18px; height: 18px; fill: currentColor; }
 .compact-label {
   font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
+.compact-detail { position: absolute; top: 50%; right: 7px; transform: translateY(-50%); }
+.compact-detail .row-action { color: var(--compact-on); }
+.compact-detail .row-action:disabled { color: color-mix(in srgb, var(--md-on-surface) 38%, transparent); }
 .shell[data-reduce-motion="true"] .compact-pill { transition: none; }
 /* MessageInfoDialog and the inline editor read as the phone's dialog body. */
 .message-info-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }

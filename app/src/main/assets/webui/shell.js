@@ -5,7 +5,7 @@ import { attachScrollbar } from "./material/scrollbar.js";
 import { t } from "./i18n.js";
 import {
   icon, ICON_ADD,
-  ICON_MENU, ICON_MORE_VERT, ICON_REPEAT, ICON_SEARCH, ICON_PIN,
+  ICON_MENU, ICON_MORE_VERT, ICON_SEARCH, ICON_PIN,
   ICON_DELETE, ICON_EDIT,
   ICON_ARROW_BACK, ICON_CHEVRON_DOWN,
 } from "./icons.js";
@@ -20,6 +20,9 @@ import { Composer } from "./composer.js";
  */
 // ChatDrawerHost.usesSideBySideDrawer: wider than DRAWER_MAX_WIDTH (360) + CHAT_APP_WIDTH_THRESHOLD (600).
 const SIDE_BY_SIDE_QUERY = "(min-width: 960.02px)";
+// DrawerPinned is the persisted wide-window preference; the narrow window never reads or writes it.
+const DRAWER_PINNED_KEY = "agora.drawerPinned";
+const readDrawerPinned = () => { try { return localStorage.getItem(DRAWER_PINNED_KEY) === "true"; } catch (_) { return false; } };
 
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
@@ -64,7 +67,7 @@ function ConversationRow({ conversation, selected, onSelect, onMenu }) {
     </div>`;
 }
 
-/** ChatDrawerContent: title, search, Tasks, New Chat, then the conversation list. */
+/** ChatDrawerContent: title, search, New Chat, then the conversation list. */
 function DrawerContent({ conversations, openId, onSelect, connected, loading, hasMore, reduceMotion,
   searchQuery, searchResults, searchLoading, searchFailed, onRequestRename, onRequestDelete }) {
   const searching = !!searchQuery.trim();
@@ -142,7 +145,6 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
       </span>
     </div>
     ${!searching && html`
-    <${DrawerButton} className="tonal tasks" iconPath=${ICON_REPEAT} label=${t.tasks} />
     <${DrawerButton} className="filled new-chat" iconPath=${ICON_ADD} label=${t.newChat}
       disabled=${!connected} onClick=${() => onSelect(null)} />
     `}
@@ -189,16 +191,24 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
  * ChatTopBar: title capsule (menu + brand, or the conversation title at conversationTitleSolo)
  * and actions capsule (new chat + more).
  */
-function TopBar({ title, conversationId, drawerOpen, onToggleDrawer, menuButton, reduceMotion, onSignedOut, connected, onFork, onShare, pageBusy, onSystemPrompt, promptEnabled, search, generating }) {
+function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, menuButton, reduceMotion, onSignedOut, connected, onFork, onShare, pageBusy, onSystemPrompt, promptEnabled, search, generating }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [retainedMenu, setRetainedMenu] = useState(false);
   const moreButton = useRef(null);
   const searchField = useRef(null);
   useLayoutEffect(() => { if (search) searchField.current?.focus(); }, [!!search]);
   const titleIdentity = title ? JSON.stringify([conversationId, title]) : "brand";
-  const [titleFrames, setTitleFrames] = useState([{ identity: titleIdentity, title, initialAlpha: 1 }]);
-  const presentations = titleFrames.some((frame) => frame.identity === titleIdentity) ? titleFrames
-    : [...titleFrames, { identity: titleIdentity, title, initialAlpha: 0 }];
+  const titled = titleFrames => {
+    if (!titleFrames.some(frame => frame.identity === titleIdentity)) {
+      return [...titleFrames, { identity: titleIdentity, title, subtitle, initialAlpha: 0 }];
+    }
+    // The token figure arrives on its own, so the frame of the title that is showing takes it
+    // without restarting the crossfade; every other frame keeps what it had while it fades out.
+    return titleFrames.every(frame => frame.subtitle === subtitle) ? titleFrames
+      : titleFrames.map(frame => frame.identity === titleIdentity ? { ...frame, subtitle } : frame);
+  };
+  const [titleFrames, setTitleFrames] = useState([{ identity: titleIdentity, title, subtitle, initialAlpha: 1 }]);
+  const presentations = titled(titleFrames);
   const titleCanvas = useRef(null);
   const titleClip = useRef({ identity: null, target: 0, deadline: 0, animation: null });
   const titleFade = useRef({ identity: titleIdentity, animations: new Map() });
@@ -273,7 +283,7 @@ function TopBar({ title, conversationId, drawerOpen, onToggleDrawer, menuButton,
         labels.forEach((node) => { node.style.opacity = node === label ? "1" : "0"; });
         fade.animations.forEach((owned) => owned.cancel());
         fade.animations.clear();
-        setTitleFrames([{ identity, title, initialAlpha: 1 }]);
+        setTitleFrames([{ identity, title, subtitle, initialAlpha: 1 }]);
       };
     }
   }, [titleIdentity, !!search]);
@@ -311,9 +321,10 @@ function TopBar({ title, conversationId, drawerOpen, onToggleDrawer, menuButton,
             </button>
             <div class="title-labels">
               ${presentations.map((frame) => html`<h1 key=${frame.identity}
-                class=${frame.title ? "conversation-bar-title" : "brand-title"}
+                class=${frame.title ? (frame.subtitle ? "conversation-bar-title has-subtitle" : "conversation-bar-title") : "brand-title"}
                 data-title-identity=${frame.identity} aria-hidden=${frame.identity === titleIdentity ? null : "true"}
-                style=${{ opacity: frame.initialAlpha }}>${frame.title || t.title}</h1>`)}
+                style=${{ opacity: frame.initialAlpha }}><span class="title-text">${frame.title || t.title}</span>${frame.subtitle &&
+                  html`<span class="conversation-subtitle">${frame.subtitle}</span>`}</h1>`)}
             </div>
           </div>
         </div>
@@ -472,6 +483,7 @@ export function Shell({ onSignedOut }) {
   }, []);
   const sideBySide = useMediaQuery(SIDE_BY_SIDE_QUERY);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerPinned, setDrawerPinned] = useState(readDrawerPinned);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pageDialog, setPageDialog] = useState(null);
   // The drawer row menu's own dialogs, held here as on the phone they outlive the drawer itself.
@@ -493,6 +505,7 @@ export function Shell({ onSignedOut }) {
   }
   const shell = useRef(null);
   const drawerTarget = useRef(0);
+  const previousWide = useRef(null);
   const drawerAnimation = useRef(null);
   const drawerDrag = useRef(null);
   const dragClick = useRef(null);
@@ -633,9 +646,22 @@ export function Shell({ onSignedOut }) {
     };
   }, [sideBySide, reduceMotion]);
   useEffect(() => () => { drawerAnimation.current?.cancel(); cancelAnimationFrame(drawerFrame.current); }, []);
+  // Wide/narrow state machine: entering wide restores the expansion from the persisted pin,
+  // entering narrow always collapses the overlay and leaves the pin untouched. A same-mode
+  // re-run (motion setting change) just re-settles at the current expansion.
   useLayoutEffect(() => {
     endDrawerDrag(null, true);
-    settleDrawer(drawerTarget.current > 0);
+    const was = previousWide.current;
+    previousWide.current = sideBySide;
+    if (was === null) {
+      const open = sideBySide && readDrawerPinned();
+      drawerTarget.current = open ? 1 : 0;
+      shell.current.style.setProperty("--drawer-progress", open ? "1" : "0");
+      setDrawerOpen(open);
+      return;
+    }
+    if (was === sideBySide) { settleDrawer(drawerTarget.current > 0); return; }
+    settleDrawer(sideBySide && readDrawerPinned());
   }, [sideBySide, reduceMotion]);
   // ChatTopBar falls back to the brand while the title is blank.
   const openTitle = state.conversations.find((c) => c.id === state.openId)?.title?.trim() || null;
@@ -647,11 +673,9 @@ export function Shell({ onSignedOut }) {
     const enteringModal = modalOpen && !wasModalOpen.current;
     wasModalOpen.current = modalOpen;
     if (!modalOpen) return undefined;
-    // The dialog itself takes focus while none of its controls is enabled yet.
-    if (enteringModal) {
-      (drawer.current?.querySelector("input:not([disabled]), button:not([disabled])") ?? drawer.current)
-        ?.focus();
-    }
+    // The panel itself takes focus on entry; focusing a control here would focus the search
+    // field first, which on a phone opens the soft keyboard without the user asking for it.
+    if (enteringModal) drawer.current?.focus();
     const onKey = (event) => {
       if (event.defaultPrevented || shell.current.querySelector(".detail-sheet-layer, .dropdown, dialog[open]")) return;
       if (event.key === "Escape") { event.preventDefault(); settleDrawer(false); }
@@ -699,7 +723,14 @@ export function Shell({ onSignedOut }) {
           onSystemPrompt=${() => openPageAction("system_prompt")}
           promptEnabled=${state.connected && !!state.composer?.systemPrompt && !state.composer?.controls?.lowContextModeEnabled && !state.pendingAction}
           onFork=${() => openPageAction("fork")} onShare=${() => openPageAction("share")} pageBusy=${!!state.pageAction}
-          onToggleDrawer=${() => settleDrawer(drawerTarget.current === 0)} />
+          onToggleDrawer=${() => {
+            if (!sideBySide) { settleDrawer(drawerTarget.current === 0); return; }
+            // In the wide window the button toggles the persisted pin, not a temporary overlay.
+            const next = !drawerPinned;
+            setDrawerPinned(next);
+            try { localStorage.setItem(DRAWER_PINNED_KEY, String(next)); } catch (_) {}
+            settleDrawer(next);
+          }} />
         <${MessageList} state=${state} label=${openTitle || t.newChat} onPageAction=${openPageAction} />
         <div class="chat-top-blur" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
         <${Composer} state=${state} MoreMenu=${MoreMenu} expanded=${composerExpanded} onExpandedChange=${setComposerExpanded} />

@@ -282,7 +282,11 @@ function MessageEditDialog({ message, onClose }) {
  * phone's conversation owner, so the browser asks it whenever its own branch says the cascade would
  * take every visible row with it, which never under-warns.
  */
-function MessageDeleteDialog({ deletesConversation, onClose, onConfirm }) {
+function MessageDeleteDialog({ deletesConversation, compactOnly = false, onClose, onConfirm }) {
+  const title = compactOnly ? t.deleteCompactTitle
+    : deletesConversation ? t.deleteConversationTitle : t.deleteMessageTitle;
+  const body = compactOnly ? t.deleteCompactConfirm
+    : deletesConversation ? t.deleteConversationFromMessageConfirm : t.deleteMessageConfirm;
   const dialog = useRef(null);
   useLayoutEffect(() => {
     const node = dialog.current;
@@ -291,12 +295,12 @@ function MessageDeleteDialog({ deletesConversation, onClose, onConfirm }) {
   }, []);
   return html`
     <dialog ref=${dialog} class="attachment-editor page-dialog"
-      aria-label=${deletesConversation ? t.deleteConversationTitle : t.deleteMessageTitle}
+      aria-label=${title}
       onCancel=${(event) => { event.preventDefault(); onClose(); }}
       onClick=${(event) => { if (event.target === dialog.current) onClose(); }}
       onKeyDown=${(event) => event.stopPropagation()}>
-      <section><h2>${deletesConversation ? t.deleteConversationTitle : t.deleteMessageTitle}</h2>
-        <p>${deletesConversation ? t.deleteConversationFromMessageConfirm : t.deleteMessageConfirm}</p>
+      <section><h2>${title}</h2>
+        <p>${body}</p>
         <footer><button type="button" onClick=${onClose}>${t.cancel}</button>
           <button class="destructive" type="button" onClick=${onConfirm}>${t.delete}</button></footer>
       </section></dialog>`;
@@ -387,29 +391,44 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
 
 
 /**
- * The context-compact row. MessageItem draws a pill instead of the summary text: a 32 dp slot with
- * the state mark (18 dp), then labelLarge, on secondaryContainer, 42 dp tall and fully rounded.
+ * The context-compact row. MessageItem draws a pill instead of the summary text and centres it in
+ * the row: a fully rounded Surface at least 42 dp tall with 7 dp of side padding and 7 dp between
+ * children, a 32 dp mark slot holding the 18 dp state mark, one labelLarge line, and a trailing 32 dp
+ * IconButton. The pill itself owns the click and opens the compact SegmentDetailSheet, so its press
+ * wave is the pill shape; the detail button inherits the Surface content colour (onSecondaryContainer,
+ * onSurfaceVariant at 80 % when the compact failed) and is never tinted primary. Its menu is the
+ * phone's two items, Recompat and Delete.
  */
-function CompactPill({ message, reduceMotion, generating, onInfo, onDelete }) {
+function CompactPill({ message, reduceMotion, generating, display, wrap, onRecompact, onDelete }) {
   const running = !["SUCCESS", "ERROR", "STOPPED"].includes(message.status);
   const presentation = running ? "running" : message.status.toLowerCase();
   const label = running ? t.compactRunning : message.status === "SUCCESS" ? t.compactDone
     : message.status === "ERROR" ? t.compactError : t.compactStopped;
+  const actionsEnabled = !generating;
+  const [detail, setDetail] = useState(false);
   return html`
     <div class="compact-row">
-      <div class=${`compact-pill ${presentation}`} role="status">
-        <span class="compact-mark">
-          ${running && html`<${CircularProgress} size=${18} stroke=${2} />`}
-          ${message.status === "ERROR" && icon(ICON_ERROR)}
-          ${message.status === "STOPPED" && icon(ICON_STOP_CIRCLE, "0 0 24 24", "evenodd")}
-          ${message.status === "SUCCESS" && icon(ICON_COMPRESS)}
-        </span>
-        <span class="compact-label">${label}</span>
-      <${RowMore} reduceMotion=${reduceMotion} items=${(close) => html`
-        <${RowMenuItem} path=${ICON_INFO} label=${t.info} onClick=${() => { close(); onInfo(); }} />
-        <${RowMenuItem} path=${ICON_DELETE} label=${t.delete} destructive enabled=${!generating}
-          onClick=${() => { close(); onDelete(); }} />`} />
+      <div class=${`compact-pill-box ${presentation}`}>
+        <button class=${`compact-pill ${presentation}`} type="button" onClick=${() => setDetail(true)}>
+          <span class="compact-mark">
+            ${running && html`<${CircularProgress} size=${18} stroke=${2} />`}
+            ${message.status === "ERROR" && icon(ICON_ERROR)}
+            ${message.status === "STOPPED" && icon(ICON_STOP_CIRCLE, "0 0 24 24", "evenodd")}
+            ${message.status === "SUCCESS" && icon(ICON_COMPRESS)}
+          </span>
+          <span class="compact-label">${label}</span>
+        </button>
+        <div class="compact-detail">
+          <${RowMore} reduceMotion=${reduceMotion} items=${(close) => html`
+            <${RowMenuItem} path=${ICON_REFRESH} label=${t.recompact} enabled=${actionsEnabled}
+              onClick=${() => { close(); onRecompact(); }} />
+            <${RowMenuItem} path=${ICON_DELETE} label=${t.delete} destructive enabled=${actionsEnabled}
+              onClick=${() => { close(); onDelete(); }} />`} />
+        </div>
       </div>
+      ${detail && html`<${DetailSheet} title=${t.compact} display=${display} onClose=${() => setDetail(false)}>
+        <div class="detail-sheet-markdown"><${Markdown} text=${message.text} wrap=${wrap} /></div>
+      </${DetailSheet}>`}
     </div>`;
 }
 
@@ -668,13 +687,16 @@ function ModelMessage({ message, wrap, display, expansion, expansionController, 
   const dialogs = html`
     ${info && html`<${MessageInfoDialog} message=${message} onClose=${() => setInfo(false)} />`}
     ${confirming && html`<${MessageDeleteDialog} deletesConversation=${deletesConversation}
+      compactOnly=${!!message.compact}
       onClose=${() => setConfirming(false)}
       onConfirm=${() => { setConfirming(false); sync.rowCommand("delete", message.id); }} />`}`;
   // The compact summary never reads as prose: MessageItem owns a pill for it instead.
   if (message.compact) {
     return html`<div class="model-message">
       <${CompactPill} message=${message} reduceMotion=${reduceMotion} generating=${generating}
-        onInfo=${() => setInfo(true)} onDelete=${() => setConfirming(true)} />${dialogs}</div>`;
+        display=${display} wrap=${wrap}
+        onRecompact=${() => sync.rowCommand("recompact", message.id)}
+        onDelete=${() => setConfirming(true)} />${dialogs}</div>`;
   }
   let body = null;
   if (presentation?.useTimeline) {

@@ -20,7 +20,6 @@ const TEXT = {
     deleteChatConfirm: "Are you sure you want to delete this conversation? This action cannot be undone.",
     searchHint: "Search conversations...",
     searchNoResults: "No results", searchFailed: "Search failed", searchRoleUser: "User", searchRoleModel: "Model",
-    tasks: "Tasks",
     remote: "Remote",
     newChat: "New Chat",
     // Product name, never translated. ChatWelcomeContent reads welcome_to_agora on the phone.
@@ -87,6 +86,9 @@ const TEXT = {
     sourceTask: "Task", sourceLoop: "Loop", sourceAskUser: "Ask User", sourceUnanswered: "Unanswered",
     compactRunning: "Compacting context…", compactDone: "Context Compact",
     compactError: "Compact error", compactStopped: "Compact stopped",
+  recompact: "Recompact",
+  deleteCompactTitle: "Delete compact message?",
+  deleteCompactConfirm: "Only this compact message will be deleted.",
     forkFromHere: "Fork from here?", noFigure: "—",
     // The phone leaves this icon unnamed; a browser control still needs a name, so this one is the
     // browser's own and the only string here that has no entry in values/strings.xml.
@@ -119,7 +121,6 @@ const TEXT = {
     conversations: "对话",
     searchHint: "搜索对话...",
     searchNoResults: "无搜索结果", searchFailed: "搜索失败", searchRoleUser: "用户", searchRoleModel: "模型",
-    tasks: "任务",
     remote: "远程",
     newChat: "新对话",
     // Product name, never translated. ChatWelcomeContent reads welcome_to_agora on the phone.
@@ -184,6 +185,9 @@ const TEXT = {
     sourceTask: "任务", sourceLoop: "循环", sourceAskUser: "询问", sourceUnanswered: "未回答",
     compactRunning: "正在压缩上下文…", compactDone: "上下文压缩",
     compactError: "压缩出错", compactStopped: "压缩已停止",
+  recompact: "重新压缩",
+  deleteCompactTitle: "删除压缩消息？",
+  deleteCompactConfirm: "只会删除此压缩消息。",
     forkFromHere: "从这里创建分支？", noFigure: "—",
     regenerate: "重新生成",
     timeWithLabel: value => `时间：${value}`, modelWithLabel: value => `模型：${value}`,

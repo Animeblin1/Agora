@@ -184,6 +184,15 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   const selectedModel = state.composer?.modelId;
   const modelLabel = state.composer?.modelValid ? state.composer.models?.[selectedModel] ?? t.selectModel
     : modelChoices.length ? t.selectModel : t.noModel;
+  // ComposerModelSelector keeps one label and crossfades to the next. The label is the phone's
+  // identity for both the fade and the clip edge, so two conversations on the same model do not
+  // animate, and a model that arrives later moves the edge instead of replacing the row.
+  const modelSlot = useRef(null);
+  const modelClip = useRef({ identity: null, target: 0, deadline: 0, animation: null });
+  const modelFade = useRef({ label: modelLabel, animations: new Map() });
+  const [modelFrames, setModelFrames] = useState([{ label: modelLabel, initialAlpha: 1 }]);
+  const modelPresentations = modelFrames.some(frame => frame.label === modelLabel) ? modelFrames
+    : [...modelFrames, { label: modelLabel, initialAlpha: 0 }];
   useEffect(() => { setModelOpen(false); }, [state.openId, state.connected]);
   const phase = state.composer?.phase ?? "IDLE";
   const waiting = phase === "WAITING";
@@ -263,6 +272,105 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
     const timer = setTimeout(() => sync.dismissSnackbar(id), 4_000);
     return () => clearTimeout(timer);
   }, [state.snackbar?.id]);
+  // The slot takes the clip width so the controls after it follow the visible edge, exactly as the
+  // phone's Box does; the button inside keeps its measured target width. One 400 ms deadline owns
+  // the move: a new target rebases from the current edge inside the same deadline, a new label
+  // restarts from where the edge stands, and no correction frame follows the terminal one.
+  useLayoutEffect(() => {
+    const slot = modelSlot.current;
+    if (!slot) return undefined;
+    const clip = modelClip.current;
+    const measure = () => {
+      const label = slot.querySelector(`[data-model-label="${CSS.escape(modelLabel)}"]`);
+      if (!label) return;
+      // ComposerModelSelector is the only weighted child of ComposerControlGroup, so its room is the
+      // space the group itself was given, minus the group's own padding and the fixed buttons beside
+      // it. The room comes from the row's constraint and never from the group's measured width,
+      // because that width is what this very button sets.
+      const group = slot.parentElement;
+      const row = group.parentElement;
+      const rowStyle = getComputedStyle(row);
+      const rowGap = parseFloat(rowStyle.columnGap) || 0;
+      const send = [...row.children].find((node) => node !== group);
+      const groupRoom = row.clientWidth - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight) -
+        (send ? send.offsetWidth + rowGap : 0);
+      const style = getComputedStyle(group);
+      const beside = [...group.children].filter(node => node !== slot);
+      const available = groupRoom - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) -
+        beside.reduce((sum, node) => sum + node.offsetWidth, 0);
+      // label + 8 dp each side, never under ButtonDefaults.MinWidth (64 dp), and the room caps it.
+      const target = Math.min(Math.max(label.scrollWidth + 16, 64), available);
+      // The phone caps the Text itself at availableWidth - 16 dp so an over-long name ellipsizes
+      // inside the button instead of being cut hard by the clip edge.
+      slot.style.setProperty("--model-label-room", `${Math.max(0, available - 16)}px`);
+      const initial = clip.identity === null;
+      const changed = clip.identity !== modelLabel;
+      if (!changed && clip.target === target && (!state.display?.reduceMotion || !clip.animation)) return;
+      const from = initial ? target : parseFloat(getComputedStyle(slot).width) || target;
+      clip.animation?.cancel();
+      clip.animation = null;
+      if (changed) clip.deadline = performance.now() + 400;
+      clip.identity = modelLabel;
+      clip.target = target;
+      modelButton.current.style.width = `${target}px`;
+      if (initial || state.display?.reduceMotion || performance.now() >= clip.deadline) {
+        slot.style.width = `${target}px`;
+        clip.deadline = 0;
+        return;
+      }
+      const animation = slot.animate([{ width: `${from}px` }, { width: `${target}px` }],
+        { duration: clip.deadline - performance.now(), easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" });
+      clip.animation = animation;
+      animation.onfinish = () => {
+        if (clip.animation !== animation) return;
+        slot.style.width = `${clip.target}px`;
+        animation.cancel();
+        clip.animation = null;
+        clip.deadline = 0;
+      };
+    };
+    measure();
+    const geometry = new ResizeObserver(measure);
+    // The row owns the constraint; the group's own width is what this effect animates, so watching it
+    // would re-enter on every clip frame. Each label is watched because its width is the measurement.
+    [slot.parentElement.parentElement, ...slot.querySelectorAll(".model-label")].forEach(node =>
+      geometry.observe(node, { box: "border-box" }));
+    document.fonts.addEventListener("loadingdone", measure);
+    return () => { geometry.disconnect(); document.fonts.removeEventListener("loadingdone", measure); };
+  }, [modelLabel, modelPresentations.length, state.display?.reduceMotion]);
+  // Crossfade(tween(200, FastOutSlowInEasing)): every label keeps its own width while it fades, so an
+  // outgoing longer name is cut only by the moving clip and never ellipsizes early.
+  useLayoutEffect(() => {
+    const fade = modelFade.current;
+    if (fade.label === modelLabel) return;
+    const labels = [...(modelSlot.current?.querySelectorAll(".model-label") ?? [])];
+    for (const label of labels) {
+      const alpha = getComputedStyle(label).opacity;
+      fade.animations.get(label.dataset.modelLabel)?.cancel();
+      label.style.opacity = alpha;
+    }
+    fade.animations.clear();
+    fade.label = modelLabel;
+    setModelFrames(modelPresentations);
+    for (const label of labels) {
+      const identity = label.dataset.modelLabel;
+      const animation = label.animate([{ opacity: getComputedStyle(label).opacity },
+        { opacity: identity === modelLabel ? 1 : 0 }],
+      { duration: 200, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" });
+      fade.animations.set(identity, animation);
+      if (identity === modelLabel) animation.onfinish = () => {
+        if (fade.animations.get(identity) !== animation) return;
+        labels.forEach(node => { node.style.opacity = node === label ? "1" : "0"; });
+        fade.animations.forEach(owned => owned.cancel());
+        fade.animations.clear();
+        setModelFrames([{ label: modelLabel, initialAlpha: 1 }]);
+      };
+    }
+  }, [modelLabel]);
+  useLayoutEffect(() => () => {
+    modelClip.current.animation?.cancel();
+    modelFade.current.animations.forEach(animation => animation.cancel());
+  }, []);
   return html`
     <div class=${`composer-host ${expanded ? "composer-expanded" : ""}`} ref=${host}>
       <${InteractionBar} state=${state} />
@@ -330,10 +438,16 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
               aria-haspopup="menu" aria-expanded=${addOpen} onClick=${() => { setRetainedAdd(true); setAddOpen(!addOpen); }}>
               ${icon(ICON_ADD)}
             </button>
-            <button ref=${modelButton} class="model-selector" type="button" aria-label=${t.selectModel}
-              aria-haspopup="menu" aria-expanded=${modelOpen} data-valid=${!!state.composer?.modelValid}
-              disabled=${!composerReady || !!state.pendingAction}
-              onClick=${() => { setRetainedModelMenu(true); setModelOpen(!modelOpen); }}>${modelLabel}</button>
+            <div class="model-selector" ref=${modelSlot}>
+              <button ref=${modelButton} class="model-button" type="button" aria-label=${t.selectModel}
+                aria-haspopup="menu" aria-expanded=${modelOpen} data-valid=${!!state.composer?.modelValid}
+                disabled=${!composerReady || !!state.pendingAction}
+                onClick=${() => { setRetainedModelMenu(true); setModelOpen(!modelOpen); }}>
+                ${modelPresentations.map(frame => html`<span class="model-label" key=${frame.label}
+                  data-model-label=${frame.label} aria-hidden=${frame.label === modelLabel ? null : "true"}
+                  style=${{ opacity: frame.initialAlpha }}>${frame.label}</span>`)}
+              </button>
+            </div>
             <button ref=${contextButton} class="control-icon context-ring" type="button"
               aria-label=${contextReady ? `${t.context}: ${contextUsage}` : t.context}
               aria-haspopup="menu" aria-expanded=${contextOpen} disabled=${!contextReady}
