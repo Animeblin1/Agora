@@ -474,7 +474,7 @@ p {
   cursor: pointer;
   /* Hover fades this row's trailing action in over 200 ms and the row gives it room at the same
    * moment; a padding change that snaps on the same hover reads wrong next to a fade. */
-  --md-component-transition: background-color 250ms, color 250ms, padding-right 200ms linear;
+  --md-component-transition: background-color 250ms, color 250ms, padding-right 200ms cubic-bezier(.4, 0, .2, 1);
 }
 .conversation-row.selected {
   background: var(--md-secondary-container);

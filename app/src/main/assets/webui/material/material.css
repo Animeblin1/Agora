@@ -117,25 +117,21 @@
 /* A determinate ring paints its own dashes inline, so this only settles what an indeterminate ring
  * shows before its animation starts and while motion is turned off. */
 .circular-progress .arc { stroke-dasharray: 75 100; }
-/* ProgressIndicator.kt rotates an indeterminate ring twice over: 1080 degrees in 6000ms, plus a
- * 90 degree step every 1500ms that eases in over 300ms (EasingEmphasizedDecelerateCubicBezier) and
- * then holds. Both turns run on the same 6000ms cycle so they stay in step, like the composable. */
+/* Match the pinned Material3 keyframe intervals, including the clockwise start at 3 o'clock. */
 .circular-progress:not(.determinate) svg { animation: md-progress-turn 6000ms linear infinite; }
 .circular-progress:not(.determinate) g { animation: md-progress-step 6000ms linear infinite; }
-/* The arc itself breathes between CircularIndeterminateMinProgress (10%) and MaxProgress (87%) of a
- * turn: out over 3000ms with EasingStandardCubicBezier, back over the next 3000ms linearly. */
 .circular-progress:not(.determinate) .arc { animation: md-progress-arc 6000ms linear infinite; }
-@keyframes md-progress-turn { from { transform: rotate(-90deg); } to { transform: rotate(990deg); } }
+@keyframes md-progress-turn { from { transform: rotate(0deg); } to { transform: rotate(1080deg); } }
 @keyframes md-progress-step {
-  0% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.05, .7, .1, 1); }
+  0% { transform: rotate(0deg); }
   5%, 25% { transform: rotate(90deg); }
   30%, 50% { transform: rotate(180deg); }
   55%, 75% { transform: rotate(270deg); }
   80%, 100% { transform: rotate(360deg); }
 }
 @keyframes md-progress-arc {
-  0% { stroke-dasharray: 10 100; animation-timing-function: cubic-bezier(.2, 0, 0, 1); }
-  50% { stroke-dasharray: 87 100; }
+  0% { stroke-dasharray: 10 100; }
+  50% { stroke-dasharray: 87 100; animation-timing-function: cubic-bezier(.2, 0, 0, 1); }
   100% { stroke-dasharray: 10 100; }
 }
 /* App Reduce Motion stops the spin and leaves a still arc; the sign-in page has no app setting to
