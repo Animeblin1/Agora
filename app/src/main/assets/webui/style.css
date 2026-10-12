@@ -420,8 +420,7 @@ p {
   background: var(--md-primary);
   color: var(--md-on-primary);
 }
-.drawer-button:disabled,
-.drawer-button.tonal:disabled {
+.drawer-button:disabled {
   cursor: default;
   background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
   color: color-mix(in srgb, var(--md-on-surface) 38%, transparent);
