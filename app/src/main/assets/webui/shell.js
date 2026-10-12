@@ -6,7 +6,7 @@ import { t } from "./i18n.js";
 import {
   icon, ICON_ADD,
   ICON_MENU, ICON_MORE_VERT, ICON_SEARCH, ICON_PIN,
-  ICON_DELETE, ICON_EDIT,
+  ICON_DELETE, ICON_EDIT, ICON_REFRESH,
   ICON_ARROW_BACK, ICON_CHEVRON_DOWN,
 } from "./icons.js";
 import { MoreMenu } from "./menu.js";
@@ -69,7 +69,7 @@ function ConversationRow({ conversation, selected, onSelect, onMenu }) {
 
 /** ChatDrawerContent: title, search, New Chat, then the conversation list. */
 function DrawerContent({ conversations, openId, onSelect, connected, loading, hasMore, reduceMotion,
-  searchQuery, searchResults, searchLoading, searchFailed, onRequestRename, onRequestDelete }) {
+  searchQuery, searchResults, searchLoading, searchFailed, onRequestRename, onRequestDelete, switching }) {
   const searching = !!searchQuery.trim();
   const list = useRef(null), bar = useRef(null), focusIndex = useRef(null);
   const [viewport, setViewport] = useState({ top: 0, height: 500 });
@@ -175,6 +175,11 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
       <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected}
         onClick=${() => { sync.pin(menu.conversation.id, !menu.conversation.isPinned); setMenuOpen(false); }}>
         ${icon(ICON_PIN)}<span>${menu.conversation.isPinned ? t.unpin : t.pin}</span>
+      </button>
+      <button class="dropdown-item" role="menuitem" type="button"
+        disabled=${!connected || switching || menu.conversation.generating}
+        onClick=${() => { sync.generateTitle(menu.conversation.id); setMenuOpen(false); }}>
+        ${icon(ICON_REFRESH)}<span>${t.generateTitle}</span>
       </button>
       <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected}
         onClick=${() => { onRequestRename({ conversationId: menu.conversation.id, title: menu.conversation.title, anchor: menu.anchor }); setMenuOpen(false); }}>
@@ -715,6 +720,7 @@ export function Shell({ onSignedOut }) {
         inert=${!drawerOpen}>
         <${DrawerContent} conversations=${state.conversations} openId=${state.openId}
           connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion}
+          switching=${state.openStatus === "loading"}
           searchQuery=${state.searchQuery} searchResults=${state.searchResults} searchLoading=${state.searchLoading} searchFailed=${state.searchFailed}
           onRequestRename=${(request) => setRowDialog({ ...request, type: "rename" })}
           onRequestDelete=${(request) => setRowDialog({ ...request, type: "delete" })}

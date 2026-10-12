@@ -412,6 +412,7 @@ class AppContainer(
             },
             forkShare = chatRuntime.conversationForkShare,
             conversationLifecycle = chatRuntime.conversationLifecycle,
+            generation = chatRuntime.messageGeneration,
             askUser = askUserController,
             shellConfirmation = shellConfirmationController,
             contextAccounting = com.newoether.agora.webui.WebUiContextAccounting(

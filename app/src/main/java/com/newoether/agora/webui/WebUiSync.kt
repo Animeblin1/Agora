@@ -87,6 +87,7 @@ internal class WebUiSync(
     private val forkShare: com.newoether.agora.viewmodel.ConversationForkShareController,
     /** The one conversation-metadata owner the phone uses too; the drawer row menu goes through it. */
     private val conversationLifecycle: com.newoether.agora.viewmodel.ConversationLifecycleController,
+    private val generation: com.newoether.agora.viewmodel.MessageGenerationController,
     private val askUser: com.newoether.agora.viewmodel.AskUserController,
     private val shellConfirmation: com.newoether.agora.viewmodel.ShellConfirmationController,
     /** Builds this connection's own context accounting; see [WebUiContextAccounting]. */
@@ -446,28 +447,10 @@ internal class WebUiSync(
                             }
                         }
                         "list_more" -> if (command.tokens == listLimit.value) listLimit.value += DRAWER_PAGE_SIZE
-                        "pin" -> {
-                            val id = command.conversationId ?: continue
-                            val pinned = command.enabled ?: continue
-                            conversationLifecycle.setPinned(id, pinned)
-                        }
-                        "conversation_rename" -> {
-                            val id = command.conversationId ?: continue
-                            val title = command.text?.trim().orEmpty()
-                            if (title.isNotEmpty()) conversationLifecycle.rename(id, title)
-                        }
-                        "conversation_delete" -> {
-                            val id = command.conversationId ?: continue
-                            val actionId = command.actionId
-                            if (actionId <= 0L) continue
-                            // The phone's own transaction: refused while a send is admitted, and every client
-                            // still showing the conversation settles back to New Chat. This session is the
-                            // origin, and only this browser's own answer settles the dialog it opened.
-                            val accepted = conversationLifecycle.delete(session, id) { deleted ->
-                                if (connectionJob.isActive) launch { outbound.send(WebSyncEvent.ConversationDelete(id, actionId, deleted)) }
+                        "pin", "conversation_title", "conversation_rename", "conversation_delete" ->
+                            routeConversationMenu(command, session, conversationLifecycle, generation, registry.activeConversationIds.value) { event ->
+                                if (connectionJob.isActive) launch { outbound.send(event) }
                             }
-                            if (!accepted) outbound.send(WebSyncEvent.ConversationDelete(id, actionId, false))
-                        }
                         COMMAND_OPEN -> {
                             watched.value = emptySet()
                             session.open(command.conversationId, command.seq)

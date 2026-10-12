@@ -47,8 +47,10 @@ class WebUiConversationMenuTest {
     private val conversations = mockk<ConversationRepository> {
         every { observeDrawerConversations(any()) } answers { list.map { rows -> rows.take(firstArg<Int>()) } }
     }
+    private val generation = mockk<com.newoether.agora.viewmodel.MessageGenerationController>(relaxed = true)
+    private val generating = MutableStateFlow<Set<String>>(emptySet())
     private val registry = mockk<ConversationStateRegistry> {
-        every { activeConversationIds } returns MutableStateFlow<Set<String>>(emptySet())
+        every { activeConversationIds } returns generating
     }
     private val lifecycle = mockk<ConversationLifecycleController> {
         every { setPinned(any(), any()) } just Runs
@@ -72,6 +74,17 @@ class WebUiConversationMenuTest {
         coEvery { start() } just Runs
         coEvery { close() } just Runs
         coEvery { endUploads() } just Runs
+    }
+
+    @Test
+    fun titleUsesTheCanonicalGeneratorWithTheNamedDrawerRowAndThisBrowserAsOrigin() = sync { send, _ ->
+        send("""{"type":"conversation_title","conversationId":"b"}""")
+        verify(exactly = 1) { generation.generateTitle("b", session) }
+        generating.value = setOf("b")
+        send("""{"type":"conversation_title","conversationId":"b"}""")
+        send("""{"type":"conversation_title"}""")
+        send("""{"type":"conversation_title","conversationId":" "}""")
+        verify(exactly = 1) { generation.generateTitle(any(), any()) }
     }
 
     @Test
@@ -167,6 +180,7 @@ class WebUiConversationMenuTest {
             openChatSession = { session },
             forkShare = mockk(relaxed = true),
             conversationLifecycle = lifecycle,
+            generation = generation,
             askUser = com.newoether.agora.viewmodel.AskUserController(),
             shellConfirmation = com.newoether.agora.viewmodel.ShellConfirmationController(MutableStateFlow(true), {}),
             contextAccounting = WebUiContextAccounting(

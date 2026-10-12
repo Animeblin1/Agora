@@ -754,7 +754,7 @@ class WebUiSyncTest {
         display = display,
         openChatSession = { session },
         forkShare = forkShare,
-        conversationLifecycle = mockk(relaxed = true),
+        conversationLifecycle = mockk(relaxed = true), generation = mockk(relaxed = true),
         askUser = askUser,
         shellConfirmation = shell,
         contextAccounting = contextAccounting,

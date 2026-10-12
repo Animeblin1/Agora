@@ -214,7 +214,7 @@ class WebUiMessagePresentationTest {
             kotlinx.coroutines.flow.MutableStateFlow(90), kotlinx.coroutines.flow.MutableStateFlow(true))
         val owner = WebUiSync(repository, registry, com.newoether.agora.automation.ConversationExecutionCoordinator(),
             hydration, providers, kotlinx.coroutines.flow.flowOf(display(toolMode = ToolCallDisplayModes.COMPACT)), { session },
-            io.mockk.mockk(), io.mockk.mockk(), com.newoether.agora.viewmodel.AskUserController(),
+            io.mockk.mockk(), io.mockk.mockk(), io.mockk.mockk(), com.newoether.agora.viewmodel.AskUserController(),
             com.newoether.agora.viewmodel.ShellConfirmationController(kotlinx.coroutines.flow.MutableStateFlow(true), {}),
             accounting, { emptyList() }, kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
         val incoming = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)

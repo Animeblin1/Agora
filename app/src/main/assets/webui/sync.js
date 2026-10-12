@@ -337,6 +337,11 @@ export const sync = {
     if (send({ type: "list_more", tokens: state.listLimit })) update({ listLoading: true });
   },
   pin(conversationId, enabled) { send({ type: "pin", conversationId, enabled }); },
+  generateTitle(conversationId) {
+    if (!state.connected || state.openStatus === "loading" ||
+        state.conversations.find(item => item.id === conversationId)?.generating) return false;
+    return send({ type: "conversation_title", conversationId });
+  },
   renameConversation(conversationId, title) {
     return send({ type: "conversation_rename", conversationId, text: title });
   },

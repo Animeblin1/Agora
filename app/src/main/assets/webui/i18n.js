@@ -15,7 +15,7 @@ const TEXT = {
     options: "Options",
     conversations: "Conversations",
     pinned: "Pinned", pin: "Pin", unpin: "Unpin", loading: "Loading",
-    rename: "Rename", renameChat: "Rename Chat",
+    rename: "Rename", renameChat: "Rename Chat", generateTitle: "Generate Title",
     deleteChat: "Delete Chat?", toolStateFailed: "Failed",
     deleteChatConfirm: "Are you sure you want to delete this conversation? This action cannot be undone.",
     searchHint: "Search conversations...",
@@ -105,7 +105,7 @@ const TEXT = {
   zh: {
     title: "Agora",
     pinned: "置顶", pin: "置顶", unpin: "取消置顶", loading: "加载中",
-    rename: "重命名", renameChat: "重命名对话",
+    rename: "重命名", renameChat: "重命名对话", generateTitle: "生成标题",
     deleteChat: "删除对话", toolStateFailed: "调用失败",
     deleteChatConfirm: "确定要删除此对话吗？此操作无法撤销。",
     signInTitle: "登录",
