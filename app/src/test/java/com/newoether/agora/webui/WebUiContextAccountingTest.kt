@@ -68,6 +68,33 @@ class WebUiContextAccountingTest {
     }
 
     @Test
+    fun targetSwitchSequenceEmitsNoUnsettledFigureThenItsOwnSuccessOrFailure() {
+        val next = request.copy(conversationId = "c2", seq = 4L, tokenBudget = 200_000)
+        val oldSettled = contextAccountingEvent(request, projection(usage), null, 90, true)
+        val switched = contextAccountingEvent(next, projection(usage), "c1", 90, true)
+        val pricing = projection(usage, loading = true, completed = false).copy(conversationId = "c2")
+        val pending = contextAccountingEvent(next, pricing, "c1", 90, true)
+        val nextUsage = usage.copy(estimatedTokenCount = 60_000, tokenBudget = 200_000)
+        val completed = contextAccountingEvent(next, projection(nextUsage).copy(conversationId = "c2"), "c1", 90, true)
+        val failed = contextAccountingEvent(next, pricing.copy(loading = false, failed = true), "c1", 90, true)
+
+        assertEquals(40_000, oldSettled.estimatedTokens)
+        for (event in listOf(switched, pending)) {
+            assertEquals("c2", event.conversationId)
+            assertEquals(4L, event.seq)
+            assertEquals(200_000, event.tokenBudget)
+            assertNull(event.estimatedTokens)
+            assertTrue(event.parts.isEmpty())
+            assertFalse(event.failed)
+        }
+        assertTrue(pending.loading)
+        assertEquals(60_000, completed.estimatedTokens)
+        assertFalse(completed.loading)
+        assertNull(failed.estimatedTokens)
+        assertTrue(failed.failed)
+    }
+
+    @Test
     fun aFailedProjectionShowsNothingAndOnlyTheOwnTargetReportsFailure() {
         val failed = projection(usage, completed = true, failed = true)
         val event = contextAccountingEvent(request, failed, "c1", 90, true)
