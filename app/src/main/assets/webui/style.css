@@ -812,7 +812,7 @@ mark[data-search-key].active { background: #ffa000; }
  * they run once per transition and not once per mount. */
 .welcome-enters {
   transform-origin: 50% 50%;
-  animation: welcome-fade 500ms linear both, welcome-scale 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: welcome-fade 500ms cubic-bezier(0.4, 0, 0.2, 1) both, welcome-scale 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @keyframes welcome-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes welcome-scale { from { transform: scale(0.6); } to { transform: scale(1); } }
@@ -822,7 +822,7 @@ mark[data-search-key].active { background: #ffa000; }
 /* The frame the transition is replacing, pinned over the thread it is leaving. */
 .chat-frame-exits { position: absolute; left: 0; right: 0; pointer-events: none; }
 /* AllowSpatialTransitions off keeps the fade and drops the scale, exactly as the composable does. */
-.shell[data-reduce-motion="true"] .welcome-enters { animation: welcome-fade 500ms linear both; }
+.shell[data-reduce-motion="true"] .welcome-enters { animation: welcome-fade 500ms cubic-bezier(0.4, 0, 0.2, 1) both; }
 .shell[data-reduce-motion="true"] .welcome-typing .welcome-glyph { animation: none; }
 /* Layout only: an unloaded row keeps a one-line height so only rows near the screen are watched. */
 .row-placeholder { min-height: 54px; }
@@ -1907,8 +1907,8 @@ button.info-item:focus-visible { outline: none; }
  * container and it is concentric with the control's border by construction. The frame used to ask for
  * a 2 px ring *outside* the control, which the drawer list's `overflow: auto` sliced in half and which
  * sat off the row's 20 dp corner radius; drawing it inset fixes both at once, for every control. */
-.shell :focus-visible { outline: 2px solid var(--md-primary); outline-offset: -2px; }
+:is(.shell, dialog) :focus-visible { outline: 2px solid var(--md-primary); outline-offset: -2px; }
 /* No text field on the phone carries a native resize handle, and the ones that grow do so with their
  * content. The affordance is dropped for the whole frame rather than field by field, so a control
  * cannot gain one by being added later. */
-.shell textarea { resize: none; }
+:is(.shell, dialog) textarea { resize: none; }

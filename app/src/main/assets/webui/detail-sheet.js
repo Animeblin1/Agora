@@ -1,6 +1,6 @@
 // Shared message-detail and Composer settings sheet presentation.
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/preact-hooks.mjs";
-import { html, runSpring } from "./html.js";
+import { html, runSpring, useDialog } from "./html.js";
 import { Spinner } from "./material/progress.js";
 import { Markdown } from "./markdown.js";
 import { icon, ICON_BUILD, ICON_CHEVRON_RIGHT, ICON_IMAGE, ICON_NEUROLOGY } from "./icons.js";
@@ -131,14 +131,11 @@ function ToolImage({ src, image, detail, full = false, onClick }) {
   </${Tag}>`;
 }
 
-function ToolMediaPreview({ detail, urls, initialIndex, onClose }) {
+function ToolMediaPreview({ detail, urls, initialIndex, onClose: onClosed }) {
   const dialog = useRef(null);
+  const onClose = useDialog(dialog, onClosed);
   const [index, setIndex] = useState(initialIndex);
   const [scale, setScale] = useState(1);
-  useEffect(() => {
-    dialog.current.showModal();
-    return () => dialog.current?.close();
-  }, []);
   function navigate(next) { setIndex(next); setScale(1); }
   return html`<dialog class="tool-media-viewer" ref=${dialog} aria-label=${detail.imageLabel}
     onCancel=${(event) => { event.preventDefault(); onClose(); }}

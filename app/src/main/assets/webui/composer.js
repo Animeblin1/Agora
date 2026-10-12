@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/preact-hooks.mjs";
-import { html } from "./html.js";
+import { html, useDialog } from "./html.js";
 import { CircularProgress, Spinner } from "./material/progress.js";
 import { sliderStyle } from "./material/slider.js";
 import { t } from "./i18n.js";
@@ -668,23 +668,19 @@ function ConversationEditor({ editor, state, focusReturn, onClose }) {
   const [retain, setRetain] = useState(String(info.retainCount ?? 0));
   const [error, setError] = useState(null);
   const busy = !!state.pendingAction;
-  useEffect(() => {
-    const node = dialog.current;
-    node.showModal();
-    return () => { node.close(); focusReturn.current?.focus(); };
-  }, []);
-  useEffect(() => { if (!advanced && state.composer.compact?.compacting) onClose(); }, [state.composer.compact?.compacting]);
-  function close() { if (!busy) onClose(); }
+  const dismiss = useDialog(dialog, onClose, focusReturn);
+  useEffect(() => { if (!advanced && state.composer.compact?.compacting) dismiss(); }, [state.composer.compact?.compacting]);
+  function close() { if (!busy) dismiss(); }
   function apply() {
     if (busy) return;
     if (advanced) {
-      if (sync.editorCommand("advanced", { parameters: draft }, editor)) onClose();
+      if (sync.editorCommand("advanced", { parameters: draft }, editor)) dismiss();
     } else {
       const count = retain === "" ? NaN : Number(retain);
       if (!(model in state.composer.models)) setError(t.compactModelError);
       else if (!prompt.trim()) setError(t.compactPromptError);
       else if (!Number.isInteger(count) || count < 0 || count > 2147483647) setError(t.compactRetainError);
-      else if (sync.editorCommand("compact", { modelId: model, text: prompt, retainCount: count }, editor)) onClose();
+      else if (sync.editorCommand("compact", { modelId: model, text: prompt, retainCount: count }, editor)) dismiss();
     }
   }
   return html`<dialog ref=${dialog} class="attachment-editor conversation-editor" aria-label=${advanced ? t.advancedTitle : t.compactTitle}
@@ -770,8 +766,18 @@ function AttachmentEditor({ attachment: a, editable, onPreview }) {
   const sliceMs = countMode ? Math.floor((a.durationMs || 0) / Math.max(2, frames)) : interval * 1000;
   const loading = pdf && a.pagePreviewCount !== a.pageCount;
   const valid = pdf ? pages.length > 0 && !loading : Number.isInteger(frames) && frames >= 2 && frames <= 2147483647;
-  function cancel() { if (editable) sync.attachmentCommand("attachment_remove", a.id); }
-  useEffect(() => { dialog.current.showModal(); return () => dialog.current?.close(); }, []);
+  const exitAction = useRef(null);
+  const target = sync.attachmentTarget();
+  const dismiss = useDialog(dialog, () => {
+    if (exitAction.current && target) sync.attachmentCommand(exitAction.current.type, a.id,
+      exitAction.current.config, target);
+  });
+  function finish(type, config = {}) {
+    if (!editable) return;
+    exitAction.current = { type, config };
+    dismiss();
+  }
+  function cancel() { finish("attachment_remove"); }
   return html`<dialog ref=${dialog} class="attachment-editor" aria-label=${pdf ? t.pdfTitle : t.videoTitle}
     onCancel=${event => { event.preventDefault(); cancel(); }} onClick=${event => { if (event.target === dialog.current) cancel(); }} onKeyDown=${event => event.stopPropagation()}>
     <section><h2>${pdf ? t.pdfTitle : t.videoTitle}</h2>
@@ -788,13 +794,14 @@ function AttachmentEditor({ attachment: a, editable, onPreview }) {
       ${countMode ? html`<label>${t.frames(frames || 2)}<input type="number" min="2" max="2147483647" value=${count} aria-invalid=${!valid} onInput=${event => setCount(event.currentTarget.value)} /></label><p>${t.betweenFrames(sliceMs < 1000 ? `${sliceMs}ms` : `${Math.round(sliceMs / 1000)}s`)}</p>`
         : html`<label>${t.interval(interval)}<input type="range" min="1" max=${Math.max(1, Math.min(seconds, 30))} style=${sliderStyle(1, Math.max(1, Math.min(seconds, 30)), interval)} value=${interval} onInput=${event => setInterval(Number(event.currentTarget.value))} /></label><p>${t.frames(frames)}</p>`}`}
     <footer><button type="button" disabled=${!editable} onClick=${cancel}>${t.cancel}</button>
-      <button class="filled" type="button" disabled=${!editable || !valid} onClick=${() => sync.attachmentCommand(pdf ? "attachment_pdf" : "attachment_video", a.id,
+      <button class="filled" type="button" disabled=${!editable || !valid} onClick=${() => finish(pdf ? "attachment_pdf" : "attachment_video",
         pdf ? { pages } : { frameCount: frames, intervalMs: sliceMs })}>${pdf ? t.sendPages(pages.length) : t.extractFrames(frames)}</button></footer>
     </section></dialog>`;
 }
 
-export function AttachmentViewer({ viewer, onNavigate, onClose }) {
+export function AttachmentViewer({ viewer, onNavigate, onClose: onClosed }) {
   const dialog = useRef(null);
+  const onClose = useDialog(dialog, onClosed);
   const index = viewer.index || 0;
   const [scale, setScale] = useState(1);
   const file = viewer.file;
@@ -804,7 +811,6 @@ export function AttachmentViewer({ viewer, onNavigate, onClose }) {
   const [failedSource, setFailedSource] = useState(null);
   const loaded = !!source && loadedSource === source;
   const failed = !!source && failedSource === source;
-  useEffect(() => { dialog.current.showModal(); return () => dialog.current?.close(); }, []);
   function navigate(next) { setScale(1); onNavigate(next); }
   return html`<dialog ref=${dialog} class=${`tool-media-viewer attachment-viewer ${file ? "text-file-viewer" : ""}`} aria-label=${file?.name || item?.name || t.attachments}
     onCancel=${event => { event.preventDefault(); onClose(); }} onKeyDown=${event => {

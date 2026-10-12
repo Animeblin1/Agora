@@ -269,7 +269,11 @@ input[type="range"]:focus-visible::-moz-range-thumb { width: 2px; }
  * `backwards` and not `both`: the window keeps its own transform once the entry is over. */
 @keyframes md-window-enter { from { opacity: 0; transform: translateY(12px); } to { transform: none; } }
 @keyframes md-scrim-enter { from { opacity: 0; } }
-dialog:not(.menu-popup-layer) { animation: md-window-enter 200ms cubic-bezier(.05, .7, .1, 1) backwards; }
+@keyframes md-window-exit { from { opacity: var(--md-window-exit-alpha); transform: var(--md-window-exit-transform); } to { opacity: 0; transform: translateY(12px); } }
+@keyframes md-scrim-exit { from { opacity: var(--md-scrim-exit-alpha); } to { opacity: 0; } }
+dialog:not(.menu-popup-layer)[data-closing] { animation: md-window-exit 200ms cubic-bezier(.3, 0, .8, .15) forwards; }
+dialog:not(.menu-popup-layer)[data-closing]::backdrop { animation: md-scrim-exit 200ms linear forwards; }
+dialog:not(.menu-popup-layer):not([data-closing]) { animation: md-window-enter 200ms cubic-bezier(.05, .7, .1, 1) backwards; }
 dialog:not(.menu-popup-layer)::backdrop { animation: md-scrim-enter 200ms linear backwards; }
 /* App Reduce Motion keeps the window where it is and lets it simply appear. Two rules because a
  * pseudo-element inside :is() never matches. */

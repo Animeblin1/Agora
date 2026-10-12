@@ -426,8 +426,9 @@ export const sync = {
       } finally { uploads.delete(controller); }
     }
   },
-  attachmentCommand(type, attachmentId, config = {}) {
-    if (!state.connected || !state.composer || state.pendingAction) return false;
+  attachmentCommand(type, attachmentId, config = {}, target = this.attachmentTarget()) {
+    if (!target || target.connectionId !== state.connectionId || target.seq !== openSeq ||
+        !state.connected || !state.composer || state.pendingAction) return false;
     const command = { ...config, type, attachmentId, seq: openSeq, actionId: ++nextAction };
     if (!send(command)) return false;
     update({ pendingAction: command.actionId });

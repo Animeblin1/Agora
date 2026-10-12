@@ -1,7 +1,7 @@
 // The open conversation's selected branch, drawn as the app's MessageList and MessageItem.
 // Only rows near the screen are watched, so the phone sends just those bodies.
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/preact-hooks.mjs";
-import { html } from "./html.js";
+import { html, useDialog } from "./html.js";
 import { CircularProgress, Spinner } from "./material/progress.js";
 import { Markdown, highlightSearch } from "./markdown.js";
 import {
@@ -207,13 +207,9 @@ function RowMore({ reduceMotion, items }) {
 }
 
 /** MessageInfoDialog: the phone's own figures, and an em dash where its provider reported none. */
-function MessageInfoDialog({ message, onClose }) {
+function MessageInfoDialog({ message, onClose: onClosed }) {
   const dialog = useRef(null);
-  useLayoutEffect(() => {
-    const node = dialog.current;
-    node.showModal();
-    return () => node.close();
-  }, []);
+  const onClose = useDialog(dialog, onClosed);
   const usage = message.usage;
   const lines = [t.timeWithLabel(formatRowTime(message.timestamp))];
   if (message.participant !== "USER") {
@@ -243,16 +239,12 @@ function MessageInfoDialog({ message, onClose }) {
  * The phone's inline editor for a user row: it resends the edited text through the phone's own edit
  * owner, so only Save commits. Escape and the scrim dismiss without sending anything.
  */
-function MessageEditDialog({ message, onClose }) {
+function MessageEditDialog({ message, onClose: onClosed }) {
   const dialog = useRef(null);
+  const onClose = useDialog(dialog, onClosed);
   const field = useRef(null);
   const [value, setValue] = useState(readableText(message));
-  useLayoutEffect(() => {
-    const node = dialog.current;
-    node.showModal();
-    field.current?.focus();
-    return () => node.close();
-  }, []);
+  useLayoutEffect(() => { field.current?.focus(); }, []);
   function save() {
     if (!value.trim()) return;
     if (sync.rowCommand("edit", message.id, { text: value })) onClose();
@@ -282,17 +274,19 @@ function MessageEditDialog({ message, onClose }) {
  * phone's conversation owner, so the browser asks it whenever its own branch says the cascade would
  * take every visible row with it, which never under-warns.
  */
-function MessageDeleteDialog({ deletesConversation, compactOnly = false, onClose, onConfirm }) {
+function MessageDeleteDialog({ deletesConversation, compactOnly = false, onClose: onClosed, onConfirm }) {
   const title = compactOnly ? t.deleteCompactTitle
     : deletesConversation ? t.deleteConversationTitle : t.deleteMessageTitle;
   const body = compactOnly ? t.deleteCompactConfirm
     : deletesConversation ? t.deleteConversationFromMessageConfirm : t.deleteMessageConfirm;
   const dialog = useRef(null);
-  useLayoutEffect(() => {
-    const node = dialog.current;
-    node.showModal();
-    return () => node.close();
-  }, []);
+  const confirmed = useRef(false);
+  const target = sync.attachmentTarget();
+  const onClose = useDialog(dialog, () => {
+    const current = sync.attachmentTarget();
+    if (confirmed.current && target?.connectionId === current?.connectionId && target?.seq === current?.seq) onConfirm();
+    onClosed();
+  });
   return html`
     <dialog ref=${dialog} class="attachment-editor page-dialog"
       aria-label=${title}
@@ -302,7 +296,7 @@ function MessageDeleteDialog({ deletesConversation, compactOnly = false, onClose
       <section><h2>${title}</h2>
         <p>${body}</p>
         <footer><button type="button" onClick=${onClose}>${t.cancel}</button>
-          <button class="destructive" type="button" onClick=${onConfirm}>${t.delete}</button></footer>
+          <button class="destructive" type="button" onClick=${() => { confirmed.current = true; onClose(); }}>${t.delete}</button></footer>
       </section></dialog>`;
 }
 
@@ -389,7 +383,7 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
       ${editing && html`<${MessageEditDialog} message=${message} onClose=${() => setEditing(false)} />`}
       ${confirming && html`<${MessageDeleteDialog} deletesConversation=${deletesConversation}
         onClose=${() => setConfirming(false)}
-        onConfirm=${() => { setConfirming(false); sync.rowCommand("delete", message.id); }} />`}
+        onConfirm=${() => sync.rowCommand("delete", message.id)} />`}
     </div>`;
 }
 
@@ -693,7 +687,7 @@ function ModelMessage({ message, wrap, display, expansion, expansionController, 
     ${confirming && html`<${MessageDeleteDialog} deletesConversation=${deletesConversation}
       compactOnly=${!!message.compact}
       onClose=${() => setConfirming(false)}
-      onConfirm=${() => { setConfirming(false); sync.rowCommand("delete", message.id); }} />`}`;
+      onConfirm=${() => sync.rowCommand("delete", message.id)} />`}`;
   // The compact summary never reads as prose: MessageItem owns a pill for it instead.
   if (message.compact) {
     return html`<div class="model-message">
@@ -1341,14 +1335,14 @@ export function MessageList({ state, label, onPageAction }) {
       host.style.top = `${leaving.top}px`;
       host.style.height = `${scroller.current?.clientHeight ?? 0}px`;
       const fade = host.animate([{ opacity: 1 }, { opacity: 0 }],
-        { duration: 300, easing: "linear", fill: "forwards" });
+        { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" });
       fade.onfinish = () => { host.replaceChildren(); fade.cancel(); };
     }
     // Returning from New Chat to an existing conversation is fadeIn(tween(300)).
     if (enterFrame.current) {
       enterFrame.current = false;
       scroller.current?.firstElementChild?.animate?.([{ opacity: 0 }, { opacity: 1 }],
-        { duration: 300, easing: "linear" });
+        { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)" });
     }
     return undefined;
   }, [frameKind]);

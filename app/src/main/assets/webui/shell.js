@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/preact-hooks.mjs";
-import { html } from "./html.js";
+import { html, useDialog } from "./html.js";
 import { CircularProgress } from "./material/progress.js";
 import { attachScrollbar } from "./material/scrollbar.js";
 import { t } from "./i18n.js";
@@ -362,9 +362,10 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
  * The drawer overlays the chat with a scrim up to 960 px; wider, it sits beside the chat and the
  * chat narrows, as the app's side-by-side drawer. Both start closed and open from the menu button.
  */
-function ConversationDialog({ state, request, onClose }) {
+function ConversationDialog({ state, request, onClose: onClosed }) {
   const dialog = useRef(null);
   const returnFocus = useRef(document.querySelector('.actions-capsule [aria-haspopup="menu"]'));
+  const onClose = useDialog(dialog, () => { sync.dismissShare(); onClosed(); }, returnFocus);
   const sent = useRef(false);
   const busy = !!state.pageAction;
   const sharing = request.type === "share";
@@ -376,12 +377,7 @@ function ConversationDialog({ state, request, onClose }) {
   const heading = picking ? t.systemPrompt : sharing ? t.share
     : request.messageId == null ? t.forkConversation : t.forkFromHere;
   const text = state.shareText;
-  function close() { if (!busy && !sent.current) { sync.dismissShare(); onClose(); } }
-  useLayoutEffect(() => {
-    const node = dialog.current;
-    node.showModal();
-    return () => { node.close(); if (returnFocus.current?.isConnected) returnFocus.current.focus(); };
-  }, []);
+  function close() { if (!busy && !sent.current) onClose(); }
   useEffect(() => {
     if (sent.current && state.pageResult?.actionId === sent.current.actionId) onClose();
   }, [state.pageResult]);
@@ -426,19 +422,15 @@ function ConversationDialog({ state, request, onClose }) {
  * ChatRenameDialog: the field opens on the stored title and an untouched Save keeps it, so a title
  * the browser never edited is never written back over the stored one.
  */
-function ConversationRenameDialog({ conversation, onClose }) {
+function ConversationRenameDialog({ conversation, onClose: onClosed }) {
   const dialog = useRef(null);
+  const returnFocus = useRef(conversation.anchor);
+  const onClose = useDialog(dialog, onClosed, returnFocus);
   const field = useRef(null);
   const edited = useRef(false);
   useLayoutEffect(() => {
-    const node = dialog.current;
-    node.showModal();
     field.current.value = conversation.title;
     field.current.focus();
-    return () => {
-      node.close();
-      if (conversation.anchor?.isConnected) conversation.anchor.focus();
-    };
   }, []);
   function save() {
     if (edited.current) sync.renameConversation(conversation.conversationId, field.current.value);
@@ -460,13 +452,10 @@ function ConversationRenameDialog({ conversation, onClose }) {
  * ChatDeleteConfirmDialog: CONFIRM, then PENDING while the phone's owner runs its transaction, then
  * FAILED when it refuses. A pending delete cannot be dismissed, so the dialog cannot outlive it.
  */
-function ConversationDeleteDialog({ pending, failed, onConfirm, onClose }) {
+function ConversationDeleteDialog({ pending, failed, complete, onConfirm, onClose: onClosed }) {
   const dialog = useRef(null);
-  useLayoutEffect(() => {
-    const node = dialog.current;
-    node.showModal();
-    return () => node.close();
-  }, []);
+  const onClose = useDialog(dialog, onClosed);
+  useEffect(() => { if (complete) onClose(); }, [complete]);
   function close() { if (!pending) onClose(); }
   return html`<dialog ref=${dialog} class="attachment-editor page-dialog" aria-label=${t.deleteChat}
     onCancel=${event => { event.preventDefault(); close(); }}
@@ -494,11 +483,6 @@ export function Shell({ onSignedOut }) {
   // The drawer row menu's own dialogs, held here as on the phone they outlive the drawer itself.
   const [rowDialog, setRowDialog] = useState(null);
   const deleteResult = state.conversationDeleteResult;
-  useEffect(() => {
-    if (rowDialog?.actionId != null && deleteResult?.actionId === rowDialog.actionId && deleteResult.success) {
-      setRowDialog(null);
-    }
-  }, [deleteResult]);
   useEffect(() => { setPageDialog(null); }, [state.connectionId, state.openId]);
   useEffect(() => { if (pageDialog?.type === "share" && !state.pageAction && !state.shareText) setPageDialog(null); }, [state.pageAction, state.shareText]);
   // A row names the message it forks or shares; the top bar names none and so acts on the whole
@@ -750,6 +734,7 @@ export function Shell({ onSignedOut }) {
       </main>
       ${rowDialog?.type === "rename" && html`<${ConversationRenameDialog} conversation=${rowDialog} onClose=${() => setRowDialog(null)} />`}
       ${rowDialog?.type === "delete" && html`<${ConversationDeleteDialog}
+        complete=${rowDialog.actionId != null && deleteResult?.actionId === rowDialog.actionId && deleteResult.success}
         pending=${rowDialog.actionId != null && state.conversationDelete?.actionId === rowDialog.actionId}
         failed=${rowDialog.failed === true ||
           (rowDialog.actionId != null && deleteResult?.actionId === rowDialog.actionId && !deleteResult.success)}
