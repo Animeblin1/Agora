@@ -139,6 +139,12 @@ class WebUiConversationMenuTest {
         transitions.abortCurrent()
     }
 
+    @Test
+    fun recompactRowCommandReachesTheCurrentSession() = sync { send, _ ->
+        send("""{"type":"recompact","conversationId":"a","seq":1,"messageId":"compact_target"}""")
+        coVerify(exactly = 1) { session.rowCommand(match { it.type == "recompact" && it.messageId == "compact_target" }, any()) }
+    }
+
     private fun sync(
         block: suspend TestScope.(send: suspend (String) -> Unit, received: () -> List<JsonObject>) -> Unit,
     ) = runTest {

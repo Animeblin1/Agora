@@ -481,7 +481,7 @@ internal class WebUiSync(
                         COMMAND_REMOVE_QUEUED -> session.removeQueued(command.queuedId.orEmpty(), command.seq)
                         COMMAND_SEND_QUEUED -> session.sendQueued(command.seq, command.actionId)
                         "branch_fade", "branch_scroll", "branch_complete" -> acknowledgeBranchReplacement(session, command, connectionId, visiblePath.value)
-                        "edit", "regenerate", "delete" -> launch { session.rowCommand(command, visiblePath.value) }
+                        "edit", "regenerate", "delete", "recompact" -> launch { session.rowCommand(command, visiblePath.value) }
                         "attachment_remove", "attachment_retry", "attachment_pdf", "attachment_video" ->
                             session.attachmentCommand(command)
                         "setting" -> session.settingCommand(command)

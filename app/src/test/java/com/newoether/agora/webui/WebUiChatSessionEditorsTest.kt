@@ -25,6 +25,7 @@ class WebUiChatSessionEditorsTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val shared = MutableStateFlow(mapOf("a" to ConversationSettings(thinkingEnabled = false, temperature = 0.7f)))
     private val preserve = MutableStateFlow(true)
+    private val compactModel = MutableStateFlow<String?>("OpenAI:compact")
     private val prompts = MutableStateFlow(listOf(com.newoether.agora.data.SystemPromptEntry(id = "prompt", title = "Prompt")))
     private val conversation = MutableStateFlow(ChatConversation("a", "Test", modelId = "OpenAI:test"))
     private val streaming = MutableStateFlow<com.newoether.agora.model.ChatMessage?>(null)
@@ -65,7 +66,7 @@ class WebUiChatSessionEditorsTest {
         every { defaultTopP } returns MutableStateFlow(null)
         every { defaultFrequencyPenalty } returns MutableStateFlow(null)
         every { defaultPresencePenalty } returns MutableStateFlow(null)
-        every { contextCompactModel } returns MutableStateFlow("OpenAI:compact")
+        every { contextCompactModel } returns compactModel
         every { contextCompactPrompt } returns MutableStateFlow("configured summary")
         every { contextCompactRetainCount } returns MutableStateFlow(4)
         every { contextCompactPreserveSystemPrompt } returns preserve
@@ -181,6 +182,46 @@ class WebUiChatSessionEditorsTest {
         assertEquals(0L, session.composerState.first().actionId)
         assertEquals(original, shared.value)
         verify(exactly = 0) { settings.updateConversationSettings(any(), any()) }
+    }
+    @Test fun recompactUsesTheSelectedCompactAndCapturedConfiguredRequest() = runBlocking {
+        val started = CompletableDeferred<CompactRequest>()
+        val release = CompletableDeferred<Unit>()
+        coEvery { generation.compactManual("a", any()) } coAnswers {
+            started.complete(secondArg()); release.await(); CompactResult.Created("compact_target")
+        }
+        session.start()
+        ready("a", 9)
+        val target = com.newoether.agora.model.ChatMessage(id = "compact_target", text = "summary",
+            participant = com.newoether.agora.model.Participant.MODEL)
+        val command = WebSyncCommand("recompact", conversationId = "a", seq = 9, messageId = target.id)
+        session.rowCommand(command.copy(seq = 8), listOf(target))
+        session.rowCommand(command.copy(conversationId = "other"), listOf(target))
+        session.rowCommand(command, emptyList())
+        session.editorCommand(command.copy(messageId = null, modelId = "OpenAI:compact", text = "summary", retainCount = 0))
+        assertFalse(started.isCompleted)
+        session.rowCommand(command, listOf(target))
+        val request = withTimeout(5_000) { started.await() }
+        assertEquals(CompactRequest("OpenAI:compact", "configured summary", 4,
+            replaceMessageId = target.id, preserveSystemPrompt = true), request)
+        preserve.value = false
+        ready("b", 10)
+        release.complete(Unit)
+        coVerify(timeout = 5_000, exactly = 1) { generation.compactManual("a", request) }
+        assertEquals("b", session.openConversationId)
+        coVerify(exactly = 0) { conversations.upsertConversation(any()) }
+    }
+    @Test fun recompactUsesTheCurrentModelForBlankConfigurationAndReportsFailure() = runBlocking {
+        compactModel.value = ""
+        coEvery { generation.compactManual("a", any()) } returns CompactResult.Failed(CompactFailureReason.GENERIC)
+        session.start()
+        ready("a", 4)
+        val notice = async(start = CoroutineStart.UNDISPATCHED) { session.snackbars.first() }
+        val target = com.newoether.agora.model.ChatMessage(id = "compact_target", text = "summary",
+            participant = com.newoether.agora.model.Participant.MODEL)
+        session.rowCommand(WebSyncCommand("recompact", conversationId = "a", seq = 4, messageId = target.id), listOf(target))
+        assertEquals("GENERIC", withTimeout(5_000) { notice.await() })
+        coVerify(exactly = 1) { generation.compactManual("a", CompactRequest("OpenAI:test", "configured summary", 4,
+            replaceMessageId = target.id, preserveSystemPrompt = true)) }
     }
     @Test fun compactRejectsNewChatStaleInvalidAndStoppingRequests() = runBlocking {
         session.start()

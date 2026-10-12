@@ -328,7 +328,7 @@ export const sync = {
       seq: event.seq, actionId: event.request.id, ...(success == null ? {} : { enabled: success }) });
   },
   rowCommand(type, messageId, values = {}) {
-    if (!["edit", "regenerate", "delete"].includes(type) || !state.connected || !state.openId) return false;
+    if (!["edit", "regenerate", "delete", "recompact"].includes(type) || !state.connected || !state.openId) return false;
     return send({ type, conversationId: state.openId, messageId, seq: openSeq, ...values });
   },
   notify(message) { update({ snackbar: { id: ++noticeId, message } }); },
