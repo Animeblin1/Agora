@@ -82,6 +82,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   const validPanel = toolPanel && toolPanel.connectionId === state.connectionId && toolPanel.seq === state.composer?.seq &&
     !!controls && (toolPanel.kind === "thinking" || (controls.openAiServiceTierAvailable && state.composer.modelValid));
   useEffect(() => { setToolsOpen(false); setToolPanel(null); setSlider(null); setEditor(null); setContextOpen(false); }, [state.openId, state.connectionId]);
+  useEffect(() => { if (!contextReady) setContextOpen(false); }, [contextReady]);
   useEffect(() => { if (!state.pendingAction) setSlider(null); }, [state.pendingAction]);
   useEffect(() => { setSlider(null); }, [state.composer?.modelId]);
   useEffect(() => { if (controls?.displayedThinkingBudgetEnabled) setAdvancedThinking(true); }, [controls?.displayedThinkingBudgetEnabled]);
@@ -507,7 +508,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
             </div>
             <button ref=${contextButton} class="control-icon context-ring" type="button"
               aria-label=${contextReady ? `${t.context}: ${contextUsage}` : t.context}
-              aria-haspopup="menu" aria-expanded=${contextOpen} disabled=${!contextReady}
+              aria-haspopup="menu" aria-expanded=${contextOpen && contextReady} disabled=${!contextReady}
               data-over=${context?.overCompactThreshold ? "true" : null}
               onClick=${() => { if (contextReady) { setRetainedContext(true); setContextOpen(!contextOpen); } }}>
               <${CircularProgress} size=${20} stroke=${2.5} value=${contextFraction} />
@@ -525,7 +526,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
         </div>
       </form>
     </div>
-      ${retainedContext && context && html`<${MoreMenu} expanded=${contextOpen} reduceMotion=${state.display.reduceMotion}
+      ${retainedContext && context && html`<${MoreMenu} expanded=${contextOpen && contextReady} reduceMotion=${state.display.reduceMotion}
         anchor=${contextButton} above onClose=${() => setContextOpen(false)}
         onExited=${restore => { setRetainedContext(false); if (restore) contextButton.current?.focus(); }}>
         <div class="context-menu">

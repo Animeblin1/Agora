@@ -257,8 +257,8 @@ input[type="range"]:focus-visible::-moz-range-thumb { width: 2px; }
  * `backwards` and not `both`: the window keeps its own transform once the entry is over. */
 @keyframes md-window-enter { from { opacity: 0; transform: translateY(12px); } to { transform: none; } }
 @keyframes md-scrim-enter { from { opacity: 0; } }
-dialog { animation: md-window-enter 200ms cubic-bezier(.05, .7, .1, 1) backwards; }
-dialog::backdrop { animation: md-scrim-enter 200ms linear backwards; }
+dialog:not(.menu-popup-layer) { animation: md-window-enter 200ms cubic-bezier(.05, .7, .1, 1) backwards; }
+dialog:not(.menu-popup-layer)::backdrop { animation: md-scrim-enter 200ms linear backwards; }
 /* App Reduce Motion keeps the window where it is and lets it simply appear. Two rules because a
  * pseudo-element inside :is() never matches. */
 .shell[data-reduce-motion="true"] dialog { animation: none; }

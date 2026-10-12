@@ -13,8 +13,11 @@ import {
  */
 export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, onExited, children, above = false, onFork, onShare, pageActionsEnabled, onSystemPrompt, promptEnabled, onSearch }) {
   const menu = useRef(null);
+  const layer = useRef(null);
   const motion = useRef({ scale: 0.8, alpha: 0, scaleVelocity: 0, alphaVelocity: 0 });
   useLayoutEffect(() => {
+    const popup = layer.current;
+    popup.showModal();
     const node = menu.current;
     const measure = () => {
       const bounds = anchor.current.getBoundingClientRect();
@@ -34,7 +37,7 @@ export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, o
     window.addEventListener("resize", measure);
     measure();
     node.querySelector("[role^=menuitem]:not([disabled])")?.focus();
-    return () => { geometry.disconnect(); window.removeEventListener("resize", measure); };
+    return () => { popup.close(); geometry.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
   useLayoutEffect(() => {
     const node = menu.current;
@@ -46,10 +49,17 @@ export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, o
     }, value => {
       node.style.transform = `scale(${value.scale})`;
       node.style.opacity = String(value.alpha);
-    }, () => { if (!expanded) onExited(node.contains(document.activeElement)); });
+    }, () => {
+      if (!expanded) {
+        const ownedFocus = layer.current.contains(document.activeElement);
+        layer.current.close();
+        onExited(ownedFocus);
+      }
+    });
   }, [expanded, reduceMotion]);
   useLayoutEffect(() => {
     const onKey = (event) => {
+      if (!layer.current.contains(document.activeElement)) return;
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
       if (["Tab", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
         event.preventDefault();
@@ -64,7 +74,8 @@ export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, o
     return () => document.removeEventListener("keydown", onKey);
   }, []);
   return html`
-    <div class="menu-popup-layer" onPointerDown=${(event) => {
+    <dialog class="menu-popup-layer" ref=${layer} aria-label=${t.options}
+      onCancel=${(event) => { event.preventDefault(); onClose(); }} onPointerDown=${(event) => {
       if (!menu.current.contains(event.target)) { event.preventDefault(); onClose(); }
       event.stopPropagation();
     }} onWheel=${(event) => { if (!menu.current.contains(event.target)) event.preventDefault(); }}
@@ -87,5 +98,5 @@ export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, o
         ${icon(ICON_LOGOUT)}<span>${t.signOut}</span>
       </button>`}
     </div>
-    </div>`;
+    </dialog>`;
 }
