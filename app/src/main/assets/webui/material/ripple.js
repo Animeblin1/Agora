@@ -42,7 +42,7 @@ const HOSTS = [
 const DEAD = "[disabled], [aria-disabled=\"true\"]";
 /** RippleAnimation.kt's extra reach for a bounded wave, in dp (= px here). */
 const BOUNDED_EXTRA_RADIUS = 10;
-/** The wave's play state: `in` while the press holds it, `out` while it fades away. */
+/** The wave's play state: held, released while growing, then fading out. */
 const WAVE = "data-md-wave";
 // App Reduce Motion: the state layer stays and changes instantly, the wave does not run at all.
 const reduced = () => document.querySelector(".shell")?.dataset.reduceMotion === "true";
@@ -76,9 +76,12 @@ function press(host, x, y) {
   void host.offsetWidth;
   host.setAttribute(WAVE, "in");
 }
-/** The release: stop growing and fade whatever is left over RippleAnimation's own 150ms. */
+/** The release waits for the original growth animation before the canonical 150ms fade. */
 function release() {
-  for (const host of waving("in")) host.setAttribute(WAVE, "out");
+  for (const host of waving("in")) {
+    const growing = host.getAnimations().some(animation => animation.animationName === "md-wave-grow" && animation.playState === "running");
+    host.setAttribute(WAVE, growing ? "released" : "out");
+  }
 }
 function settled(host) {
   host.removeAttribute(WAVE);
@@ -110,6 +113,9 @@ export function installTouchFeedback() {
     if (event.target === window) release();
   }, { passive: true, capture: true });
   addEventListener("animationend", (event) => {
+    if (event.animationName === "md-wave-grow" && event.target.getAttribute(WAVE) === "released") {
+      event.target.setAttribute(WAVE, "out");
+    }
     if (event.animationName === "md-wave-out") settled(event.target);
   }, { passive: true, capture: true });
 }

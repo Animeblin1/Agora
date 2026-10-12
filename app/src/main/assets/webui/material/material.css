@@ -56,13 +56,15 @@
 /* RippleAnimation.kt: a wave's alpha arrives over 75ms linear, its radius travels over 225ms
  * FastOutSlowIn, and its centre drifts from the press point to the control's centre over the same
  * 225ms linear. It then holds, because Compose only ever fades a wave out on a release. */
-:is(.shell, .sign-in-page) [data-md-wave="in"] {
+:is(.shell, .sign-in-page) :is([data-md-wave="in"], [data-md-wave="released"]) {
   animation:
     md-wave-in 75ms linear forwards,
-    md-wave-grow 225ms cubic-bezier(0, 0, 0.2, 1) forwards,
+    md-wave-grow 225ms cubic-bezier(0.4, 0, 0.2, 1) forwards,
     md-wave-move 225ms linear forwards;
 }
-/* The release: 150ms linear fade of whatever the wave grew to, at its grown radius and centre. */
+/* Early release keeps the original growth clock and shows final alpha until growth completes. */
+:is(.shell, .sign-in-page) [data-md-wave="released"] { --md-wave-alpha: 0.1 !important; }
+/* The release: 150ms linear fade after the original radius and centre reach their targets. */
 :is(.shell, .sign-in-page) [data-md-wave="out"] {
   --md-wave-grow: 1;
   --md-wave-move: 1;
