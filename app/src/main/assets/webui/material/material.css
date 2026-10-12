@@ -53,6 +53,16 @@
       rgb(from currentColor r g b / var(--md-wave-alpha)) 0 52%, transparent 100%),
     linear-gradient(rgb(from currentColor r g b / var(--md-state)), rgb(from currentColor r g b / var(--md-state)));
 }
+/* Image children cover a host background, so the same indication paints above media content. */
+:is(.shell, .sign-in-page) button:has(> img) { position: relative; }
+:is(.shell, .sign-in-page) button:has(> img)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: inherit;
+  pointer-events: none;
+}
 /* RippleAnimation.kt: a wave's alpha arrives over 75ms linear, its radius travels over 225ms
  * FastOutSlowIn, and its centre drifts from the press point to the control's centre over the same
  * 225ms linear. It then holds, because Compose only ever fades a wave out on a release. */

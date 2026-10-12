@@ -349,18 +349,18 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
             ${attachments.map(item => {
               const index = media.findIndex(current => current.index === item.index);
               const failed = item.unavailable || failedImages.has(item.index);
-              // AttachmentThumbnailItem captions only its file, pdf and unavailable branches; an image
-              // or a video is the thumbnail alone, and the rounded clip that shapes the picture is the
-              // same clip the press wave takes.
+              // Captioned media keeps its filename outside the thumbnail's indication and hit box.
               const captioned = item.type === "file" || item.type === "pdf" || item.unavailable;
-              return html`<button key=${item.index} class=${`user-attachment${captioned ? " captioned" : ""}`} type="button" title=${item.fileName}
+              const thumbnail = html`<button key=${item.index} class=${`user-attachment${captioned ? " captioned-thumbnail" : ""}`} type="button" title=${item.fileName}
                 aria-label=${item.fileName || t.attachments} disabled=${failed || index < 0}
                 onClick=${() => setPreview(index)}>
                 ${!failed && index >= 0 ? html`<img src=${media[index].url} alt=${item.fileName || t.attachments}
                   onError=${() => setFailedImages(current => new Set([...current, item.index]))} />`
                   : html`<span class="attachment-missing">${icon(ICON_IMAGE)}</span>`}
-                ${captioned ? html`<span class="user-attachment-name">${item.fileName}</span>` : null}
               </button>`;
+              return captioned ? html`<span key=${item.index} class="user-attachment-column">
+                ${thumbnail}<span class="user-attachment-name">${item.fileName}</span>
+              </span>` : html`<span key=${item.index} class="user-attachment-media">${thumbnail}</span>`;
             })}
           </div>`}
           <div class="user-text" ref=${text}></div>

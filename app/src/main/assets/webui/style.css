@@ -854,16 +854,13 @@ mark[data-search-key].active { background: #ffa000; }
 }
 .user-attachments { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; margin-bottom: 8px; }
 .user-attachment { flex: none; width: 120px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: start; }
-/* AttachmentThumbnailItem's image and video branches are `Modifier.clip(shape).combinedClickable`
-   around the 120 x 90 thumbnail alone, so the button is the picture itself and its 15 dp corner
-   clip (USER_BUBBLE_ATTACHMENT_CORNER) is what bounds the press wave. Only the file, pdf and
-   unavailable branches are a column with a caption, and theirs is an unrounded click box. */
-.user-attachment:not(.captioned) { height: 90px; border-radius: 15px; }
-.user-attachment.captioned { width: 72px; }
+/* Only the visual thumbnail owns indication; a caption remains outside its rounded hit box. */
+.user-attachment { height: 90px; border-radius: 15px; }
+.user-attachment-media { flex: none; }
+.user-attachment-column { flex: none; display: flex; flex-direction: column; align-items: center; width: 72px; }
+.user-attachment.captioned-thumbnail { width: 64px; height: 64px; }
 .user-attachment img, .attachment-missing { display: block; width: 120px; height: 90px; border-radius: 15px; object-fit: cover; background: var(--md-secondary-container); }
-/* The captioned column is the phone's `Column(Modifier.width(72.dp))` over a 64 dp FileThumbnail,
-   with the name in labelSmall 11/16 and 2 dp above it. */
-.user-attachment.captioned .attachment-missing { width: 64px; height: 64px; margin: 0 auto; }
+.user-attachment.captioned-thumbnail :is(img, .attachment-missing) { width: 64px; height: 64px; }
 .user-attachment-name { display: block; max-width: 72px; padding-top: 2px; font-size: 11px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-missing { display: grid; place-items: center; }
 .attachment-missing svg { width: 24px; height: 24px; fill: currentColor; }
