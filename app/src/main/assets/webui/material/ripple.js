@@ -91,10 +91,21 @@ function settled(host) {
 }
 /** One delegated listener per interaction keeps every list, menu and dialog covered without wiring. */
 export function installTouchFeedback() {
+  const geometry = new ResizeObserver(entries => {
+    for (const { target: host } of entries) {
+      if (!host.isConnected || !host.hasAttribute(WAVE)) { geometry.unobserve(host); continue; }
+      const box = host.getBoundingClientRect();
+      host.style.setProperty("--md-wave-r0", `${Math.max(box.width, box.height) * 0.3}px`);
+      host.style.setProperty("--md-wave-r1", `${Math.hypot(box.width, box.height) / 2 + BOUNDED_EXTRA_RADIUS}px`);
+      host.style.setProperty("--md-wave-cx", `${box.width / 2}px`);
+      host.style.setProperty("--md-wave-cy", `${box.height / 2}px`);
+    }
+  });
   addEventListener("pointerdown", (event) => {
     const host = event.target.closest?.(HOSTS);
     if (!host || host.matches(DEAD) || host.querySelector("input:disabled") || event.target.closest(DEAD)) return;
     press(host, event.clientX, event.clientY);
+    if (host.hasAttribute(WAVE)) geometry.observe(host);
   }, { passive: true, capture: true });
   // A Release or a Cancel is what ends a wave. A touch that turns into a scroll is cancelled by the
   // browser, so a fling over a list fades its wave out exactly like Compose drops the press.
@@ -107,6 +118,7 @@ export function installTouchFeedback() {
     if (!host || host.matches(DEAD) || host.querySelector("input:disabled") || event.target.closest(DEAD)) return;
     const box = host.getBoundingClientRect();
     press(host, box.left + box.width / 2, box.top + box.height / 2);
+    if (host.hasAttribute(WAVE)) geometry.observe(host);
   }, { passive: true, capture: true });
   addEventListener("keyup", release, { passive: true, capture: true });
   addEventListener("blur", (event) => {
@@ -116,6 +128,6 @@ export function installTouchFeedback() {
     if (event.animationName === "md-wave-grow" && event.target.getAttribute(WAVE) === "released") {
       event.target.setAttribute(WAVE, "out");
     }
-    if (event.animationName === "md-wave-out") settled(event.target);
+    if (event.animationName === "md-wave-out") { geometry.unobserve(event.target); settled(event.target); }
   }, { passive: true, capture: true });
 }
