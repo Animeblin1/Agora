@@ -334,6 +334,7 @@ internal class WebUiChatSession(
 
     /** The browser opened [conversationId] (null is a fresh New Chat page) with request [seq]. */
     suspend fun open(conversationId: String?, seq: Long) = ownerMutex.withLock {
+        branchTransitions.abortCurrent()
         if (conversationId == null) {
             newChatEntryId.incrementAndGet()
         } else {
@@ -666,6 +667,7 @@ internal class WebUiChatSession(
     suspend fun endUploads() = ownerMutex.withLock { closed = true }
     /** Connection children settle before this call, so no importer or Send outlives reclamation. */
     suspend fun close() = withContext(NonCancellable) {
+        branchTransitions.abortCurrent()
         clients.detach(this@WebUiChatSession)
         ownerMutex.withLock {
             closed = true

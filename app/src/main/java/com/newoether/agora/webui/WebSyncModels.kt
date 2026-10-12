@@ -69,6 +69,11 @@ internal sealed interface WebSyncEvent {
         val generating: Boolean,
     ) : WebSyncEvent
 
+    /** The visual branch replacement request owned by this browser's ordinary ChatClient. */
+    @Serializable @SerialName("branch_replacement")
+    data class BranchReplacement(
+        val connectionId: String, val conversationId: String, val seq: Long, val request: JsonObject?,
+    ) : WebSyncEvent
     /** The body of one watched row. */
     @Serializable @SerialName("payload")
     data class Payload(val conversationId: String, val message: WebMessage) : WebSyncEvent
