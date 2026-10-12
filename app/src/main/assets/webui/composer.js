@@ -496,16 +496,16 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
               aria-haspopup="menu" aria-expanded=${addOpen} onClick=${() => { setRetainedAdd(true); setAddOpen(!addOpen); }}>
               ${icon(ICON_ADD)}
             </button>
-            <div class="model-selector" ref=${modelSlot}>
-              <button ref=${modelButton} class="model-button" type="button" aria-label=${t.selectModel}
+            <button class="model-selector" ref=${modelSlot} type="button" aria-label=${t.selectModel}
                 aria-haspopup="menu" aria-expanded=${modelOpen} data-valid=${!!state.composer?.modelValid}
                 disabled=${!composerReady || !!state.pendingAction}
                 onClick=${() => { setRetainedModelMenu(true); setModelOpen(!modelOpen); }}>
+              <span ref=${modelButton} class="model-button">
                 ${modelPresentations.map(frame => html`<span class="model-label" key=${frame.label}
                   data-model-label=${frame.label} aria-hidden=${frame.label === modelLabel ? null : "true"}
                   style=${{ opacity: frame.initialAlpha }}>${frame.label}</span>`)}
-              </button>
-            </div>
+              </span>
+            </button>
             <button ref=${contextButton} class="control-icon context-ring" type="button"
               aria-label=${contextReady ? `${t.context}: ${contextUsage}` : t.context}
               aria-haspopup="menu" aria-expanded=${contextOpen && contextReady} disabled=${!contextReady}
@@ -552,8 +552,8 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
         </div>
       </${MoreMenu}>`}
       ${retainedModelMenu && html`<${MoreMenu} expanded=${modelOpen} reduceMotion=${state.display.reduceMotion}
-        anchor=${modelButton} above=${true} onClose=${() => setModelOpen(false)}
-        onExited=${(restoreFocus) => { setRetainedModelMenu(false); if (restoreFocus) modelButton.current?.focus(); }}>
+        anchor=${modelSlot} above=${true} onClose=${() => setModelOpen(false)}
+        onExited=${(restoreFocus) => { setRetainedModelMenu(false); if (restoreFocus) modelSlot.current?.focus(); }}>
           ${modelChoices.length ? modelChoices.map(([id, label]) => html`
             <button class="dropdown-item" type="button" role="menuitemradio" aria-checked=${id === selectedModel}
               onClick=${() => { sync.selectModel(id); setModelOpen(false); }}>

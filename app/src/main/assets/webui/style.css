@@ -1502,6 +1502,11 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   width: 0;
   min-width: 0;
   height: 38px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--md-on-surface) 50%, transparent);
+  cursor: pointer;
   overflow: hidden;
   border-radius: 19px;
 }
@@ -1514,7 +1519,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   padding: 0;
   border: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--md-on-surface) 50%, transparent);
+  color: inherit;
   font: inherit;
   font-size: 13px;
   line-height: 16px;
@@ -1522,7 +1527,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   text-align: start;
   cursor: pointer;
 }
-.model-button:disabled { cursor: default; }
+.model-selector:disabled { cursor: default; }
 .model-label {
   /* wrapContentWidth(unbounded = true).widthIn(max = labelMaxWidth): the label takes the intrinsic
      width of its own text, is capped only by the room the group leaves, and ellipsizes at that cap.
@@ -1571,7 +1576,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   overflow-wrap: anywhere;
   pointer-events: none;
 }
-.model-button[data-valid="true"] { color: var(--md-primary); }
+.model-selector[data-valid="true"] { color: var(--md-primary); }
 .composer-menu { max-height: min(480px, 50dvh); overflow-y: auto; }
 .composer-menu .dropdown-item { height: auto; min-height: 48px; white-space: normal; overflow-wrap: anywhere; }
 .composer-menu .dropdown-item > span:last-child { min-width: 0; }
