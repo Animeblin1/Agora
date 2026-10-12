@@ -60,11 +60,14 @@ class WebUiConversationMenuTest {
         }
     }
     private val openTarget = MutableStateFlow(WebUiChatSession.OpenTarget(null, browserSeq = 0L, movedByServer = false))
+    private val transitions = com.newoether.agora.viewmodel.BranchReplacementTransitionCoordinator()
     private val session = mockk<WebUiChatSession> {
         every { openTarget } returns this@WebUiConversationMenuTest.openTarget
         every { snackbars } returns MutableSharedFlow<String>(extraBufferCapacity = 4)
         every { scrollRequests } returns MutableSharedFlow<WebSyncEvent.ScrollToBottom>(extraBufferCapacity = 4)
         every { composerState } returns MutableSharedFlow<WebUiChatSession.ComposerState>(extraBufferCapacity = 4)
+        every { branchTransitions } returns transitions
+        coEvery { rowCommand(any(), any()) } just Runs
         every { openConversationId } answers { this@WebUiConversationMenuTest.openTarget.value.conversationId }
         coEvery { start() } just Runs
         coEvery { close() } just Runs
@@ -118,6 +121,22 @@ class WebUiConversationMenuTest {
         send("""{"type":"conversation_delete","conversationId":"b"}""")
         assertTrue(received().none { it.type == "conversation_delete" })
         verify(exactly = 0) { lifecycle.delete(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun editWaitingForFadeDoesNotBlockTheConnectionCommandReader() = sync { send, received ->
+        received()
+        val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { session.rowCommand(any(), any()) } coAnswers {
+            val request = transitions.begin("a", "old")!!
+            entered.complete(Unit)
+            transitions.awaitFade(request.id)
+        }
+        send("""{"type":"edit","conversationId":"a","seq":1,"messageId":"u","text":"edit"}""")
+        assertTrue(entered.isCompleted)
+        send("""{"type":"pin","conversationId":"b","enabled":true}""")
+        verify(exactly = 1) { lifecycle.setPinned("b", true) }
+        transitions.abortCurrent()
     }
 
     private fun sync(

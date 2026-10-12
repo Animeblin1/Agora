@@ -204,7 +204,9 @@ class WebUiChatSessionTest {
         session.start()
         session.open("a", 1)
         val origin = session.openTarget.value
+        session.branchTransitions.begin("a", "old")
         session.open(null, 2)
+        assertNull(session.branchTransitions.request.value)
         assertFalse(session.openForkIfCurrent("forked", origin))
         assertNull(session.openTarget.value.conversationId)
         session.open("a", 3)
@@ -462,7 +464,9 @@ class WebUiChatSessionTest {
         session.start()
         session.open("a", seq = 1L)
         assertTrue(clients.isConversationOpen("a"))
+        session.branchTransitions.begin("a", "old")
         session.close()
+        assertNull(session.branchTransitions.request.value)
         assertFalse(clients.isConversationOpen("a"))
     }
     @Test

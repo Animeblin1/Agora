@@ -844,6 +844,59 @@ export function MessageList({ state, label, onPageAction }) {
   const watchedSheet = useRef(sheetWatchedId);
   watchedSheet.current = sheetWatchedId;
   const ids = state.path.map((entry) => entry.id).join(",");
+  const branch = state.branchReplacement;
+  const branchVisual = useRef({ id: null, entries: [], bodies: new Map() });
+  const branchScroll = useRef(null);
+  const visualKeys = useRef(new Map());
+  if (branch && branchVisual.current.id !== branch.request.id) {
+    const start = state.path.findIndex(entry => entry.id === branch.request.oldMessageId);
+    branchVisual.current = { id: branch.request.id, entries: start < 0 ? [] : state.path.slice(start),
+      bodies: new Map(state.bodies) };
+    if (state.streaming) branchVisual.current.bodies.set(state.streaming.id, state.streaming);
+  }
+  if (branch?.request.sourceUserMessageId && branch.request.targetUserMessageId) {
+    visualKeys.current.set(branch.request.targetUserMessageId,
+      visualKeys.current.get(branch.request.sourceUserMessageId) || branch.request.sourceUserMessageId);
+  }
+  const exitIds = new Set(branch ? branchVisual.current.entries.map(entry => entry.id) : []);
+  const renderedPath = branch ? [...state.path, ...branchVisual.current.entries.filter(entry =>
+    !state.path.some(active => active.id === entry.id))] : state.path;
+  const branchTarget = branch?.request.targetUserMessageId;
+  const watchedBranch = useRef(branchTarget);
+  watchedBranch.current = branchTarget;
+  useLayoutEffect(() => {
+    const root = scroller.current;
+    const request = branch?.request;
+    const rows = [...root.querySelectorAll('.message-row')].filter(row =>
+      branchVisual.current.entries.some(entry => entry.id === row.dataset.id));
+    if (!request) {
+      const animations = rows.map(row => row.animate([{ opacity: getComputedStyle(row).opacity }, { opacity: 1 }],
+        { duration: 180, easing: 'linear', fill: 'forwards' }));
+      animations.forEach((animation, index) => {
+        animation.onfinish = () => { rows[index].style.opacity = ''; animation.cancel(); };
+      });
+      branchVisual.current = { id: null, entries: [], bodies: new Map() };
+      branchScroll.current = null;
+      return () => animations.forEach(animation => animation.cancel());
+    }
+    if (branchVisual.current.entries.some(entry => exitIds.has(entry.id))) pinned.current = false;
+    const animations = rows.map(row => row.animate([{ opacity: 1 }, { opacity: 0 }],
+      { duration: request.fadeFinished ? 0 : 180, easing: 'linear', fill: 'forwards' }));
+    Promise.all(animations.map(animation => animation.finished)).then(() => {
+      sync.branchAck('branch_fade', branch);
+    }).catch(() => {});
+    return () => {
+      rows.forEach(row => { row.style.opacity = getComputedStyle(row).opacity; });
+      animations.forEach(animation => animation.cancel());
+    };
+  }, [branch?.request.id]);
+  useLayoutEffect(() => {
+    const request = branch?.request;
+    if (request?.stage !== 'COMMITTED' || !request.scrollFinished ||
+        state.path.some(entry => entry.id === request.oldMessageId)) return;
+    const frame = requestAnimationFrame(() => sync.branchAck('branch_complete', branch));
+    return () => cancelAnimationFrame(frame);
+  }, [branch, state.path]);
   const wrap = state.display?.autoWrapCodeBlocks ?? true;
   // An empty new chat replaces the whole body with ChatWelcomeContent, as on the phone.
   const showWelcome = !state.openId && state.path.length === 0;
@@ -877,6 +930,7 @@ export function MessageList({ state, label, onPageAction }) {
   useEffect(() => {
     if (previousOpenId.current === state.openId) return;
     previousOpenId.current = state.openId;
+    visualKeys.current.clear();
     expansion.current.clear();
     expansionController.current.reset();
     // SegmentAppearanceRegistry is session-scoped and lives above the list, so a segment that has
@@ -902,6 +956,7 @@ export function MessageList({ state, label, onPageAction }) {
       }
       const watched = new Set(visible.current);
       if (watchedSheet.current) watched.add(watchedSheet.current);
+      if (watchedBranch.current) watched.add(watchedBranch.current);
       sync.watch([...new Set([searchTarget.current, ...watched].filter(Boolean))]);
     }, { root, rootMargin: WATCH_MARGIN });
     root.querySelectorAll(".message-row").forEach((row) => observer.observe(row));
@@ -911,8 +966,9 @@ export function MessageList({ state, label, onPageAction }) {
   useEffect(() => {
     const watched = new Set(visible.current);
     if (sheetWatchedId) watched.add(sheetWatchedId);
+    if (branchTarget) watched.add(branchTarget);
     sync.watch([...new Set([searchTarget.current, ...watched].filter(Boolean))]);
-  }, [sheetWatchedId, searchTarget.current]);
+  }, [sheetWatchedId, searchTarget.current, branchTarget]);
 
   // The app opens a conversation at its newest message. Row bodies arrive after the path, so
   // this same owner releases the cover after visible bodies and bottom layout have settled.
@@ -1098,6 +1154,30 @@ export function MessageList({ state, label, onPageAction }) {
       }
     };
     const followBottom = (fromFrame = false) => {
+      if (branch) {
+        pinned.current = false;
+        bottomMotion.current = null;
+        const request = branch.request;
+        const row = [...column.querySelectorAll('.message-row')].find(node => node.dataset.id === branchTarget);
+        if (!request.scrollFinished && row && state.bodies.has(branchTarget)) {
+          if (branchScroll.current?.id !== request.id || branchScroll.current.target !== branchTarget) {
+            branchScroll.current = { id: request.id, target: branchTarget, started: performance.now(),
+              from: root.scrollTop, distance: row.getBoundingClientRect().top - root.getBoundingClientRect().top,
+              done: false };
+          }
+          const motion = branchScroll.current;
+          if (!motion.done && fromFrame) {
+            const progress = state.display?.reduceMotion ? 1 : Math.min(1, (performance.now() - motion.started) / 600);
+            root.scrollTop = motion.from + motion.distance * cubicBezierEasing(0.3, 0, 0, 1)(progress);
+            if (progress === 1) {
+              motion.done = true;
+              sync.branchAck('branch_scroll', branch, true);
+            }
+          }
+          if (!motion.done && !seekFrame) seekFrame = requestAnimationFrame(() => { seekFrame = 0; followBottom(true); });
+        }
+        return;
+      }
       if (search?.query.trim()) pinned.current = false;
       else searchPosition.current = null;
       if (search && !search.searching && search.matches.length && !covered) {
@@ -1188,6 +1268,10 @@ export function MessageList({ state, label, onPageAction }) {
       if (pending && !frame) frame = requestAnimationFrame(settle);
     };
     const release = () => {
+      if (branch && !branch.request.scrollFinished && !branchScroll.current?.done) {
+        branchScroll.current = { id: branch.request.id, target: branchTarget, done: true };
+        sync.branchAck('branch_scroll', branch, false);
+      }
       pinned.current = false;
       bottomMotion.current = null;
       cancelAnimationFrame(motionFrame);
@@ -1209,7 +1293,7 @@ export function MessageList({ state, label, onPageAction }) {
       cancelAnimationFrame(seekFrame);
       inputs.forEach((type) => root.removeEventListener(type, release));
     };
-  }, [state.openId, state.openStatus, ids, state.bodies, state.streaming, settledOpenId, state.scrollRequest, search, covered, state.display?.reduceMotion]);
+  }, [state.openId, state.openStatus, ids, state.bodies, state.streaming, settledOpenId, state.scrollRequest, search, branch, covered, state.display?.reduceMotion]);
 
   useLayoutEffect(() => {
     const node = cover.current;
@@ -1273,8 +1357,10 @@ export function MessageList({ state, label, onPageAction }) {
     <section class="messages" ref=${scroller} aria-label=${label} aria-busy=${covered} inert=${covered}>
       ${showWelcome ? html`<${ChatWelcome} reduceMotion=${!!state.display?.reduceMotion} />`
         : html`<div class="message-column">
-        ${state.path.map((entry, index) => html`
-          <${Row} key=${entry.id} entry=${entry} wrap=${wrap} display=${state.display}
+        ${renderedPath.map((entry, index) => html`
+          <div key=${visualKeys.current.get(entry.id) || entry.id} data-branch-exit=${exitIds.has(entry.id) ? 'true' : null}
+            inert=${exitIds.has(entry.id)} aria-hidden=${exitIds.has(entry.id) ? 'true' : null}>
+          <${Row} entry=${entry} wrap=${wrap} display=${state.display}
             search=${search} first=${index === 0} rows=${state.path.length}
             generating=${!!state.generating} reduceMotion=${!!state.display?.reduceMotion}
             onPageAction=${onPageAction}
@@ -1283,7 +1369,8 @@ export function MessageList({ state, label, onPageAction }) {
             onOpenSheet=${openSheet} onOpenDetail=${openDetail}
             streaming=${state.streaming?.id === entry.id}
             stopping=${!!state.composer?.stopping}
-            body=${state.streaming?.id === entry.id ? state.streaming : state.bodies.get(entry.id)} />`)}
+            body=${exitIds.has(entry.id) ? branchVisual.current.bodies.get(entry.id)
+              : state.streaming?.id === entry.id ? state.streaming : state.bodies.get(entry.id)} /></div>`)}
       </div>`}
       <div class="chat-frame-exits" ref=${exitHost} aria-hidden="true"></div>
     </section>

@@ -45,6 +45,7 @@ let state = {
   interactionPending: 0,
   snackbar: null,
   scrollRequest: null,
+  branchReplacement: null,
   connectionId: null,
 };
 const bodySizes = new Map();
@@ -79,7 +80,7 @@ function select(conversationId, patch = {}) {
   const composer = state.composer ? { ...state.composer, attachments: [], queue: [], text: "",
     phase: "IDLE", generating: false, stopping: false } : null;
   update({ openId: conversationId, openStatus: conversationId ? "loading" : null,
-    path: [], generating: false, streaming: null, bodies: new Map(), scrollRequest: null,
+    path: [], generating: false, streaming: null, bodies: new Map(), scrollRequest: null, branchReplacement: null,
     pageAction: null, pageResult: null, shareText: null, interactions: [], interactionPending: 0, conversationSearch: null,
     composer, context: state.context, ...patch });
 }
@@ -124,6 +125,10 @@ function receive(event, size) {
       break;
     case "connection":
       update({ connectionId: event.connectionId });
+      break;
+    case "branch_replacement":
+      if (event.connectionId !== state.connectionId || event.seq !== openSeq || event.conversationId !== state.openId) return;
+      update({ branchReplacement: event.request ? event : null });
       break;
     case "scroll_to_bottom":
       if (event.conversationId === state.openId && event.seq === openSeq) update({ scrollRequest: event });
@@ -225,7 +230,7 @@ function connect() {
   ws.onopen = () => {
     if (socket !== ws || !running) return;
     retryMs = 1_000;
-    update({ connected: true, composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, connectionId: null,
+    update({ connected: true, composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, branchReplacement: null, connectionId: null,
       conversationDelete: null, conversationDeleteResult: null,
       listLoading: true, listLimit: 0, interactions: [], interactionPending: 0 });
     update({ searchQuery: "", searchResults: [], searchLoading: false, searchFailed: false });
@@ -243,7 +248,7 @@ function connect() {
     if (socket !== ws) return;
     socket = null;
     uploads.forEach(controller => controller.abort());
-    update({ connected: false, composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, connectionId: null,
+    update({ connected: false, composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, branchReplacement: null, connectionId: null,
       conversationDelete: null, conversationDeleteResult: null,
       interactions: [], interactionPending: 0,
       conversationSearch: null,
@@ -316,6 +321,12 @@ export const sync = {
    * One row-level command. The browser only names the row; the phone's owners resolve the branch,
    * the mutation and whether the row was the last one standing.
    */
+  branchAck(type, event, success) {
+    if (!state.connected || state.branchReplacement?.request.id !== event.request.id ||
+        event.connectionId !== state.connectionId || event.seq !== openSeq || event.conversationId !== state.openId) return false;
+    return send({ type, connectionId: event.connectionId, conversationId: event.conversationId,
+      seq: event.seq, actionId: event.request.id, ...(success == null ? {} : { enabled: success }) });
+  },
   rowCommand(type, messageId, values = {}) {
     if (!["edit", "regenerate", "delete"].includes(type) || !state.connected || !state.openId) return false;
     return send({ type, conversationId: state.openId, messageId, seq: openSeq, ...values });

@@ -124,6 +124,7 @@ class WebUiSyncTest {
         every { snackbars } returns this@WebUiSyncTest.snackbars
         every { scrollRequests } returns this@WebUiSyncTest.scrollRequests
         every { composerState } returns this@WebUiSyncTest.composerState
+        every { branchTransitions } returns com.newoether.agora.viewmodel.BranchReplacementTransitionCoordinator()
         every { openConversationId } answers { this@WebUiSyncTest.openTarget.value.conversationId }
         coEvery { start() } just Runs
         coEvery { close() } just Runs

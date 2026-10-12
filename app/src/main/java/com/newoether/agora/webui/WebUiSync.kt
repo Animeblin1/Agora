@@ -221,23 +221,7 @@ internal class WebUiSync(
                             outbound.send(WebSyncEvent.Opened(target.conversationId, target.browserSeq))
                         }
                         coroutineScope {
-                            launch {
-                                session.branchTransitions.request.collect { request ->
-                                    outbound.send(WebSyncEvent.BranchReplacement(connectionId,
-                                        target.conversationId ?: return@collect, target.browserSeq,
-                                        request?.takeIf { it.conversationId == target.conversationId }?.let {
-                                            buildJsonObject {
-                                                put("id", it.id)
-                                                put("oldMessageId", it.oldMessageId)
-                                                put("sourceUserMessageId", it.sourceUserMessageId)
-                                                put("targetUserMessageId", it.targetUserMessageId)
-                                                put("stage", it.stage.name)
-                                                put("fadeFinished", it.fadeFinished)
-                                                put("scrollFinished", it.scrollFinished)
-                                            }
-                                        }))
-                                }
-                            }
+                            launch { forwardBranchReplacement(session, target, connectionId, outbound) }
                             launch {
                                 session.composerState
                                     .combine(customProviders) { state, _ -> state }
@@ -496,21 +480,8 @@ internal class WebUiSync(
                         COMMAND_MODEL -> session.selectModel(command.modelId.orEmpty(), command.seq, command.actionId)
                         COMMAND_REMOVE_QUEUED -> session.removeQueued(command.queuedId.orEmpty(), command.seq)
                         COMMAND_SEND_QUEUED -> session.sendQueued(command.seq, command.actionId)
-                        "branch_fade", "branch_scroll", "branch_complete" -> {
-                            val target = session.openTarget.value
-                            val transitions = session.branchTransitions
-                            val request = transitions.request.value ?: continue
-                            if (command.connectionId != connectionId || command.seq != target.browserSeq ||
-                                command.conversationId != target.conversationId || request.conversationId != target.conversationId ||
-                                command.actionId != request.id) continue
-                            when (command.type) {
-                                "branch_fade" -> transitions.acknowledgeFade(request.id)
-                                "branch_scroll" -> command.enabled?.let { transitions.acknowledgeScroll(request.id, it) }
-                                "branch_complete" -> if (request.stage == com.newoether.agora.viewmodel.BranchReplacementTransitionStage.COMMITTED &&
-                                    request.scrollFinished && visiblePath.value.none { it.id == request.oldMessageId }) transitions.complete(request.id)
-                            }
-                        }
-                        "edit", "regenerate", "delete" -> session.rowCommand(command, visiblePath.value)
+                        "branch_fade", "branch_scroll", "branch_complete" -> acknowledgeBranchReplacement(session, command, connectionId, visiblePath.value)
+                        "edit", "regenerate", "delete" -> launch { session.rowCommand(command, visiblePath.value) }
                         "attachment_remove", "attachment_retry", "attachment_pdf", "attachment_video" ->
                             session.attachmentCommand(command)
                         "setting" -> session.settingCommand(command)

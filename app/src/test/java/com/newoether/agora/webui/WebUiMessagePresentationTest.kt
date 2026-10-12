@@ -206,6 +206,7 @@ class WebUiMessagePresentationTest {
         val session = io.mockk.mockk<WebUiChatSession>(relaxed = true)
         io.mockk.every { session.openTarget } returns kotlinx.coroutines.flow.MutableStateFlow(WebUiChatSession.OpenTarget("c", 0, false))
         io.mockk.every { session.composerState } returns kotlinx.coroutines.flow.emptyFlow()
+        io.mockk.every { session.branchTransitions } returns com.newoether.agora.viewmodel.BranchReplacementTransitionCoordinator()
         io.mockk.every { session.snackbars } returns kotlinx.coroutines.flow.MutableSharedFlow<String>()
         io.mockk.every { session.scrollRequests } returns kotlinx.coroutines.flow.MutableSharedFlow<WebSyncEvent.ScrollToBottom>()
         val providers = kotlinx.coroutines.flow.MutableStateFlow(emptyList<com.newoether.agora.data.CustomProviderConfig>())
