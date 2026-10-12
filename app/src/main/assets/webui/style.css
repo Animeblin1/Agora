@@ -1368,6 +1368,13 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   flex: none;
   padding: 12px 8px calc(8px + env(safe-area-inset-bottom));
 }
+/* The phone's `animateContentSize` box (ChatComposerLayout.kt:80-97). While the bar travels to a new
+   height the card keeps filling that height and clips, so the card's own background still reaches the
+   bottom edge instead of leaving a gap under the bar, and the controls row stays at that bottom edge -
+   the phone lays it out outside the animated column (`:145`) - with the travelling height between the
+   two. Without this the card rides at the top of the shrinking box and the bar reads as unstuck. */
+.composer-host.composer-resizing .composer { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.composer-host.composer-resizing .composer-controls { margin-top: auto; }
 /* Surface at 2 dp tonal elevation, 8 dp shadow, 28 dp corners; host insets 4 / 8 / 10 dp. */
 .composer {
   max-width: 840px;
@@ -1432,7 +1439,12 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .composer-expanded .composer-field { flex: 1; min-height: 0; position: static; }
 .composer-expanded .composer-field textarea { height: 100%; max-height: none; }
 .composer-expanded .expand-button { top: 12px; right: 8px; }
-.chat-composer-expanded .messages { mask-image: none; }
+/* The messages' negative bottom margin is what lets the last row scroll out from under the collapsed
+   bar while the mask fades it there. In the expanded state the bar covers the whole frame, so that
+   margin has to go with the mask: leaving it in place made the scrollport taller than the frame by the
+   height of the expanded bar, and the browser clamped the pinned position to the new maximum - the
+   "scroll jumps up a little when the composer opens" the owner filed. */
+.chat-composer-expanded .messages { mask-image: none; margin-bottom: 0; }
 /* Controls row: 6 dp above, 10 dp from the card sides. The 14 dp gap is COMPOSER_SEND_BUTTON_GAP,
    the Spacer the phone emits after the controls group, so the group can never grow into the send
    button and its own room stays what the row leaves it (weight(1f, fill = false)). */

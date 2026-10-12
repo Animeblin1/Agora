@@ -35,11 +35,20 @@ const CONTEXT_PART_LABEL = {
   system: t.contextPartSystem, tools: t.contextPartTools, messages: t.contextPartMessages,
   free: t.contextPartFree, reserved: t.contextPartReserved,
 };
+/**
+ * `TextFieldLineLimits.MultiLine(1, 6)` in ChatComposerLayout.kt, in the units the stylesheet uses:
+ * six 23 px lines over the textarea's own 8 px + 16 px vertical padding. style.css caps the field at
+ * the same box (`max-height: calc(6 * 23px + 24px)`), so the cap the script measures with and the cap
+ * the field paints with are one number, not two that have to be kept in step.
+ */
+const FIELD_MAX_HEIGHT = 6 * 23 + 24;
 /** ChatBottomBar: surface card with the text field, the expand button and the controls row. */
 export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }) {
   const field = useRef(null);
   const host = useRef(null);
   const sizeMotion = useRef({ height: null, animation: null });
+  // A send this bar started, waiting for the ack that lets the expanded bar travel down (see below).
+  const sendInFlight = useRef(false);
   const composing = useRef(false);
   const modelButton = useRef(null);
   const addButton = useRef(null);
@@ -237,42 +246,81 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
     !["loading", "failed", "deleted"].includes(state.openStatus) &&
     (waiting || (phase === "IDLE" && (stop || ((state.text.trim() || attachments.length || canDrain) && state.composer.modelValid))));
   function submit() {
-    if (actionable) { if (stop && !busy) sync.stopGeneration(); else sync.submit(); }
+    if (actionable) {
+      if (stop && !busy) sync.stopGeneration();
+      else { sendInFlight.current = true; sync.submit(); }
+    }
   }
-  useLayoutEffect(() => {
+  // The phone collapses the composer in the same branch that clears the draft once a send is accepted
+  // (RemoteConversation.kt sets `expanded = false` there), which is the travel down the owner sees when
+  // sending from the expanded bar. The ack that closes the send action is that same signal here, so a
+  // send that never landed leaves the bar open with its text intact.
+  useEffect(() => {
+    if (!sendInFlight.current || state.pendingAction) return;
+    sendInFlight.current = false;
+    if (expanded && !state.text) onExpandedChange(false);
+  }, [state.pendingAction]);
+  // The field owns its own height: one line up to six, which is `TextFieldLineLimits.MultiLine(1, 6)`
+  // in ChatComposerLayout.kt, and the full box while expanded (`Modifier.fillMaxHeight()`).
+  function fitField() {
+    const node = field.current;
+    if (!node) return;
+    if (expanded) { node.style.height = ""; return; }
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, FIELD_MAX_HEIGHT)}px`;
+  }
+  // ChatComposerLayout wraps the composer's content in `animateContentSize(tween(400))`, so every
+  // height change of the bar - a typed line, a paste, the collapse after a send - travels instead of
+  // snapping. The field is fitted first because the bar's own height is that content plus the
+  // controls row: measuring before the field settled used to animate to the single-line box, which
+  // left the card hanging below the bottom edge and snapped the rest of the way at the end.
+  function travel() {
     const node = host.current;
+    if (!node) return;
     const motion = sizeMotion.current;
+    fitField();
     const from = motion.animation ? node.getBoundingClientRect().height : motion.height;
     motion.animation?.cancel();
     motion.animation = null;
     const target = node.offsetHeight;
-    if (from != null && Math.abs(from - target) > 1 && !state.display?.reduceMotion) {
-      const animation = node.animate([{ height: `${from}px` }, { height: `${target}px` }],
-        { duration: 400, easing: expanded ? "cubic-bezier(0.15, 0.5, 0.25, 1)" : "cubic-bezier(0.4, 0, 0.2, 1)", fill: "both" });
-      motion.animation = animation;
-      animation.onfinish = () => {
-        if (motion.animation !== animation) return;
-        motion.animation = null;
-        animation.cancel();
-        motion.height = node.offsetHeight;
-      };
-    }
     motion.height = target;
-    const geometry = new ResizeObserver(() => { if (!motion.animation) motion.height = node.offsetHeight; });
-    geometry.observe(node);
+    if (from == null || Math.abs(from - target) <= 1 || state.display?.reduceMotion) {
+      node.classList.remove("composer-resizing");
+      return;
+    }
+    node.classList.add("composer-resizing");
+    const animation = node.animate([{ height: `${from}px` }, { height: `${target}px` }],
+      { duration: 400, easing: expanded ? "cubic-bezier(0.15, 0.5, 0.25, 1)" : "cubic-bezier(0.4, 0, 0.2, 1)", fill: "both" });
+    motion.animation = animation;
+    animation.onfinish = () => {
+      if (motion.animation !== animation) return;
+      motion.animation = null;
+      animation.cancel();
+      node.classList.remove("composer-resizing");
+      motion.height = node.offsetHeight;
+    };
+  }
+  useLayoutEffect(travel, [expanded, state.text, state.display?.reduceMotion]);
+  // The observer outlives every render, so it reaches the current travel through a ref: a stale
+  // closure would fit the field with the previous render's expanded flag and hold a full-height
+  // composer to six lines.
+  const travelRef = useRef(travel);
+  useLayoutEffect(() => { travelRef.current = travel; });
+  // The height changes no dependency above can see - an attachment preview, a queued message, a
+  // status row appearing - are exactly what animateContentSize reacts to on the phone.
+  useLayoutEffect(() => {
+    const geometry = new ResizeObserver(() => {
+      if (!sizeMotion.current.animation) travelRef.current();
+    });
+    geometry.observe(host.current);
     return () => geometry.disconnect();
-  }, [expanded, state.display?.reduceMotion]);
+  }, []);
   useLayoutEffect(() => () => sizeMotion.current.animation?.cancel(), []);
   useLayoutEffect(() => {
-    const node = field.current;
-    if (expanded) { node.style.height = ""; return; }
-    const resize = () => {
-      node.style.height = "auto";
-      node.style.height = Math.min(node.scrollHeight, 6 * 23 + 24) + "px";
-    };
-    const geometry = new ResizeObserver(resize);
-    geometry.observe(node);
-    resize();
+    fitField();
+    if (expanded) return undefined;
+    const geometry = new ResizeObserver(fitField);
+    geometry.observe(field.current);
     return () => geometry.disconnect();
   }, [state.text, expanded]);
   useEffect(() => {
