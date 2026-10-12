@@ -358,7 +358,7 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
           <span></span>
         </button>
         <header class="detail-sheet-header">
-          ${page === "detail" && group && html`<button class="detail-sheet-icon detail-sheet-back" type="button" aria-label="Back" onClick=${onBack}>
+          ${page === "detail" && onBack && html`<button class="detail-sheet-icon detail-sheet-back" type="button" aria-label="Back" onClick=${onBack}>
             ${icon(SHEET_BACK_PATH)}
           </button>`}
           <h2>${title || "Message details"}</h2>

@@ -908,10 +908,10 @@ export function MessageList({ state, label, onPageAction }) {
       (sheet.page !== "detail" || canOpenSheetItem(selectedItem))));
 
   function openSheet(messageId, groupKey) {
-    setSheet({ conversationId: state.openId, messageId, groupKey, page: "list", detailIndex: null });
+    setSheet({ conversationId: state.openId, messageId, groupKey, page: "list", detailIndex: null, listFirst: true });
   }
   function openDetail(messageId, groupKey, detailIndex) {
-    setSheet({ conversationId: state.openId, messageId, groupKey, page: "detail", detailIndex });
+    setSheet({ conversationId: state.openId, messageId, groupKey, page: "detail", detailIndex, listFirst: false });
   }
   useEffect(() => {
     if (!sheet) return;
@@ -1381,7 +1381,7 @@ export function MessageList({ state, label, onPageAction }) {
       selectedItem=${selectedItem} display=${state.display} wrap=${wrap}
       conversationId=${sheet.conversationId} messageId=${sheet.messageId}
       onSelectItem=${(detailIndex) => setSheet({ ...sheet, page: "detail", detailIndex })}
-      onBack=${sheet.page === "detail" && sheetGroup
+      onBack=${sheet.page === "detail" && sheet.listFirst
         ? () => setSheet({ ...sheet, page: "list", detailIndex: null }) : null}
       onClose=${() => setSheet(null)} />`}`;
 }
