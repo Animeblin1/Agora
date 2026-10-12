@@ -43,7 +43,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.CustomProviderConfig
-import com.newoether.agora.data.ModelEndpointType
 import com.newoether.agora.data.modelAliasDisplayName
 import com.newoether.agora.data.modelApiDisplayName
 import com.newoether.agora.data.providerDisplayName
@@ -55,8 +54,6 @@ import com.newoether.agora.util.Constants
 import com.newoether.agora.util.noOpBringIntoView
 import com.newoether.agora.viewmodel.ChatViewModel
 import com.newoether.agora.ui.components.optionClickable
-import com.newoether.agora.data.repository.endpointQuestionsToPersist
-import com.newoether.agora.data.repository.setModelEndpoint
 
 // Shape constants matching SettingsGroup's per-position rounding (top / bottom corners by place).
 private val FullRounded   = RoundedCornerShape(24.dp)
@@ -89,8 +86,6 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val customProviders by viewModel.settings.customProviders.collectAsState()
     val modelAliases by viewModel.settings.modelAliases.collectAsState()
     val modelProviderNames by viewModel.settings.modelProviderNames.collectAsState()
-    val modelEndpointTypes by viewModel.settings.modelEndpointTypes.collectAsState()
-    val modelDecisionQuestions by viewModel.settings.modelDecisionQuestions.collectAsState()
     val selectedModel by viewModel.settings.selectedModel.collectAsState()
     val isSyncingModels by viewModel.isSyncingModels.collectAsState()
     var showActiveModelDialog by remember { mutableStateOf(false) }
@@ -192,8 +187,15 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
 
             item(key = "default_model") {
                 val activeParsed = com.newoether.agora.model.ModelId.parse(selectedModel)
-                val providerName = providerDisplayName(activeParsed.providerName, customProviders)
-                val activeDisplayName = modelAliasDisplayName(selectedModel, modelAliases, customProviders)
+                val providerName = providerDisplayName(
+                    activeParsed.providerName,
+                    customProviders,
+                )
+                val activeDisplayName = modelAliasDisplayName(
+                    selectedModel,
+                    modelAliases,
+                    customProviders,
+                )
                 val activeIconRes = providerIcon(providerName)
                 val isActiveLocal = providerName.equals(Constants.PROVIDER_LOCAL, ignoreCase = true)
                 val hasEnabledModels = enabledModels.isNotEmpty()
@@ -277,10 +279,17 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                     onDetailsClick = { model ->
                         val parsed = ModelId.parse(model)
                         editingCustomModel = model
-                        customModelProvider = providerDisplayName(parsed.providerName, customProviders)
+                        customModelProvider = providerDisplayName(
+                            parsed.providerName,
+                            customProviders,
+                        )
                         customModelId = parsed.modelName
                         customModelRawAlias = modelAliases[model].orEmpty()
-                        customModelAlias = modelAliasDisplayName(model, modelAliases, customProviders)
+                        customModelAlias = modelAliasDisplayName(
+                            model,
+                            modelAliases,
+                            customProviders,
+                        )
                         showCustomModelDialog = true
                     },
                     onEnabledChange = { model, enabled ->
@@ -414,7 +423,11 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                 )
                             },
                             leadingContent = {
-                                Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                )
                             },
                             modifier = Modifier.heightIn(min = 64.dp),
                         )
@@ -473,7 +486,10 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                 Text(displayName, fontWeight = if (model == selectedModel) FontWeight.Bold else FontWeight.Normal)
                             },
                             supportingContent = {
-                                Text(providerName, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    providerName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             },
                             leadingContent = {
                                 RadioButton(
@@ -707,11 +723,6 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
         val displayAlias = modelAliasDisplayName(model, modelAliases, customProviders)
         val aliasState = rememberTextFieldState(displayAlias)
         var showProviderName by remember(model) { mutableStateOf(modelProviderNames[model] != false) }
-        var endpointType by remember(model) {
-            mutableStateOf(ModelEndpointType.fromWireValue(modelEndpointTypes[model]))
-        }
-        var endpointPath by remember(model) { mutableStateOf(ModelEndpointType.customPathOf(modelEndpointTypes[model])) }
-        var decisionQuestions by remember(model) { mutableStateOf(modelDecisionQuestions[model].orEmpty()) }
 
         AlertDialog(
             modifier = Modifier.clearFocusOnTap(),
@@ -733,14 +744,6 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                         )
                     }
                     ModelProviderNameSwitch(showProviderName) { showProviderName = it }
-                    ModelEndpointTypePicker(
-                        selected = endpointType,
-                        onSelected = { endpointType = it },
-                        customPath = endpointPath,
-                        onCustomPathChange = { endpointPath = it },
-                        questions = decisionQuestions,
-                        onQuestionsChange = { decisionQuestions = it },
-                    )
                 }
             },
             confirmButton = {
@@ -755,8 +758,6 @@ fun SettingsModelsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                         ),
                         showProviderName = showProviderName,
                     )
-                    val persisted = endpointQuestionsToPersist(endpointType, decisionQuestions)
-                    setModelEndpoint(viewModel.settings, model, ModelEndpointType.toWireValue(endpointType, endpointPath), persisted)
                     showModelAliasDialog = null
                 }) { Text(stringResource(R.string.provider_save)) }
             },

@@ -6,7 +6,6 @@ import com.newoether.agora.api.LlmProvider
 import com.newoether.agora.api.ModelFetchEmptyResultException
 import com.newoether.agora.api.ModelFetchTimeoutException
 import com.newoether.agora.api.anthropic.AnthropicProvider
-import com.newoether.agora.api.decisions.DecisionsProvider
 import com.newoether.agora.api.gemini.GeminiProvider
 import com.newoether.agora.api.local.LocalProvider
 import com.newoether.agora.api.ollama.OllamaProvider
@@ -48,31 +47,7 @@ internal fun createCustomProvider(
         CustomEndpointProtocol.OPENAI -> CustomOpenAiProvider(config.name, baseUrl)
         CustomEndpointProtocol.GOOGLE -> GeminiProvider(config.name, baseUrl)
         CustomEndpointProtocol.ANTHROPIC -> AnthropicProvider(config.name, baseUrl)
-        CustomEndpointProtocol.DECISIONS -> DecisionsProvider(
-            name = config.name,
-            defaultBaseUrl = baseUrl.takeIf { it.isNotBlank() }
-                ?: DecisionsProvider.TYPE_SAFE_URL,
-            decisionsPath = decisionsPathFor(baseUrl),
-        )
         CustomEndpointProtocol.UNKNOWN -> null
-    }
-}
-
-/**
- * The decision path a host serves.
- *
- * The three hosts that speak this contract disagree on the path: TypeSafe serves `/v1/systemone`,
- * Inception `/v1/decisions`, and OpenRouter keeps decisions outside its `/api/v1` prefix at its
- * own alpha path. A saved Base URL already carries whatever prefix the user entered, so this only
- * adds the part that differs — and leaves a URL that already ends in a decisions path alone.
- */
-internal fun decisionsPathFor(baseUrl: String): String {
-    val normalized = baseUrl.trim().trimEnd('/').lowercase()
-    if (normalized.endsWith("systemone") || normalized.endsWith("decisions")) return ""
-    return when {
-        normalized.contains("openrouter.ai") -> DecisionsProvider.OPENROUTER_DECISIONS_PATH
-        normalized.contains("inceptionlabs.ai") -> DecisionsProvider.INCEPTION_DECISIONS_PATH
-        else -> DecisionsProvider.DEFAULT_DECISIONS_PATH
     }
 }
 
@@ -112,9 +87,6 @@ internal fun customEndpointBaseUrlCandidates(
             // its derived terminal `/v1` into the user-facing Base URL.
             if (unversioned != null) add(unversioned)
         }.distinct()
-        // The decision path is chosen by host, not by a version segment, so the configured URL
-        // is used as typed: guessing a `/v1` here would point at a path the host does not serve.
-        CustomEndpointProtocol.DECISIONS -> listOf(normalized)
         CustomEndpointProtocol.UNKNOWN -> emptyList()
     }
 }

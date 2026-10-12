@@ -36,8 +36,6 @@ internal class GenerationOutputAccumulator(
     var currentThoughtBuf = StringBuilder()
     var currentThoughtSignature: String? = null
     var currentThoughtSignatureProvider: String? = null
-    /** Raw decision-endpoint body for the answer being written, if any. */
-    var decisionAnswers: String? = null
 
     fun flushAnswerSegment() {
         if (currentAnswerBuf.isNotEmpty()) {
@@ -46,12 +44,10 @@ internal class GenerationOutputAccumulator(
                     type = "answer",
                     content = currentAnswerBuf.toString(),
                     streamingTextDeltas = currentAnswerDeltas.toList(),
-                    decisionAnswers = decisionAnswers,
                 ),
             )
             currentAnswerBuf = StringBuilder()
             currentAnswerDeltas = mutableListOf()
-            decisionAnswers = null
         }
     }
 
@@ -234,10 +230,6 @@ internal class GenerationOutputAccumulator(
                 currentStatus = MessageStatus.TOOL_CALLING
                 publishStreamUpdate(true)
                 uiUpdateGate.recordPublished(System.currentTimeMillis())
-            }
-            is StreamEvent.DecisionAnswers -> {
-                // Arrives just before the prose it renders, so it lands on that same segment.
-                decisionAnswers = event.body
             }
             is StreamEvent.ToolCallsRequest -> {
                 event.calls.forEach { call ->

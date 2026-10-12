@@ -346,7 +346,6 @@ class GenerationManager(
                     output.generationErrorMessage,
                     output.generationErrorCode,
                     answerDeltas = output.currentAnswerDeltas,
-                    decisionAnswers = output.decisionAnswers,
                 ),
                 retryText = output.retryText,
                 runId = runId,

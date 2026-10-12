@@ -91,7 +91,6 @@ internal class ProviderPassRunner(
                     providerError = event.error
                 }
                 is StreamEvent.TextChunk,
-                is StreamEvent.DecisionAnswers,
                 is StreamEvent.CitationUpdate,
                 is StreamEvent.ThoughtChunk,
                 is StreamEvent.HostedToolCallUpdate,

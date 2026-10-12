@@ -18,8 +18,6 @@ internal val SYSTEM_PROMPTS_JSON = stringPreferencesKey("system_prompts_json")
 internal val ACTIVE_SYSTEM_PROMPT_ID = stringPreferencesKey("active_system_prompt_id")
 internal val MODEL_ALIASES_JSON = stringPreferencesKey("model_aliases_json")
 internal val MODEL_PROVIDER_NAMES_JSON = stringPreferencesKey("model_provider_names_json")
-internal val MODEL_ENDPOINT_TYPES_JSON = stringPreferencesKey("model_endpoint_types_json")
-internal val MODEL_DECISION_QUESTIONS_JSON = stringPreferencesKey("model_decision_questions_json")
 internal val CONTEXT_TOKEN_BUDGET = stringPreferencesKey("context_token_budget")
 /** Legacy logical-message window, retained only as a migration source. */
 internal val MAX_CONTEXT_WINDOW = stringPreferencesKey("max_context_window")

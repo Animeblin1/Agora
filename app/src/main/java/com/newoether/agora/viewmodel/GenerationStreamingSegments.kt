@@ -117,7 +117,6 @@ internal fun buildLiveSegments(
     errorMessage: String? = null,
     errorCode: String? = null,
     answerDeltas: List<StreamingTextDelta> = emptyList(),
-    decisionAnswers: String? = null,
 ): List<MessageSegment>? {
     val citations = flushed.filter { it.type == "citation" }
     val result = flushed.filterTo(mutableListOf()) { it.type != "citation" }
@@ -128,7 +127,6 @@ internal fun buildLiveSegments(
                 type = "answer",
                 content = answer.toString(),
                 streamingTextDeltas = answerDeltas.toList(),
-                decisionAnswers = decisionAnswers,
             ),
         )
     }

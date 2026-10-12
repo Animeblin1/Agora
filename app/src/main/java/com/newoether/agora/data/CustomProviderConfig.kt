@@ -14,23 +14,15 @@ enum class CustomEndpointProtocol(val wireValue: String) {
     OPENAI("openai"),
     GOOGLE("google"),
     ANTHROPIC("anthropic"),
-    /**
-     * A System One decision endpoint — Jev, Mercury Decide or an OpenRouter Decisions router.
-     *
-     * These hosts answer typed questions instead of writing text and do not stream, so they share
-     * none of the chat transports above despite often accepting an OpenAI-shaped model list.
-     */
-    DECISIONS("decisions"),
     UNKNOWN("unknown");
 
     companion object {
-        val selectable: List<CustomEndpointProtocol> = listOf(OPENAI, GOOGLE, ANTHROPIC, DECISIONS)
+        val selectable: List<CustomEndpointProtocol> = listOf(OPENAI, GOOGLE, ANTHROPIC)
 
         fun fromWireValue(value: String): CustomEndpointProtocol = when (value.trim().lowercase()) {
             "openai" -> OPENAI
             "google", "gemini" -> GOOGLE
             "anthropic", "claude" -> ANTHROPIC
-            "decisions", "systemone", "system-one", "jev" -> DECISIONS
             else -> UNKNOWN
         }
     }

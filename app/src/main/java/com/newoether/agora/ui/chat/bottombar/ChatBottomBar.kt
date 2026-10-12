@@ -42,7 +42,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.newoether.agora.data.CustomProviderConfig
-import com.newoether.agora.data.ModelEndpointType
 import com.newoether.agora.data.thinkingCapabilityForSelectedModel
 import com.newoether.agora.model.ModelId
 import com.newoether.agora.model.OpenAiServiceTiers
@@ -97,9 +96,6 @@ internal fun ChatBottomBar(
     selectedModel: String,
     modelAliases: Map<String, String> = emptyMap(),
     modelProviderNames: Map<String, Boolean> = emptyMap(),
-    modelEndpointTypes: Map<String, String> = emptyMap(),
-    modelDecisionQuestions: Map<String, String> = emptyMap(),
-    onDecisionQuestionsChange: (String) -> Unit = {},
     customProviders: List<CustomProviderConfig> = emptyList(),
     codeExecutionEnabled: Boolean = false,
     googleSearchEnabled: Boolean = false,
@@ -260,10 +256,6 @@ internal fun ChatBottomBar(
     var showThinkingSheet by showThinkingSheetState
     val showOpenAiServiceTierSheetState = rememberSaveable { mutableStateOf(false) }
     var showOpenAiServiceTierSheet by showOpenAiServiceTierSheetState
-    var showDecisionQuestions by rememberSaveable { mutableStateOf(false) }
-    // Only a decisions model has questions to ask, so the entry point follows the model.
-    val selectedIsDecisions =
-        ModelEndpointType.fromWireValue(modelEndpointTypes[selectedModel]) == ModelEndpointType.DECISIONS
     LaunchedEffect(fullScreenViewerUrls) {
         if (
             fullScreenViewerUrls == null &&
@@ -538,16 +530,6 @@ internal fun ChatBottomBar(
                                 }
                             )
                         }
-                        if (selectedIsDecisions) {
-                            AgoraDropdownMenuItem(
-                                text = { Text(stringResource(R.string.decision_questions)) },
-                                onClick = {
-                                    activeMenu = null
-                                    lastModelDismissTime = 0L
-                                    showDecisionQuestions = true
-                                },
-                            )
-                        }
                     }
                 }
 
@@ -641,13 +623,6 @@ internal fun ChatBottomBar(
                         )
                     }
                 }
-            }
-            if (showDecisionQuestions) {
-                ComposerDecisionQuestionsDialog(
-                    questions = modelDecisionQuestions[selectedModel].orEmpty(),
-                    onDismissRequest = { showDecisionQuestions = false },
-                    onConfirm = { onDecisionQuestionsChange(it) },
-                )
             }
             ComposerSendButton(
                 textFieldState = textFieldState,

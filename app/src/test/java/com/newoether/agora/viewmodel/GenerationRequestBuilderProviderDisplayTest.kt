@@ -596,8 +596,6 @@ private class RequestBuilderFixture(
         every { settings.anthropicCacheEnabled } returns MutableStateFlow(true)
         every { settings.anthropicCacheTtl } returns MutableStateFlow("1h")
         every { settings.customProviders } returns MutableStateFlow(emptyList())
-        every { settings.modelEndpointTypes } returns MutableStateFlow(emptyMap())
-        every { settings.modelDecisionQuestions } returns MutableStateFlow(emptyMap())
         every { settings.titleGenerationEnabled } returns MutableStateFlow(true)
         every { settings.imageGenModel } returns MutableStateFlow(null)
         every { settings.imageTranscriptionModel } returns MutableStateFlow(null)

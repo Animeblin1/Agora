@@ -38,7 +38,6 @@ import com.newoether.agora.TopLevelPresentation
 import com.newoether.agora.api.DebugProvider
 import com.newoether.agora.data.forDisplay
 import com.newoether.agora.data.replaceCustomProviderIdsForDisplay
-import com.newoether.agora.data.repository.setModelEndpoint
 import com.newoether.agora.util.gradientBlur
 import com.newoether.agora.ui.chat.bottombar.CHAT_BOTTOM_BAR_OUTER_SHAPE
 import com.newoether.agora.ui.chat.bottombar.ChatBottomBar
@@ -119,8 +118,6 @@ fun ChatApp(
     val debugModelEnabled by viewModel.settings.debugModelEnabled.collectAsState()
     val modelAliases by viewModel.settings.modelAliases.collectAsState()
     val modelProviderNames by viewModel.settings.modelProviderNames.collectAsState()
-    val modelEndpointTypes by viewModel.settings.modelEndpointTypes.collectAsState()
-    val modelDecisionQuestions by viewModel.settings.modelDecisionQuestions.collectAsState()
     val chatEnabledModels = validChatModels(
         enabledModels,
         developerOptionsEnabled,
@@ -696,15 +693,14 @@ fun ChatApp(
                             haptics.interrupt()
                             viewModel.stopGeneration()
                         },
-                        isLoading = isLoading, isCompacting = isCompacting, isSwitching = isSwitching,
+                        isLoading = isLoading,
+                        isCompacting = isCompacting,
+                        isSwitching = isSwitching,
                         enabledModels = chatEnabledModels,
                         selectedModel = selectedModel,
                         modelAliases = chatModelAliases,
                         modelProviderNames = modelProviderNames,
                         customProviders = customProviders,
-                        modelEndpointTypes = modelEndpointTypes,
-                        modelDecisionQuestions = modelDecisionQuestions,
-                        onDecisionQuestionsChange = { q -> setModelEndpoint(viewModel.settings, selectedModel, modelEndpointTypes[selectedModel], q) },
                         codeExecutionEnabled = conversationControls.codeExecutionEnabled,
                         googleSearchEnabled = conversationControls.googleSearchEnabled,
                         thinkingEnabled = conversationControls.thinkingEnabled, thinkingLevel = conversationControls.thinkingLevel,
