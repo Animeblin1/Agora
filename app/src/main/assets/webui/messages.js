@@ -1330,11 +1330,12 @@ export function MessageList({ state, label, onPageAction }) {
     const host = exitHost.current;
     const leaving = exiting.current;
     exiting.current = null;
+    let fade = null;
     if (host && leaving) {
       host.replaceChildren(leaving.node);
       host.style.top = `${leaving.top}px`;
       host.style.height = `${scroller.current?.clientHeight ?? 0}px`;
-      const fade = host.animate([{ opacity: 1 }, { opacity: 0 }],
+      fade = host.animate([{ opacity: 1 }, { opacity: 0 }],
         { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" });
       fade.onfinish = () => { host.replaceChildren(); fade.cancel(); };
     }
@@ -1344,7 +1345,7 @@ export function MessageList({ state, label, onPageAction }) {
       scroller.current?.firstElementChild?.animate?.([{ opacity: 0 }, { opacity: 1 }],
         { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)" });
     }
-    return undefined;
+    return () => { if (fade) { fade.onfinish = null; fade.cancel(); host.replaceChildren(); } };
   }, [frameKind]);
 
   return html`
@@ -1366,7 +1367,7 @@ export function MessageList({ state, label, onPageAction }) {
             body=${exitIds.has(entry.id) ? branchVisual.current.bodies.get(entry.id)
               : state.streaming?.id === entry.id ? state.streaming : state.bodies.get(entry.id)} /></div>`)}
       </div>`}
-      <div class="chat-frame-exits" ref=${exitHost} aria-hidden="true"></div>
+      <div key="page-exit" class="chat-frame-exits" ref=${exitHost} aria-hidden="true"></div>
     </section>
     <div class="scrollbar-overlay" ref=${bar} aria-hidden="true"><span></span></div>
     ${covered && html`<div class="conversation-loading-cover" ref=${cover}
