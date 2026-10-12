@@ -1015,7 +1015,7 @@ mark[data-search-key].active { background: #ffa000; }
 .info-card.first .info-card-surface { border-radius: 24px 24px 5px 5px; }
 .info-card.middle .info-card-surface { border-radius: 5px; }
 .info-card.last .info-card-surface { border-radius: 5px 5px 24px 24px; }
-.info-card .timeline-item { padding: 10px; }
+.info-card .timeline-item { width: 100%; padding: 10px; border-radius: inherit; overflow: hidden; }
 .info-item-icon, .info-item-arrow { flex: none; display: grid; place-items: center; width: 16px; height: 16px; }
 .info-item-icon { color: color-mix(in srgb, var(--md-primary) 70%, transparent); }
 .info-item-arrow { color: color-mix(in srgb, var(--md-on-surface-variant) 50%, transparent); }
@@ -1133,7 +1133,7 @@ mark[data-search-key].active { background: #ffa000; }
 .detail-sheet-list-row.first:not(:last-child) { border-radius: 24px 24px 5px 5px; }
 .detail-sheet-list-row.middle { border-radius: 5px; }
 .detail-sheet-list-row.last:not(:first-child) { border-radius: 5px 5px 24px 24px; }
-.detail-sheet-list-row .timeline-item { width: 100%; padding: 10px; }
+.detail-sheet-list-row .timeline-item { width: 100%; padding: 10px; border-radius: inherit; overflow: hidden; }
 .info-item.sheet-item {
   border: 0;
   background: transparent;
@@ -1904,7 +1904,6 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 }
 
 button.info-item:focus-visible { outline: none; }
-.info-card .timeline-item, .detail-sheet-list-row .timeline-item { border-radius: 8px; overflow: hidden; }
 
 /* ---- Focus indication: drawn inside the control, never clipped, never a second border --------- */
 /* Compose draws a focus indicator inside the component's own shape, so it cannot be cut by a scroll
