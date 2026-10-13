@@ -69,7 +69,7 @@ class WebUiConversationMenuTest {
         every { scrollRequests } returns MutableSharedFlow<WebSyncEvent.ScrollToBottom>(extraBufferCapacity = 4)
         every { composerState } returns MutableSharedFlow<WebUiChatSession.ComposerState>(extraBufferCapacity = 4)
         every { branchTransitions } returns transitions
-        coEvery { rowCommand(any(), any()) } just Runs
+        coEvery { rowCommand(any(), any(), any()) } just Runs
         every { openConversationId } answers { this@WebUiConversationMenuTest.openTarget.value.conversationId }
         coEvery { start() } just Runs
         coEvery { close() } just Runs
@@ -140,7 +140,7 @@ class WebUiConversationMenuTest {
     fun editWaitingForFadeDoesNotBlockTheConnectionCommandReader() = sync { send, received ->
         received()
         val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
-        coEvery { session.rowCommand(any(), any()) } coAnswers {
+        coEvery { session.rowCommand(any(), any(), any()) } coAnswers {
             val request = transitions.begin("a", "old")!!
             entered.complete(Unit)
             transitions.awaitFade(request.id)
@@ -155,7 +155,7 @@ class WebUiConversationMenuTest {
     @Test
     fun recompactRowCommandReachesTheCurrentSession() = sync { send, _ ->
         send("""{"type":"recompact","conversationId":"a","seq":1,"messageId":"compact_target"}""")
-        coVerify(exactly = 1) { session.rowCommand(match { it.type == "recompact" && it.messageId == "compact_target" }, any()) }
+        coVerify(exactly = 1) { session.rowCommand(match { it.type == "recompact" && it.messageId == "compact_target" }, any(), any()) }
     }
 
     private fun sync(

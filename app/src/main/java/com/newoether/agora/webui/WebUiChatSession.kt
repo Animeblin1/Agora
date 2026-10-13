@@ -99,7 +99,7 @@ internal class WebUiChatSession(
     private val clients: ChatClients,
     private val conversations: ConversationRepository,
     private val registry: ConversationStateRegistry,
-    executionCoordinator: ConversationExecutionCoordinator,
+    private val executionCoordinator: ConversationExecutionCoordinator,
     private val settings: SettingsRepository,
     private val transfers: ConversationSettingsTransferCoordinator,
     attachmentProcessor: AttachmentImportProcessor,
@@ -349,26 +349,22 @@ internal class WebUiChatSession(
         retainOwnerLocked(conversationId ?: NEW_CHAT_WORKSPACE_ID)
     }
 
-    /**
-     * One row-level command: the browser names a row, and the phone's own owners decide the branch.
-     * [path] is the branch this connection is showing, because the phone resolves its generation
-     * boundary inside the rows the browser can actually see.
-     */
-    suspend fun rowCommand(command: WebSyncCommand, path: List<ChatMessage>) {
+    /** Admits identified row commands without holding the session lock across delete completion. */
+    suspend fun rowCommand(command: WebSyncCommand, path: List<ChatMessage>, reply: suspend (WebSyncEvent.RowAction) -> Unit = {}) {
         val opened = openTarget.value
         if (opened.browserSeq != command.seq || opened.conversationId != command.conversationId) return
         val conversationId = opened.conversationId ?: return
-        val messageId = command.messageId ?: return
+        if (command.messageId == null) return
         val modelId = activeModel.value?.takeIf { it.first == conversationId }?.second.orEmpty()
-        val text = command.text.orEmpty()
-        when (command.type) {
-            "edit" -> if (modelId.isNotBlank() && text.isNotBlank()) generation.editMessage(this, conversationId,
-                messageId, text, modelId, path)
-            "regenerate" -> if (modelId.isNotBlank()) generation.regenerate(this, conversationId, messageId,
-                modelId, path)
-            "delete" -> generation.deleteMessage(this, conversationId, messageId, path)
-            "recompact" -> if (path.any { it.id == messageId && it.isContextCompact() }) editorCommand(command)
-        }
+        if (command.type in setOf("branch", "delete") && !ownerMutex.withLock {
+            if (closed || target.value != opened || command.actionId <= actionId.value) false
+            else { actionId.value = command.actionId; true }
+        }) return
+        dispatchWebUiRowCommand(this, command, path, conversationId, modelId,
+            generation, conversations, registry, executionCoordinator, ownerMutex,
+            isCurrent = { !closed && (target.value == opened || command.type == "delete" &&
+                target.value == OpenTarget(null, opened.browserSeq, movedByServer = true)) },
+            editorCommand = ::editorCommand, reply = reply)
     }
 
     /** Applies one ordered browser edit to the canonical composer owner. */

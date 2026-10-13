@@ -41,6 +41,9 @@ internal data class WebDisplayContext(
     val autoWrapCodeBlocks: Boolean,
     val blurEffectsEnabled: Boolean = true,
     val reduceMotion: Boolean = false,
+    /** The phone's model aliases and provider-name visibility, for MessageInfoDialog's model line. */
+    val modelAliases: Map<String, String> = emptyMap(),
+    val modelProviderNames: Map<String, Boolean> = emptyMap(),
 ) {
     /** Settings plus the live timer templates; the browser formats the running seconds. */
     fun toEvent() = WebSyncEvent.Display(
@@ -327,20 +330,26 @@ internal fun DrawerConversationRow.toWeb(generating: Boolean) = WebConversation(
     isPinned = isPinned,
 )
 
-internal fun ChatMessage.toWebPathEntry() = WebPathEntry(
+internal fun ChatMessage.toWebPathEntry(branch: com.newoether.agora.model.RunMessagePresentation? = null) = WebPathEntry(
     id = id,
     parentId = parentId,
     participant = participant.name,
     status = status.name,
+    showBranchSelector = branch?.showBranchSelector == true,
+    branchIndex = branch?.branchIndex ?: 0,
+    totalBranches = branch?.totalBranches ?: 1,
+    branchAnchorParentId = branch?.branchAnchorParentId,
+    branchAnchorMessageId = branch?.branchAnchorMessageId,
 )
 
-internal fun ChatMessage.toWeb(presentation: WebPresentation?) = WebMessage(
+internal fun ChatMessage.toWeb(presentation: WebPresentation?, modelDisplay: String? = null) = WebMessage(
     id = id,
     parentId = parentId,
     participant = participant.name,
     status = status.name,
     timestamp = timestamp,
     modelName = modelName,
+    modelDisplay = modelDisplay,
     // Copy and edit consume the original source; rendered bodies live only in presentation.
     text = WebText(text),
     presentation = presentation,

@@ -463,6 +463,14 @@ class AppContainer(
                 ),
             ) { context, (blur, reduceMotion) ->
                 context.copy(blurEffectsEnabled = blur, reduceMotion = reduceMotion)
+            }.combine(
+                kotlinx.coroutines.flow.combine(
+                    settingsRepository.modelAliases,
+                    settingsRepository.modelProviderNames,
+                    ::Pair,
+                ),
+            ) { context, (aliases, providerNames) ->
+                context.copy(modelAliases = aliases, modelProviderNames = providerNames)
             },
         )
     }

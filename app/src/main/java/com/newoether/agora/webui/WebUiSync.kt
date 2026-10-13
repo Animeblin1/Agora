@@ -464,7 +464,11 @@ internal class WebUiSync(
                         COMMAND_REMOVE_QUEUED -> session.removeQueued(command.queuedId.orEmpty(), command.seq)
                         COMMAND_SEND_QUEUED -> session.sendQueued(command.seq, command.actionId)
                         "branch_fade", "branch_scroll", "branch_complete" -> acknowledgeBranchReplacement(session, command, connectionId, visiblePath.value)
-                        "edit", "regenerate", "delete", "recompact" -> launch { session.rowCommand(command, visiblePath.value) }
+                        "branch", "delete" -> {
+                            if (command.connectionId != connectionId) continue
+                            launch { session.rowCommand(command, visiblePath.value) { outbound.send(it) } }
+                        }
+                        "edit", "regenerate", "recompact" -> launch { session.rowCommand(command, visiblePath.value) }
                         "attachment_remove", "attachment_retry", "attachment_pdf", "attachment_video" ->
                             session.attachmentCommand(command)
                         "setting" -> session.settingCommand(command)
@@ -526,7 +530,7 @@ internal class WebUiSync(
         val selected = conversations.observeConversation(id)
         val row = selected.first()
         if (row == null || row.taskId != null) {
-            outbound.send(WebSyncEvent.Deleted(id))
+            outbound.send(WebSyncEvent.Deleted(id, seq))
             return
         }
         // A failure in any collector ends this conversation only, never the connection.
@@ -536,7 +540,7 @@ internal class WebUiSync(
             throw error
         } catch (error: Exception) {
             DebugLog.e(TAG, "WebUI failed to load a conversation", error)
-            outbound.send(WebSyncEvent.LoadFailed(id))
+            outbound.send(WebSyncEvent.LoadFailed(id, seq))
         }
     }
 
@@ -559,7 +563,7 @@ internal class WebUiSync(
         val state = registry.getOrCreate(id)
         val selectedChildren = selected.map { row ->
             if (row == null) {
-                outbound.send(WebSyncEvent.Deleted(id))
+                outbound.send(WebSyncEvent.Deleted(id, seq))
                 this@observeConversation.cancel()
             }
             decodeSelectedChildren(row?.selectedBranchesJson)
@@ -592,10 +596,12 @@ internal class WebUiSync(
                 }
                 // Row commands resolve the phone's generation boundary inside the path this browser shows.
                 visiblePath.value = path
+                val branches = com.newoether.agora.model.RunUiProjection.project(path, all)
                 WebSyncEvent.Path(
                     conversationId = id,
-                    messages = path.map { it.toWebPathEntry() },
+                    messages = path.map { it.toWebPathEntry(branches[it.id]) },
                     generating = snapshot.isGenerating,
+                    seq = seq,
                 )
             }
                 .distinctUntilChanged()
@@ -620,9 +626,9 @@ internal class WebUiSync(
                 .mapLatest { (message, context) ->
                     message?.let { project(it, isStreaming = true, context) }
                 }
-                .collect { outbound.send(WebSyncEvent.Streaming(id, it)) }
+                .collect { outbound.send(WebSyncEvent.Streaming(id, it, seq)) }
         }
-        launch { servePayloads(id, watched, pathIds, liveMessageId, display, outbound) }
+        launch { servePayloads(id, seq, watched, pathIds, liveMessageId, display, outbound) }
         launch(projectionDispatcher) {
             combine(searchIds, query, customProviders, payloadRevision, state.generationSnapshot) { ids, command, providers, _, snapshot ->
                 Triple(ids, command, providers) to snapshot.streamingMessage
@@ -661,7 +667,7 @@ internal class WebUiSync(
 
     /** One payload subscription per watched row; only rows on the current path are served. */
     private suspend fun servePayloads(
-        conversationId: String,
+        conversationId: String, seq: Long,
         watched: StateFlow<Set<String>>,
         pathIds: StateFlow<Set<String>>,
         liveMessageId: Flow<String?>,
@@ -683,7 +689,7 @@ internal class WebUiSync(
                                     outbound.send(
                                         WebSyncEvent.Payload(
                                             conversationId,
-                                            project(message, isStreaming = false, context),
+                                            project(message, isStreaming = false, context), seq,
                                         ),
                                     )
                                 }
@@ -698,8 +704,13 @@ internal class WebUiSync(
         isStreaming: Boolean,
         display: WebDisplayContext,
     ): WebMessage = withContext(projectionDispatcher) {
-        val shown = message.forDisplay(customProviders.value)
-        shown.toWeb(webPresentation(shown, isStreaming, display))
+        val providers = customProviders.value
+        val shown = message.forDisplay(providers)
+        // MessageInfoDialog: modelDisplayName(modelName, aliases, providers, providerNames[modelName] != false).
+        val modelDisplay = message.modelName?.let {
+            com.newoether.agora.data.modelDisplayName(it, display.modelAliases, providers, display.modelProviderNames[it] != false)
+        }
+        shown.toWeb(webPresentation(shown, isStreaming, display), modelDisplay)
     }
 
     companion object {

@@ -1,5 +1,7 @@
 package com.newoether.agora.webui
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -32,6 +34,11 @@ internal data class WebSyncCommand(
     val answers: Map<String, WebInteractionAnswer>? = null,
     /** The one message a row-level command (for example an edit) acts on. */
     val messageId: String? = null,
+    val direction: Int = 0,
+    val branchAnchorMessageId: String? = null,
+    val branchAnchorParentId: String? = null,
+    val branchIndex: Int = 0,
+    val totalBranches: Int = 1,
 )
 
 @Serializable
@@ -67,7 +74,11 @@ internal sealed interface WebSyncEvent {
         val conversationId: String,
         val messages: List<WebPathEntry>,
         val generating: Boolean,
+        val seq: Long = 0L,
     ) : WebSyncEvent
+
+    @Serializable @SerialName("row_action")
+    data class RowAction(val conversationId: String, val seq: Long, val actionId: Long, val path: List<WebPathEntry>, val success: Boolean) : WebSyncEvent
 
     /** The visual branch replacement request owned by this browser's ordinary ChatClient. */
     @Serializable @SerialName("branch_replacement")
@@ -76,14 +87,14 @@ internal sealed interface WebSyncEvent {
     ) : WebSyncEvent
     /** The body of one watched row. */
     @Serializable @SerialName("payload")
-    data class Payload(val conversationId: String, val message: WebMessage) : WebSyncEvent
+    data class Payload(val conversationId: String, val message: WebMessage, val seq: Long = 0L) : WebSyncEvent
 
     /** The in-flight message; it replaces the durable body of the row with the same id. */
     @Serializable @SerialName("streaming")
-    data class Streaming(val conversationId: String, val message: WebMessage?) : WebSyncEvent
+    data class Streaming(val conversationId: String, val message: WebMessage?, val seq: Long = 0L) : WebSyncEvent
 
     @Serializable @SerialName("deleted")
-    data class Deleted(val conversationId: String) : WebSyncEvent
+    data class Deleted(val conversationId: String, val seq: Long = 0L) : WebSyncEvent
 
     /**
      * How the phone's conversation owner answered this connection's delete request. [actionId]
@@ -106,7 +117,7 @@ internal sealed interface WebSyncEvent {
     ) : WebSyncEvent
 
     @Serializable @SerialName("load_failed")
-    data class LoadFailed(val conversationId: String) : WebSyncEvent
+    data class LoadFailed(val conversationId: String, val seq: Long = 0L) : WebSyncEvent
 
     /**
      * The runtime moved this connection to [conversationId] (null is New Chat), for example after
@@ -176,12 +187,18 @@ internal data class WebConversation(
     val isPinned: Boolean = false,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 internal data class WebPathEntry(
     val id: String,
     val parentId: String?,
     val participant: String,
     val status: String,
+    val showBranchSelector: Boolean = false,
+    @EncodeDefault val branchIndex: Int = 0,
+    @EncodeDefault val totalBranches: Int = 1,
+    val branchAnchorParentId: String? = null,
+    val branchAnchorMessageId: String? = null,
 )
 
 @Serializable
@@ -192,6 +209,8 @@ internal data class WebMessage(
     val status: String,
     val timestamp: Long,
     val modelName: String?,
+    /** The model as MessageInfoDialog shows it: modelDisplayName with the phone's aliases. */
+    val modelDisplay: String? = null,
     val text: WebText,
     /** How the app lays out a model message; null for user messages. */
     val presentation: WebPresentation?,

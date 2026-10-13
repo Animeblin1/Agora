@@ -30,9 +30,11 @@ class WebUiChatSessionEditorsTest {
     private val conversation = MutableStateFlow(ChatConversation("a", "Test", modelId = "OpenAI:test"))
     private val streaming = MutableStateFlow<com.newoether.agora.model.ChatMessage?>(null)
     private val stopping = MutableStateFlow(false)
+    private val generating = MutableStateFlow(false)
     private val state = mockk<ConversationGenerationState> {
         every { generationSnapshot } returns MutableStateFlow(ConversationGenerationSnapshot())
-        every { generating } returns MutableStateFlow(false)
+        every { this@mockk.generating } returns this@WebUiChatSessionEditorsTest.generating
+        every { queueMutationMutex } returns kotlinx.coroutines.sync.Mutex()
         every { this@mockk.stopping } returns this@WebUiChatSessionEditorsTest.stopping
         every { streamingMessage } returns streaming
         every { queuedSends } returns MutableStateFlow(emptyList())
@@ -102,6 +104,170 @@ class WebUiChatSessionEditorsTest {
         session.open(id, seq)
         return withTimeout(5_000) { session.composerState.first { it.conversationId == id && it.seq == seq && it.modelValid } }
     }
+    @Test fun deleteReceiptWaitsForCompletionAndRejectsStaleDuplicateAndCancelledWork() = runBlocking {
+        ready("a", 4)
+        val row = com.newoether.agora.model.ChatMessage(id = "u", text = "input",
+            participant = com.newoether.agora.model.Participant.USER)
+        var completion: ((Boolean) -> Unit)? = null
+        every { generation.deleteMessage(any(), "a", row.id, any(), any()) } answers {
+            completion = arg(4)
+            1
+        }
+        val receipts = mutableListOf<WebSyncEvent.RowAction>()
+        val command = WebSyncCommand("delete", conversationId = "a", seq = 4, messageId = row.id, actionId = 8)
+        session.rowCommand(command.copy(seq = 3), listOf(row)) { receipts += it }
+        assertNull(completion)
+        val pending = async { session.rowCommand(command, listOf(row)) { receipts += it } }
+        withTimeout(5_000) { while (completion == null) yield() }
+        assertTrue(receipts.isEmpty())
+        assertFalse(pending.isCompleted)
+        completion!!(false)
+        pending.await()
+        assertEquals(listOf(WebSyncEvent.RowAction("a", 4, 8, emptyList(), false)), receipts)
+        session.rowCommand(command, listOf(row)) { receipts += it }
+        verify(exactly = 1) { generation.deleteMessage(any(), "a", row.id, any(), any()) }
+        completion = null
+        val cancelled = async { session.rowCommand(command.copy(actionId = 9), listOf(row)) { receipts += it } }
+        withTimeout(5_000) { while (completion == null) yield() }
+        cancelled.cancelAndJoin()
+        completion!!(true)
+        assertEquals(1, receipts.size)
+        completion = null
+        val replaced = async { session.rowCommand(command.copy(actionId = 10), listOf(row)) { receipts += it } }
+        withTimeout(5_000) { while (completion == null) yield() }
+        withTimeout(5_000) { ready("b", 5) }
+        completion!!(true)
+        replaced.await()
+        assertEquals(1, receipts.size)
+    }
+    @Test fun wholeTreeDeleteKeepsItsReceiptAfterTheCanonicalServerMoveToNewChat() = runBlocking {
+        ready("a", 4)
+        val row = com.newoether.agora.model.ChatMessage(id = "u", text = "input",
+            participant = com.newoether.agora.model.Participant.USER)
+        var completion: ((Boolean) -> Unit)? = null
+        every { generation.deleteMessage(any(), "a", row.id, any(), any()) } answers {
+            completion = arg(4)
+            1
+        }
+        val receipts = mutableListOf<WebSyncEvent.RowAction>()
+        val command = WebSyncCommand("delete", conversationId = "a", seq = 4, messageId = row.id, actionId = 8)
+        val pending = async { session.rowCommand(command, listOf(row)) { receipts += it } }
+        withTimeout(5_000) { while (completion == null) yield() }
+        session.settleDeletedConversation("a")
+        withTimeout(5_000) { session.openTarget.first { it.conversationId == null && it.movedByServer } }
+        completion!!(true)
+        pending.await()
+        assertEquals(listOf(WebSyncEvent.RowAction("a", 4, 8, emptyList(), true)), receipts)
+        completion = null
+        ready("a", 5)
+        val explicitExit = async {
+            session.rowCommand(command.copy(seq = 5, actionId = 9), listOf(row)) { receipts += it }
+        }
+        withTimeout(5_000) { while (completion == null) yield() }
+        ready(null, 6)
+        completion!!(true)
+        explicitExit.await()
+        assertEquals(1, receipts.size)
+        completion = null
+        ready("a", 7)
+        val disconnected = async {
+            session.rowCommand(command.copy(seq = 7, actionId = 10), listOf(row)) { receipts += it }
+        }
+        withTimeout(5_000) { while (completion == null) yield() }
+        session.endUploads()
+        completion!!(true)
+        disconnected.await()
+        assertEquals(1, receipts.size)
+    }
+
+    @Test fun failedBranchSelectionPublishesCommittedReceiptBeforeRethrowing() = runBlocking {
+        val user = com.newoether.agora.model.ChatMessage(id = "u", text = "question", participant = com.newoether.agora.model.Participant.USER,
+            timestamp = 1, runId = "input")
+        val first = user.copy(id = "m1", parentId = "u", participant = com.newoether.agora.model.Participant.MODEL,
+            timestamp = 2, runId = "first")
+        val second = first.copy(id = "m2", timestamp = 3, runId = "second")
+        val graph = listOf(user, first, second)
+        val snapshot = com.newoether.agora.data.local.ProviderContextTopologySnapshot(
+            """{"null":"u","u":"m1"}""", graph.map { message ->
+                com.newoether.agora.data.local.MessageContextTopology(message.id, "a", message.parentId,
+                    message.status, message.participant, message.timestamp, modelName = null,
+                    runId = message.runId!!, runSequence = 0, consumedAtPass = null)
+            })
+        coEvery { conversations.getProviderContextTopologySnapshot("a") } returns snapshot
+        val failure = IllegalStateException("fixture mutation failure")
+        coEvery { conversations.selectRunBranch("a", "input", "second", any()) } throws failure
+        ready("a", 6)
+        val command = WebSyncCommand("branch", conversationId = "a", seq = 6, actionId = 12,
+            messageId = "m1", direction = 1, branchAnchorMessageId = "m1", branchAnchorParentId = "u",
+            branchIndex = 0, totalBranches = 2)
+        val receipts = mutableListOf<WebSyncEvent.RowAction>()
+        val thrown = runCatching { session.rowCommand(command, listOf(user, first)) { receipts += it } }.exceptionOrNull()
+        assertSame(failure, thrown)
+        assertEquals(1, receipts.size)
+        assertEquals(listOf("u", "m1"), receipts.single().path.map { it.id })
+        assertEquals(12L, receipts.single().actionId)
+        assertFalse(receipts.single().success)
+    }
+    @Test fun branchSelectionRevalidatesTopologyAndRejectsStaleDuplicateInvalidAndBusyCommands() = runBlocking {
+        val user = com.newoether.agora.model.ChatMessage(id = "u", text = "question", timestamp = 1,
+            participant = com.newoether.agora.model.Participant.USER, runId = "run-input")
+        val first = user.copy(id = "m1", parentId = "u", participant = com.newoether.agora.model.Participant.MODEL,
+            timestamp = 2, runId = "run-first")
+        val second = first.copy(id = "m2", timestamp = 3, runId = "run-second")
+        val graph = listOf(user, first, second)
+        var selected = first.id
+        fun snapshot() = com.newoether.agora.data.local.ProviderContextTopologySnapshot(
+            """{"null":"u","u":"$selected"}""", graph.map { message ->
+                com.newoether.agora.data.local.MessageContextTopology(message.id, "a", message.parentId,
+                    message.status, message.participant, message.timestamp, modelName = null,
+                    runId = message.runId!!, runSequence = 0, consumedAtPass = null)
+            })
+        coEvery { conversations.getProviderContextTopologySnapshot("a") } answers { snapshot() }
+        coEvery { conversations.selectRunBranch("a", "run-input", "run-second", any()) } coAnswers {
+            selected = arg<Map<String?, String>>(3).getValue("u")
+        }
+        session.start()
+        ready("a", 5)
+        val path = listOf(user, first)
+        val command = WebSyncCommand("branch", conversationId = "a", seq = 5, messageId = first.id,
+            actionId = 10, direction = 1, branchAnchorMessageId = first.id, branchAnchorParentId = "u",
+            branchIndex = 0, totalBranches = 2)
+        session.rowCommand(command.copy(seq = 4), path)
+        session.rowCommand(command.copy(conversationId = "b"), path)
+        session.rowCommand(command.copy(actionId = 1, direction = 0), path)
+        session.rowCommand(command.copy(actionId = 2, direction = -1), path)
+        session.rowCommand(command.copy(actionId = 3, branchAnchorMessageId = "old"), path)
+        session.rowCommand(command.copy(actionId = 4, totalBranches = 3), path)
+        session.rowCommand(command.copy(actionId = 5), listOf(user))
+        generating.value = true
+        session.rowCommand(command.copy(actionId = 6), path)
+        generating.value = false
+        stopping.value = true
+        session.rowCommand(command.copy(actionId = 7), path)
+        stopping.value = false
+        coVerify(exactly = 0) { conversations.selectRunBranch(any(), any(), any(), any()) }
+        val before = snapshot().messages
+        var receipt: WebSyncEvent.RowAction? = null
+        session.rowCommand(command, path) { receipt = it }
+        val selectedReceipt = requireNotNull(receipt)
+        assertEquals(listOf("u", "m2"), selectedReceipt.path.map { it.id })
+        assertEquals(10L, selectedReceipt.actionId)
+        assertEquals(5L, selectedReceipt.seq)
+        assertTrue(selectedReceipt.success)
+        session.rowCommand(command, path)
+        session.rowCommand(command.copy(actionId = 11), path)
+        coVerify(exactly = 1) { conversations.selectRunBranch("a", "run-input", "run-second", mapOf(null to "u", "u" to "m2")) }
+        assertEquals("m2", selected)
+        assertEquals(before, snapshot().messages)
+        assertEquals(11L, session.composerState.first().actionId)
+        session.endUploads()
+        session.rowCommand(command.copy(actionId = 12), path)
+        coVerify(exactly = 1) { conversations.selectRunBranch(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { conversations.upsertConversation(any()) }
+        coVerify(exactly = 0) { conversations.upsertNewChatPersist(any()) }
+        verify(exactly = 0) { settings.updateConversationSettings(any(), any()) }
+    }
+
     @Test fun advancedSaveUpdatesOnlySixFieldsAndResetLeavesCurrentToolsIntact() = runBlocking {
         session.start()
         val initial = ready()

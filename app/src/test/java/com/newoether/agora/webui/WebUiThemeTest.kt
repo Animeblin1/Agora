@@ -24,6 +24,14 @@ class WebUiThemeTest {
     }
 
     @Test
+    fun fontFacesMirrorTheComposeFamilyWeights() {
+        val css = WebUiTheme(dark = true, colors = colors, font = WebUiFont.AppDefault).toCss()
+        val weights = Regex("""font-weight:([^;]+);""").findAll(css).map { it.groupValues[1] }.toList()
+        // No 600 face and no variable range: a SemiBold request must resolve to Bold as on Compose.
+        assertEquals(listOf("200", "300", "400", "500", "700"), weights)
+    }
+
+    @Test
     fun systemFontSkipsTheFontFace() {
         val css = WebUiTheme(dark = false, colors = colors, font = WebUiFont.System).toCss()
         assertTrue(css.contains("color-scheme:light"))

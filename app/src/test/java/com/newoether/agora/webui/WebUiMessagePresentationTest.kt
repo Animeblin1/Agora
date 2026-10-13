@@ -49,6 +49,35 @@ class WebUiMessagePresentationTest {
         )
 
     @Test
+    fun branchWireUsesTheCanonicalUserEditAndAssistantRegenerationProjection() {
+        val user = ChatMessage(id = "u", text = "input", participant = Participant.USER, timestamp = 1, runId = "r1")
+        val edited = user.copy(id = "edited", timestamp = 2, runId = "r2")
+        val first = user.copy(id = "m", parentId = "u", participant = Participant.MODEL, timestamp = 3)
+        val regenerated = first.copy(id = "regen", timestamp = 4, runId = "r3")
+        val final = first.copy(id = "final", parentId = "m", timestamp = 5)
+        val path = listOf(user, first, final)
+        val graph = listOf(user, edited, first, regenerated, final)
+        val projected = com.newoether.agora.model.RunUiProjection.project(path, graph)
+        val wire = path.map { it.toWebPathEntry(projected[it.id]) }
+        assertTrue(wire[0].showBranchSelector)
+        assertEquals(2, wire[0].totalBranches)
+        assertEquals("u", wire[0].branchAnchorMessageId)
+        assertTrue(!wire[1].showBranchSelector)
+        assertTrue(wire[2].showBranchSelector)
+        assertEquals("m", wire[2].branchAnchorMessageId)
+        assertEquals("u", wire[2].branchAnchorParentId)
+        assertEquals(2, wire[2].totalBranches)
+        val encoded = WebUiSync.json.encodeToString(WebPathEntry.serializer(), wire[2])
+        assertEquals(wire[2], WebUiSync.json.decodeFromString(WebPathEntry.serializer(), encoded))
+        val fields = WebUiSync.json.parseToJsonElement(encoded) as kotlinx.serialization.json.JsonObject
+        assertEquals("0", fields.getValue("branchIndex").toString())
+        assertEquals("2", fields.getValue("totalBranches").toString())
+        val last = WebUiSync.json.encodeToString(WebPathEntry.serializer(), wire[2].copy(branchIndex = 1))
+        assertEquals("1", (WebUiSync.json.parseToJsonElement(last) as kotlinx.serialization.json.JsonObject)
+            .getValue("branchIndex").toString())
+    }
+
+    @Test
     fun `live thinking group carries a timer base and loading icon`() {
         val message = model(
             MessageStatus.THINKING,
