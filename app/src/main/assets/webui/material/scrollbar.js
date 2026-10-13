@@ -1,15 +1,6 @@
 /**
- * The animated scrollbar the phone draws and a browser cannot.
- *
- * Chrome paints `::-webkit-scrollbar-thumb` on the compositor and runs no CSS transition on it, so a
- * native bar changes width and colour on the frame the pointer arrives (measured on Quantum with a
- * headed Chrome: 4 px at rest, a full 12 px bar 80 ms into a 300 ms transition, identical at 210 ms
- * and at the end). The WebUI therefore keeps the native bar for hit-testing and paints the visible
- * one here: a 12 px gutter holds one pill whose width, colour and opacity ride ordinary CSS
- * transitions, while its top edge tracks scroll position exactly.
- *
- * The overlay never receives pointer events, so every native affordance - thumb drag, page jump on
- * the track, wheel and keyboard scrolling - stays with the element it belongs to.
+ * One floating scrollbar owns paint and pointer input for its scrollable host.
+ * Native bars are hidden without a layout gutter; wheel and keyboard remain with the host.
  */
 const IDLE_MS = 900;
 
@@ -20,6 +11,7 @@ const IDLE_MS = 900;
  */
 export function attachScrollbar(host, bar) {
   let idleTimer = 0;
+  const controller = new AbortController();
   const thumb = bar.firstElementChild;
   // The bar lives beside the scroller, so it copies the box the scroller actually paints: the chat
   // column starts under the top bar and runs under the composer.
@@ -28,6 +20,9 @@ export function attachScrollbar(host, bar) {
     const parent = bar.offsetParent?.getBoundingClientRect() ?? box;
     bar.style.top = `${Math.round(box.top - parent.top)}px`;
     bar.style.height = `${Math.round(box.height)}px`;
+    // Pin the gutter to the scroller's own right edge, whatever box the overlay is positioned in.
+    bar.style.left = `${Math.round(box.right - parent.left - bar.offsetWidth)}px`;
+    bar.style.right = "auto";
   };
   const paint = () => {
     const scrollable = host.scrollHeight - host.clientHeight;
@@ -44,20 +39,56 @@ export function attachScrollbar(host, bar) {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => bar.classList.remove("scrolling"), IDLE_MS);
   };
-  // A pointerdown inside the gutter is the native thumb being dragged; the overlay cannot see it.
-  const pressed = (event) => {
-    if (host.getBoundingClientRect().right - event.clientX <= 14) bar.classList.add("dragging");
+  let drag = null;
+  const pointerDown = (event) => {
+    if (event.button !== 0 || !bar.classList.contains("scrollable") || host.inert) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // The host's existing scroll owner receives the same user-input cancellation as a content drag.
+    host.dispatchEvent(new Event("pointerdown"));
+    bar.setPointerCapture(event.pointerId);
+    const box = thumb.getBoundingClientRect();
+    const onThumb = event.clientY >= box.top - 8 && event.clientY <= box.bottom + 8;
+    if (!onThumb) {
+      const travel = host.clientHeight - thumb.offsetHeight;
+      if (travel > 0) host.scrollTop = ((event.clientY - bar.getBoundingClientRect().top - box.height / 2) / travel) *
+        (host.scrollHeight - host.clientHeight);
+    }
+    drag = { id: event.pointerId, y: event.clientY, top: host.scrollTop };
+    bar.classList.add("dragging");
+    wake();
   };
-  const released = () => bar.classList.remove("dragging");
-  // Chrome grows a native bar while the pointer sits over the scroller. The overlay never takes
-  // pointer events, so the scroller reports that hover here; a touch never counts as one.
+  const pointerMove = (event) => {
+    if (drag?.id !== event.pointerId) return;
+    const scrollable = host.scrollHeight - host.clientHeight;
+    const travel = host.clientHeight - thumb.offsetHeight;
+    if (scrollable <= 0 || travel <= 0) return;
+    host.scrollTop = drag.top + ((event.clientY - drag.y) / travel) * scrollable;
+  };
+  const pointerUp = (event) => {
+    if (drag?.id !== event.pointerId) return;
+    drag = null;
+    bar.classList.remove("dragging");
+    if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId);
+  };
   const entered = (event) => { if (event.pointerType !== "touch") bar.classList.add("hover"); };
   const left = () => bar.classList.remove("hover");
+  bar.addEventListener("pointerdown", pointerDown);
+  bar.addEventListener("pointermove", pointerMove);
+  bar.addEventListener("pointerup", pointerUp);
+  bar.addEventListener("pointercancel", pointerUp);
+  bar.addEventListener("lostpointercapture", pointerUp);
+  bar.addEventListener("pointerenter", entered);
+  bar.addEventListener("pointerleave", left);
+  bar.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    host.dispatchEvent(new Event("wheel"));
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1;
+    host.scrollTop += event.deltaY * unit;
+  }, { passive: false, signal: controller.signal });
   host.addEventListener("scroll", wake, { passive: true });
-  host.addEventListener("pointerdown", pressed);
   host.addEventListener("pointerenter", entered);
   host.addEventListener("pointerleave", left);
-  window.addEventListener("pointerup", released);
   const observer = new ResizeObserver(() => { place(); paint(); });
   observer.observe(host);
   /* The scroll box alone is not enough. A list that grows inside a box that keeps its own size never
@@ -79,8 +110,16 @@ export function attachScrollbar(host, bar) {
   watchContent();
   return () => {
     host.removeEventListener("scroll", wake);
-    host.removeEventListener("pointerdown", pressed);
-    window.removeEventListener("pointerup", released);
+    controller.abort();
+    host.removeEventListener("pointerenter", entered);
+    host.removeEventListener("pointerleave", left);
+    bar.removeEventListener("pointerdown", pointerDown);
+    bar.removeEventListener("pointermove", pointerMove);
+    bar.removeEventListener("pointerup", pointerUp);
+    bar.removeEventListener("pointercancel", pointerUp);
+    bar.removeEventListener("lostpointercapture", pointerUp);
+    bar.removeEventListener("pointerenter", entered);
+    bar.removeEventListener("pointerleave", left);
     clearTimeout(idleTimer);
     children.disconnect();
     observer.disconnect();

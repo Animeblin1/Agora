@@ -11,7 +11,7 @@ import {
  * the alpha, and a focus trap that returns ownership to whoever opened it. Every menu in the frame
  * (top bar, drawer row, message row) is a MoreMenu so they cannot drift apart.
  */
-export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, onExited, children, above = false, onFork, onShare, pageActionsEnabled, onSystemPrompt, promptEnabled, onSearch }) {
+export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, onExited, children, above = false, matchAnchorWidth = false, onFork, onShare, pageActionsEnabled, onSystemPrompt, promptEnabled, onSearch }) {
   const menu = useRef(null);
   const layer = useRef(null);
   const motion = useRef({ scale: 0.8, alpha: 0, scaleVelocity: 0, alphaVelocity: 0 });
@@ -21,9 +21,24 @@ export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, o
     const node = menu.current;
     const measure = () => {
       const bounds = anchor.current.getBoundingClientRect();
-      const left = Math.max(8, Math.min(innerWidth - node.offsetWidth - 8,
-        above ? bounds.left : bounds.right - node.offsetWidth));
-      const top = above ? Math.max(8, bounds.top - node.offsetHeight - 4) : bounds.bottom + 4;
+      // ExposedDropdownMenu: the menu takes the anchor field's width and its start edge.
+      if (matchAnchorWidth) { node.style.width = `${bounds.width}px`; node.style.maxWidth = "none"; }
+      const margin = 48;
+      const available = above ? bounds.top - 8 - 4 : matchAnchorWidth
+        ? bounds.top > innerHeight || bounds.bottom < 0 ? innerHeight - margin * 2
+          : Math.max(bounds.top - margin, innerHeight - margin - bounds.bottom)
+        : innerHeight - margin * 2;
+      node.style.maxHeight = `${Math.max(0, available)}px`;
+      // DropdownMenuPositionProvider (LTR, zero offset): start at the anchor's left edge, else end
+      // at its right edge, else hug the window's right edge; below the anchor unless it would run
+      // past the window bottom, then above it.
+      const width = node.offsetWidth;
+      const height = node.offsetHeight;
+      const left = above ? Math.max(8, Math.min(innerWidth - width - 8, bounds.left))
+        : [bounds.left, bounds.right - width, innerWidth - width].find(x => x >= 0 && x + width <= innerWidth) ?? 0;
+      const top = above ? Math.max(8, bounds.top - height - 4)
+        : [bounds.bottom, bounds.top - height, innerHeight - height - 48]
+          .find(y => y >= 48 && y + height <= innerHeight - 48) ?? Math.max(0, (innerHeight - height) / 2);
       node.style.left = `${left}px`;
       node.style.top = `${top}px`;
       const pivotX = bounds.left >= left + node.offsetWidth ? 1 : bounds.right <= left ? 0
@@ -68,6 +83,7 @@ export function MoreMenu({ expanded, reduceMotion, anchor, onSignOut, onClose, o
         const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1
           : (current + (event.shiftKey || event.key === "ArrowUp" ? -1 : 1) + controls.length) % controls.length;
         controls[next]?.focus();
+        controls[next]?.scrollIntoView({ block: "nearest" });
       }
     };
     document.addEventListener("keydown", onKey);

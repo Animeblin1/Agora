@@ -5,7 +5,9 @@ import { Spinner } from "./material/progress.js";
 import { Markdown } from "./markdown.js";
 import { icon, ICON_BUILD, ICON_CHEVRON_RIGHT, ICON_IMAGE, ICON_NEUROLOGY } from "./icons.js";
 const SHEET_BACK_PATH = "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z";
-const SHEET_CLOSE_PATH = "M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.7 4.29 4.29 10.59 10.59 16.89 4.29z";
+// Material Icons.Default.Close, centred on (12, 12). The previous path was offset to the left,
+// so the X sat off-centre inside its round button.
+const SHEET_CLOSE_PATH = "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
 export function canOpenSheetItem(item) {
   return item?.type === "thought" || item?.type === "transcription" ||
     (item?.type === "tool" && item.toolDetail != null);
@@ -225,7 +227,7 @@ export function InfoItem({ item, compact = false, onClick }) {
   const Tag = interactive ? "button" : "div";
   return html`
     <${Tag} class=${`${compact ? "info-item compact-item" : "info-item timeline-item"} ${interactive ? "sheet-item" : ""}`}
-      type=${interactive ? "button" : null}
+      type=${interactive ? "button" : null} data-type=${item.type}
       onClick=${onClick}>
       ${!compact && html`<span class="info-item-icon">
         <${CardIcon} kind=${item.type === "tool" ? "TOOL" : item.type === "transcription" ? "IMAGE" : "THINKING"} />
@@ -238,33 +240,68 @@ export function InfoItem({ item, compact = false, onClick }) {
     </${Tag}>`;
 }
 
-export function DetailSheet({ group, items, page, detailIndex, selectedItem, conversationId, messageId, display, wrap, onSelectItem, onBack, onClose, title: suppliedTitle, children, focusReturn }) {
+export function DetailSheet({ group, items, page, detailIndex, selectedItem, conversationId, messageId, display, wrap, onSelectItem, onBack, onClose, title: suppliedTitle, children, focusReturn, settings = false }) {
   const reduceMotion = !!display?.reduceMotion;
   const [anchor, setAnchor] = useState({ fraction: .45 });
-  const expanded = anchor.fraction === .94;
+  const [settingsHeight, setSettingsHeight] = useState(0);
+  const fullFraction = settings ? Math.min(1, settingsHeight / innerHeight) : .94;
+  const partialFraction = settings ? Math.min(.5, fullFraction) : .45;
+  const expanded = anchor.fraction === .94 || (settings && fullFraction <= .5);
   const [closing, setClosing] = useState(false);
   const motion = useRef({ fraction: 0, fractionVelocity: 0, cancel: null });
+  const layer = useRef(null);
   const backdrop = useRef(null);
+  useLayoutEffect(() => {
+    const node = layer.current;
+    node.showModal();
+    return () => node.close();
+  }, []);
   const dismiss = useRef(onClose);
   dismiss.current = onClose;
   function setExpanded(value) { setAnchor({ fraction: value ? .94 : .45 }); }
   function close() { setClosing(true); }
   function draw(value) {
-    if (sheet.current) sheet.current.style.height = `${Math.max(0, value.fraction) * 100}dvh`;
-    if (backdrop.current) backdrop.current.style.backgroundColor = `rgb(0 0 0 / ${Math.max(0, value.fraction) * .32})`;
+    if (sheet.current) {
+      if (settings) {
+        sheet.current.style.height = `${settingsHeight}px`;
+        sheet.current.style.transform = `translate(-50%, ${Math.max(0, settingsHeight - value.fraction * innerHeight)}px)`;
+      } else sheet.current.style.height = `${Math.max(0, value.fraction) * 100}dvh`;
+    }
+    if (backdrop.current) backdrop.current.style.backgroundColor = `rgb(0 0 0 / ${Math.max(0, settings ? Math.min(1, value.fraction / (fullFraction || 1)) : value.fraction) * .32})`;
   }
   const closeButton = useRef(null);
   const restoreFocus = useRef(null);
   const sheet = useRef(null);
+  const contentBody = useRef(null);
+  useLayoutEffect(() => {
+    if (!settings) return;
+    const measure = () => setSettingsHeight(Math.min(innerHeight,
+      sheet.current.querySelector(".detail-sheet-handle").offsetHeight + contentBody.current.offsetHeight));
+    const observer = new ResizeObserver(measure);
+    observer.observe(contentBody.current);
+    addEventListener("resize", measure);
+    measure();
+    return () => { observer.disconnect(); removeEventListener("resize", measure); };
+  }, [settings]);
   const dragStart = useRef(null);
   const suppressHandleClick = useRef(false);
   const backAction = useRef(null);
   backAction.current = onBack ?? close;
   const groupTitle = useCardTitle(group ?? { title: "", liveBaseMs: null }, display?.liveThinking);
   const title = suppliedTitle ?? (page === "detail" ? selectedItem?.title : groupTitle);
+  // SegmentDetailSheet slides pages only when the reader moves between its list and detail pages;
+  // the page the sheet opens on is composed directly, without a slide.
+  const firstPage = useRef(page);
+  const navigated = useRef(false);
+  if (page !== firstPage.current) navigated.current = true;
+  useLayoutEffect(() => {
+    if (settings && settingsHeight > 0 && fullFraction <= .5) {
+      setAnchor(current => current.fraction === .94 ? current : { fraction: .94 });
+    }
+  }, [settings, settingsHeight]);
   useLayoutEffect(() => {
     const value = motion.current;
-    const target = closing ? 0 : anchor.fraction;
+    const target = closing ? 0 : expanded ? fullFraction : partialFraction;
     if (reduceMotion) {
       value.fraction = target;
       value.fractionVelocity = 0;
@@ -273,13 +310,14 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
       return;
     }
     value.cancel = runSpring(value, {
-      fraction: { target, stiffness: 350, damping: .9, threshold: .001 },
+      fraction: { target, stiffness: settings ? closing ? 3800 : 700 : 350, damping: settings && closing ? 1 : .9, threshold: .001 },
     }, draw, () => { if (closing) dismiss.current(); });
     return () => { value.cancel?.(); value.cancel = null; };
-  }, [anchor, closing, reduceMotion]);
+  }, [anchor, closing, reduceMotion, settingsHeight]);
   useEffect(() => {
     restoreFocus.current = focusReturn?.current ?? document.activeElement;
     closeButton.current?.focus();
+    if (settings) sheet.current?.querySelector(".detail-sheet-handle")?.focus();
     const onKey = (event) => {
       if (event.target.closest?.(".tool-media-viewer")) return;
       if (event.key === "Escape") {
@@ -318,7 +356,7 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
   }
   function moveDrag(event) {
     if (!dragStart.current) return;
-    motion.current.fraction = Math.max(0, Math.min(.94,
+    motion.current.fraction = Math.max(0, Math.min(fullFraction,
       dragStart.current.fraction + (dragStart.current.y - event.clientY) / innerHeight));
     draw(motion.current);
   }
@@ -328,13 +366,14 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
     dragStart.current = null;
     if (Math.abs(delta) > 24) {
       suppressHandleClick.current = true;
-      if (delta > 0 && motion.current.fraction <= .5) close();
-      else setExpanded(delta < 0 && motion.current.fraction > .5);
+      if (delta > 0 && motion.current.fraction <= partialFraction) close();
+      else setExpanded(delta < 0 && motion.current.fraction > partialFraction);
     } else {
       setAnchor({ fraction: anchor.fraction });
     }
   }
   function onWheel(event) {
+    if (settings && fullFraction <= .5) return;
     const content = sheet.current?.querySelector(".detail-sheet-content");
     if (event.deltaY < 0 && content?.scrollTop === 0 && expanded) {
       event.preventDefault(); setExpanded(false);
@@ -343,9 +382,11 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
     }
   }
   return html`
-    <div class="detail-sheet-layer" data-closing=${closing} onPointerDown=${event => event.stopPropagation()}>
+    <dialog class="detail-sheet-layer" ref=${layer} data-closing=${closing}
+      onCancel=${event => { event.preventDefault(); backAction.current(); }}
+      onPointerDown=${event => event.stopPropagation()}>
       <div class="detail-sheet-backdrop" ref=${backdrop} aria-hidden="true" onClick=${close}></div>
-      <section class=${`detail-sheet ${expanded ? "expanded" : ""}`} role="dialog" aria-modal="true"
+      <section class=${`detail-sheet ${expanded ? "expanded" : ""}${settings ? " settings-sheet" : ""}`} role="dialog" aria-modal="true"
         aria-label=${title || "Message details"} ref=${sheet} inert=${closing}>
         <button class="detail-sheet-handle" type="button"
           aria-label=${expanded ? "Collapse details" : "Expand details"}
@@ -353,11 +394,12 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
           onPointerCancel=${() => { dragStart.current = null; setAnchor({ fraction: anchor.fraction }); }}
           onClick=${() => {
             if (suppressHandleClick.current) suppressHandleClick.current = false;
+            else if (settings && expanded) close();
             else setExpanded(!expanded);
           }}>
           <span></span>
         </button>
-        <header class="detail-sheet-header">
+        ${!settings && html`<header class="detail-sheet-header">
           ${page === "detail" && onBack && html`<button class="detail-sheet-icon detail-sheet-back" type="button" aria-label="Back" onClick=${onBack}>
             ${icon(SHEET_BACK_PATH)}
           </button>`}
@@ -365,9 +407,9 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
           <button class="detail-sheet-icon" type="button" aria-label="Close" ref=${closeButton} onClick=${close}>
             ${icon(SHEET_CLOSE_PATH)}
           </button>
-        </header>
+        </header>`}
         <div class="detail-sheet-content" onWheel=${onWheel}>
-          ${children ?? html`<div class=${`detail-sheet-page ${page === "list" ? "list-page" : "detail-page"}`} key=${page}>
+          ${settings ? html`<div ref=${contentBody}>${children}</div>` : children ?? html`<div class=${`detail-sheet-page ${page === "list" ? "list-page" : "detail-page"}${navigated.current ? "" : " initial"}`} key=${page}>
             ${page === "list" ? html`
               <div class="detail-sheet-list">
                 ${items.map((item, index) => html`
@@ -387,5 +429,5 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
           </div>`}
         </div>
       </section>
-    </div>`;
+    </dialog>`;
 }

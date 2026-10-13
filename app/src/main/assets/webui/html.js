@@ -35,8 +35,12 @@ export function useDialog(dialog, onClosed, focusReturn) {
     const shell = node.closest(".shell");
     if (shell) observer.observe(shell, { attributes: true, attributeFilter: ["data-reduce-motion"] });
     const ended = event => {
+      const names = getComputedStyle(node).animationName.split(", ");
+      const exit = node.matches(".tool-media-viewer")
+        ? names.includes("md-media-exit-scale") ? "md-media-exit-scale" : "md-media-exit-alpha"
+        : "md-window-exit";
       if (event.target === node && node.hasAttribute("data-closing") &&
-          (event.animationName === "md-window-exit" || getComputedStyle(node).animationName === "none")) complete();
+          (event.animationName === exit || names[0] === "none")) complete();
     };
     node.addEventListener("animationend", ended);
     node.addEventListener("animationcancel", ended);
