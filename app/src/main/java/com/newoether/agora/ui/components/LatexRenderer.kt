@@ -47,8 +47,12 @@ import kotlinx.coroutines.launch
 import org.scilab.forge.jlatexmath.DefaultTeXFont
 import org.scilab.forge.jlatexmath.TeXConstants
 import ru.noties.jlatexmath.JLatexMathDrawable
+import com.newoether.agora.util.DebugLog
 import kotlin.io.encoding.Base64
 import kotlin.math.roundToInt
+
+// The log tag for this file's own diagnostics.
+private const val TAG = "LatexRenderer"
 
 /**
  * One parsed piece of message text. A LaTeX span also keeps [source]: its exact original slice,
@@ -430,6 +434,11 @@ fun renderLatexToBitmap(
         drawable.draw(canvas)
         bmp
     } catch (e: Exception) {
+        // A swallowed exception here is what turns a formula back into its own source text, so the
+        // failure has to reach the log or it is invisible: the caller only ever sees a null and
+        // silently paints the raw LaTeX. Only the exception type and stack are logged, never the
+        // formula itself.
+        DebugLog.w(TAG, "latex render failed size=$textSize", e)
         null
     }
 }

@@ -741,15 +741,16 @@ private suspend fun shareDiagnosticCapture(
     format: DiagnosticExportFormat,
     chooserTitle: String,
 ) {
+    val generatedAtMillis = System.currentTimeMillis()
     val content = withContext(Dispatchers.Default) {
-        com.newoether.agora.diagnostics.DiagnosticBundleExporter.export(snapshot, format)
+        com.newoether.agora.diagnostics.DiagnosticBundleExporter.export(snapshot, format, generatedAtMillis)
     }
     val sendIntent = withContext(Dispatchers.IO) {
         val extension = if (format == DiagnosticExportFormat.SUMMARY_TEXT) "txt" else "json"
         val mimeType = if (extension == "txt") "text/plain" else "application/json"
-        val formatName = format.name.lowercase().replace('_', '-')
         val shareDirectory = File(context.cacheDir, "shared").apply { mkdirs() }
-        val file = File(shareDirectory, "agora-diagnostics-$formatName.$extension").apply {
+        val fileName = com.newoether.agora.diagnostics.DiagnosticBundleExporter.fileName(format, generatedAtMillis)
+        val file = File(shareDirectory, fileName).apply {
             writeText(content, Charsets.UTF_8)
         }
         val uri = FileProvider.getUriForFile(
