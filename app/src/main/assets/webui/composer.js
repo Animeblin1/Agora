@@ -3,7 +3,7 @@ import { html, useDialog } from "./html.js";
 import { CircularProgress, Spinner } from "./material/progress.js";
 import { sliderStyle } from "./material/slider.js";
 import { t } from "./i18n.js";
-import { icon, ICON_ADD, ICON_ARROW_UPWARD, ICON_EXPAND_ALL, ICON_COLLAPSE_ALL, ICON_MORE_VERT, ICON_STOP, ICON_CHECK, ICON_CLOSE, ICON_ATTACH_FILE } from "./icons.js";
+import { icon, ICON_ADD, ICON_ARROW_UPWARD, ICON_EXPAND_ALL, ICON_COLLAPSE_ALL, ICON_MORE_VERT, ICON_STOP, ICON_CHECK, ICON_CLOSE, ICON_ATTACH_FILE, ICON_ARROW_DROP_DOWN } from "./icons.js";
 import { sync } from "./sync.js";
 import { Markdown } from "./markdown.js";
 import { InteractionBar } from "./interaction.js";
@@ -46,7 +46,9 @@ const FIELD_MAX_HEIGHT = 6 * 23 + 24;
 export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }) {
   const field = useRef(null);
   const host = useRef(null);
-  const sizeMotion = useRef({ height: null, animation: null });
+  const inputClip = useRef(null);
+  const inputContent = useRef(null);
+  const sizeMotion = useRef({ height: null, target: null, animation: null });
   // A send this bar started, waiting for the ack that lets the expanded bar travel down (see below).
   const sendInFlight = useRef(false);
   const composing = useRef(false);
@@ -77,8 +79,10 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   const contextUsage = contextReady ? t.contextUsage(context.estimatedLabel ?? "0", context.budgetLabel) : null;
   const contextPercent = contextReady ? `${contextUsagePercent(contextEstimated, contextBudget)}%` : null;
   const composerReady = state.connected && !!sync.attachmentTarget();
-  const settingsEditable = composerReady && !!controls && !state.pendingAction;
-  const capabilityEnabled = settingsEditable && !controls?.lowContextModeEnabled;
+  const settingsAvailable = composerReady && !!controls;
+  const settingsEditable = settingsAvailable && !state.pendingAction;
+  const capabilityAvailable = settingsAvailable && !controls?.lowContextModeEnabled;
+  const capabilityEnabled = capabilityAvailable && !state.pendingAction;
   const validPanel = toolPanel && toolPanel.connectionId === state.connectionId && toolPanel.seq === state.composer?.seq &&
     !!controls && (toolPanel.kind === "thinking" || (controls.openAiServiceTierAvailable && state.composer.modelValid));
   useEffect(() => { setToolsOpen(false); setToolPanel(null); setSlider(null); setEditor(null); setContextOpen(false); }, [state.openId, state.connectionId]);
@@ -113,6 +117,10 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   useLayoutEffect(() => {
     const host = queueHost.current;
     const motion = queueMotion.current;
+    // ComposerStatusColumn keys its AnimatedContent on the queued ids alone, so switching to another
+    // conversation is an ordinary content change: the old rows fade out (140 ms) while the stack
+    // resizes (220 ms). Only the very first snapshot is placed without motion.
+    if (motion.owner !== null && motion.owner !== queueOwner) motion.owner = queueOwner;
     if (motion.owner !== queueOwner) {
       motion.animation?.cancel();
       motion.animation = null;
@@ -212,6 +220,36 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   const phase = state.composer?.phase ?? "IDLE";
   const waiting = phase === "WAITING";
   const busy = state.pendingAction || phase !== "IDLE" || state.composer?.stopping;
+  const actionIcon = busy ? "busy" : state.generating && !state.text.trim() && !attachments.length ? "stop" : "send";
+  const actionSlot = useRef(null);
+  const actionAnimations = useRef(new Map());
+  const [actionFrames, setActionFrames] = useState([{ icon: actionIcon, initialAlpha: 1 }]);
+  const actionPresentations = actionFrames.some(frame => frame.icon === actionIcon) ? actionFrames
+    : [...actionFrames, { icon: actionIcon, initialAlpha: 0 }];
+  useLayoutEffect(() => {
+    const animations = actionAnimations.current;
+    for (const node of actionSlot.current.querySelectorAll(".send-icon")) {
+      const identity = node.dataset.icon;
+      const target = identity === actionIcon ? 1 : 0;
+      const previous = animations.get(identity);
+      if (previous?.target === target) continue;
+      const from = getComputedStyle(node).opacity;
+      previous?.animation.cancel();
+      const animation = node.animate([{ opacity: from }, { opacity: target }], {
+        duration: 200, easing: "linear", fill: "both",
+      });
+      animations.set(identity, { target, animation });
+      if (!target) animation.finished.then(() => {
+        if (animations.get(identity)?.animation !== animation) return;
+        animations.delete(identity);
+        setActionFrames(frames => frames.filter(frame => frame.icon !== identity));
+      }).catch(() => {});
+    }
+    if (actionFrames !== actionPresentations) setActionFrames(actionPresentations);
+  }, [actionIcon, actionPresentations.length]);
+  useLayoutEffect(() => () => {
+    actionAnimations.current.forEach(({ animation }) => animation.cancel());
+  }, []);
   const stop = state.generating && !state.text.trim() && !attachments.length;
   const canDrain = !state.generating && !state.text.trim() && !attachments.length && state.composer?.queue?.length;
   // ChatBottomBar gates the attachment row and the add menu on nothing but the submission freeze, and
@@ -219,7 +257,6 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   // switch in flight keeps these controls live. The tools IconButton is gated on nothing at all
   // (`menuAnchor(enabled = true)`); only the items inside its menu carry their own gates.
   const editable = composerReady && phase === "IDLE";
-  useEffect(() => { if (!editable) setAddOpen(false); }, [editable]);
   useEffect(() => { setAddOpen(false); }, [state.openId, state.connectionId]);
   const viewedId = viewer?.file?.id ?? viewer?.items?.[viewer.index]?.id;
   const currentViewer = viewer && viewer.connectionId === state.connectionId && viewer.seq === state.composer?.seq &&
@@ -270,26 +307,36 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
     node.style.height = "auto";
     node.style.height = `${Math.min(node.scrollHeight, FIELD_MAX_HEIGHT)}px`;
   }
-  // ChatComposerLayout wraps the composer's content in `animateContentSize(tween(400))`, so every
-  // height change of the bar - a typed line, a paste, the collapse after a send - travels instead of
-  // snapping. The field is fitted first because the bar's own height is that content plus the
-  // controls row: measuring before the field settled used to animate to the single-line box, which
-  // left the card hanging below the bottom edge and snapped the rest of the way at the end.
+  // Only the input/attachment column owns the 400 ms size transition. Queue and controls are
+  // siblings, so their geometry cannot be squeezed by an animated total bar height.
   function travel() {
-    const node = host.current;
-    if (!node) return;
+    const node = inputClip.current;
+    const content = inputContent.current;
+    if (!node || !content) return;
     const motion = sizeMotion.current;
     fitField();
+    const hostStyle = getComputedStyle(host.current);
+    const form = host.current.querySelector(".composer");
+    const formStyle = getComputedStyle(form);
+    const chat = host.current.closest(".chat");
+    const expandedHeight = expanded ? Math.max(0, chat.clientHeight -
+      parseFloat(getComputedStyle(chat).getPropertyValue("--chat-top-inset")) -
+      parseFloat(hostStyle.paddingTop) - parseFloat(hostStyle.paddingBottom) -
+      parseFloat(formStyle.paddingTop) - parseFloat(formStyle.paddingBottom) -
+      (queueHost.current?.offsetHeight ?? 0) -
+      form.querySelector(".composer-controls").getBoundingClientRect().height) : null;
+    if (expanded) field.current.style.height = `${Math.max(0, expandedHeight -
+      [...content.children].filter(child => child !== field.current.parentElement)
+        .reduce((height, child) => height + child.getBoundingClientRect().height, 0))}px`;
+    const target = content.getBoundingClientRect().height;
+    if (motion.target === target && (!state.display?.reduceMotion || !motion.animation)) return;
     const from = motion.animation ? node.getBoundingClientRect().height : motion.height;
     motion.animation?.cancel();
     motion.animation = null;
-    const target = node.offsetHeight;
+    motion.target = target;
     motion.height = target;
-    if (from == null || Math.abs(from - target) <= 1 || state.display?.reduceMotion) {
-      node.classList.remove("composer-resizing");
-      return;
-    }
-    node.classList.add("composer-resizing");
+    node.style.height = `${target}px`;
+    if (from == null || Math.abs(from - target) <= 0.5 || state.display?.reduceMotion) return;
     const animation = node.animate([{ height: `${from}px` }, { height: `${target}px` }],
       { duration: 400, easing: expanded ? "cubic-bezier(0.15, 0.5, 0.25, 1)" : "cubic-bezier(0.4, 0, 0.2, 1)", fill: "both" });
     motion.animation = animation;
@@ -297,39 +344,19 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
       if (motion.animation !== animation) return;
       motion.animation = null;
       animation.cancel();
-      node.classList.remove("composer-resizing");
-      motion.height = node.offsetHeight;
     };
   }
-  useLayoutEffect(travel, [expanded, state.text, state.display?.reduceMotion]);
-  // The observer outlives every render, so it reaches the current travel through a ref: a stale
-  // closure would fit the field with the previous render's expanded flag and hold a full-height
-  // composer to six lines.
   const travelRef = useRef(travel);
-  useLayoutEffect(() => { travelRef.current = travel; });
-  // The height changes no dependency above can see - an attachment preview, a queued message, a
-  // status row appearing - are exactly what animateContentSize reacts to on the phone.
+  useLayoutEffect(() => { travelRef.current = travel; travel(); },
+    [expanded, state.text, attachments, state.display?.reduceMotion]);
   useLayoutEffect(() => {
-    const geometry = new ResizeObserver(() => {
-      if (!sizeMotion.current.animation) travelRef.current();
-    });
-    geometry.observe(host.current);
+    const geometry = new ResizeObserver(() => travelRef.current());
+    geometry.observe(inputContent.current);
+    geometry.observe(field.current);
+    geometry.observe(queueHost.current);
     return () => geometry.disconnect();
   }, []);
   useLayoutEffect(() => () => sizeMotion.current.animation?.cancel(), []);
-  useLayoutEffect(() => {
-    fitField();
-    if (expanded) return undefined;
-    const geometry = new ResizeObserver(fitField);
-    geometry.observe(field.current);
-    return () => geometry.disconnect();
-  }, [state.text, expanded]);
-  useEffect(() => {
-    if (!state.snackbar) return;
-    const id = state.snackbar.id;
-    const timer = setTimeout(() => sync.dismissSnackbar(id), 4_000);
-    return () => clearTimeout(timer);
-  }, [state.snackbar?.id]);
   // The slot takes the clip width so the controls after it follow the visible edge, exactly as the
   // phone's Box does; the button inside keeps its measured target width. One 400 ms deadline owns
   // the move: a new target rebases from the current edge inside the same deadline, a new label
@@ -458,6 +485,8 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
           </div>`;
           })}
         </div>
+        <div class="composer-input-clip" ref=${inputClip}>
+        <div class="composer-input-content" ref=${inputContent}>
         ${attachments.length > 0 && html`<div class="attachment-row" aria-label=${t.attachments}>
           ${attachments.map(a => html`<${AttachmentTile} key=${`${state.connectionId}:${state.composer.seq}:${a.id}`} attachment=${a} editable=${editable} onPreview=${() => preview(a)} />`)}
         </div>`}
@@ -490,9 +519,11 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
             ${icon(expanded ? ICON_COLLAPSE_ALL : ICON_EXPAND_ALL, "0 0 960 960")}
           </button>
         </div>
+        </div>
+        </div>
         <div class="composer-controls">
           <div class="control-group">
-            <button ref=${addButton} class="control-icon" type="button" aria-label=${t.addAttachment} disabled=${!editable}
+            <button ref=${addButton} class="control-icon" type="button" aria-label=${t.addAttachment}
               aria-haspopup="menu" aria-expanded=${addOpen} onClick=${() => { setRetainedAdd(true); setAddOpen(!addOpen); }}>
               ${icon(ICON_ADD)}
             </button>
@@ -521,7 +552,13 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
           <button class="send-button" type="submit" aria-label=${waiting ? t.cancel : stop ? t.stop : t.send}
             onPointerDown=${(event) => event.preventDefault()}
             disabled=${!actionable} aria-busy=${busy ? "true" : null}>
-            ${busy ? html`<${Spinner} size=${24} stroke=${3} color="inherit" />` : icon(stop ? ICON_STOP : ICON_ARROW_UPWARD)}
+            <span class="send-icon-slot" ref=${actionSlot} aria-hidden="true">
+              ${actionPresentations.map(frame => html`<span class="send-icon" key=${frame.icon}
+                data-icon=${frame.icon} style=${{ opacity: frame.initialAlpha }}>
+                ${frame.icon === "busy" ? html`<${Spinner} size=${24} stroke=${3} color="inherit" />`
+                  : icon(frame.icon === "stop" ? ICON_STOP : ICON_ARROW_UPWARD)}
+              </span>`)}
+            </span>
           </button>
         </div>
       </form>
@@ -568,33 +605,33 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
       ${retainedTools && html`<${MoreMenu} expanded=${toolsOpen} reduceMotion=${state.display.reduceMotion} anchor=${toolsButton} above
         onClose=${() => setToolsOpen(false)} onExited=${restore => { setRetainedTools(false); if (restore) toolsButton.current?.focus(); }}>
         ${controls?.showLowContextMode && html`<button class="dropdown-item" role="menuitemcheckbox" aria-checked=${controls.lowContextModeEnabled}
-          disabled=${!settingsEditable} onClick=${() => sync.setting("lowContextModeEnabled", !controls.lowContextModeEnabled)}>
+          data-pending=${settingsAvailable && !!state.pendingAction} disabled=${!settingsEditable} onClick=${() => sync.setting("lowContextModeEnabled", !controls.lowContextModeEnabled)}>
           ${icon(ICON_MEMORY)}<span class="tool-label">${t.lowContext}</span><span class="tool-switch" data-checked=${controls.lowContextModeEnabled}></span></button>`}
-        <div class="dropdown-item tool-split">
+        <div class="dropdown-item tool-split" data-disabled=${!settingsAvailable} data-pending=${settingsAvailable && !!state.pendingAction}>
           ${icon(ICON_NEUROLOGY, "0 0 960 960")}<button class="tool-label" role="menuitem" disabled=${!settingsEditable} onClick=${() => openTool("thinking")}>
             ${t.thinking}<small>${!controls?.displayedThinkingEnabled ? t.off : controls.displayedThinkingBudgetEnabled ? t.tokens(controls.displayedThinkingBudgetTokens) : t.efforts[controls.displayedThinkingLevel] ?? controls.displayedThinkingLevel}</small></button>
           <button class="tool-switch" data-checked=${!!controls?.displayedThinkingEnabled} role="menuitemcheckbox" aria-label=${t.thinking}
-            aria-checked=${!!controls?.displayedThinkingEnabled} disabled=${!settingsEditable || (!controls?.thinkingCanDisable && controls?.displayedThinkingEnabled)}
+            aria-checked=${!!controls?.displayedThinkingEnabled} data-pending=${settingsAvailable && !!state.pendingAction && (controls?.thinkingCanDisable || !controls?.displayedThinkingEnabled)} disabled=${!settingsEditable || (!controls?.thinkingCanDisable && controls?.displayedThinkingEnabled)}
             onClick=${() => sync.setting("thinkingEnabled", !controls.displayedThinkingEnabled)}></button>
         </div>
         ${controls?.isGemini && [["codeExecutionEnabled", t.codeExecution, ICON_TERMINAL], ["googleSearchEnabled", t.googleSearch, ICON_GOOGLE]].map(([key, label, path]) => html`
-          <button class="dropdown-item" role="menuitemcheckbox" aria-checked=${controls[key]} disabled=${!capabilityEnabled} onClick=${() => sync.setting(key, !controls[key])}>
+          <button class="dropdown-item" role="menuitemcheckbox" aria-checked=${controls[key]} data-pending=${capabilityAvailable && !!state.pendingAction} disabled=${!capabilityEnabled} onClick=${() => sync.setting(key, !controls[key])}>
             ${icon(path)}<span class="tool-label">${label}</span><small class="provider-badge">Gemini</small><span class="tool-switch" data-checked=${controls[key]}></span></button>`)}
-        ${controls?.openAiServiceTierAvailable && state.composer.modelValid && html`<div class="dropdown-item tool-split" data-disabled=${!capabilityEnabled}>
+        ${controls?.openAiServiceTierAvailable && state.composer.modelValid && html`<div class="dropdown-item tool-split" data-disabled=${!capabilityAvailable} data-pending=${capabilityAvailable && !!state.pendingAction}>
           ${icon(ICON_SPEED)}<button class="tool-label" role="menuitem" disabled=${!capabilityEnabled} onClick=${() => openTool("tier")}>
             ${t.serviceTier}<small>${controls.openAiServiceTierEnabled ? t.tiers[controls.displayedServiceTier] : t.off}</small></button>
           <button class="tool-switch" data-checked=${controls.openAiServiceTierEnabled} role="menuitemcheckbox" aria-label=${t.serviceTier}
-            aria-checked=${controls.openAiServiceTierEnabled} disabled=${!capabilityEnabled} onClick=${() => sync.setting("openAiServiceTierEnabled", !controls.openAiServiceTierEnabled)}></button>
+            aria-checked=${controls.openAiServiceTierEnabled} data-pending=${capabilityAvailable && !!state.pendingAction} disabled=${!capabilityEnabled} onClick=${() => sync.setting("openAiServiceTierEnabled", !controls.openAiServiceTierEnabled)}></button>
         </div>`}
         ${[["openAiWebSearchAvailable", "openAiWebSearchEnabled", t.openAiSearch, ICON_OPENAI], ["webSearchAvailable", "webSearchEnabled", t.webSearch, ICON_LANGUAGE], ["shellAvailable", "shellEnabled", t.shell, ICON_TERMINAL]]
           .filter(([available]) => controls?.[available] && (available !== "openAiWebSearchAvailable" || state.composer.modelValid)).map(([, key, label, path]) => html`
-          <button class="dropdown-item" role="menuitemcheckbox" aria-checked=${controls[key]} disabled=${!capabilityEnabled} onClick=${() => sync.setting(key, !controls[key])}>
+          <button class="dropdown-item" role="menuitemcheckbox" aria-checked=${controls[key]} data-pending=${capabilityAvailable && !!state.pendingAction} disabled=${!capabilityEnabled} onClick=${() => sync.setting(key, !controls[key])}>
             ${icon(path)}<span class="tool-label">${label}</span><span class="tool-switch" data-checked=${controls[key]}></span></button>`)}
         <button class="dropdown-item" role="menuitem" disabled=${!compactAvailable} onClick=${() => openEditor("compact")}>${icon(ICON_COMPRESS)}<span>${t.compact}</span></button>
         <button class="dropdown-item" role="menuitem" disabled=${!settingsEditable || !state.composer.advanced} onClick=${() => openEditor("advanced")}>${icon(ICON_TUNE)}<span>${t.advanced}</span></button>
       </${MoreMenu}>`}
       ${validPanel && !retainedTools && html`<${DetailSheet} key=${`${toolPanel.connectionId}:${toolPanel.seq}:${toolPanel.kind}`}
-        title=${toolPanel.kind === "thinking" ? t.thinking : t.serviceTier} display=${state.display} focusReturn=${toolsButton} onClose=${() => setToolPanel(null)}>
+        settings title=${toolPanel.kind === "thinking" ? t.thinking : t.serviceTier} display=${state.display} focusReturn=${toolsButton} onClose=${() => setToolPanel(null)}>
         <div class="tool-settings">
           <div class="tool-setting-header">
             ${icon(toolPanel.kind === "thinking" ? ICON_NEUROLOGY : ICON_SPEED, toolPanel.kind === "thinking" ? "0 0 960 960" : "0 0 24 24")}
@@ -603,12 +640,13 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
             <button class="tool-switch" role="switch" aria-label=${toolPanel.kind === "thinking" ? t.thinking : t.serviceTier}
               aria-checked=${toolPanel.kind === "thinking" ? controls.displayedThinkingEnabled : controls.openAiServiceTierEnabled}
               data-checked=${toolPanel.kind === "thinking" ? controls.displayedThinkingEnabled : controls.openAiServiceTierEnabled}
+              data-pending=${settingsAvailable && !!state.pendingAction && (toolPanel.kind === "thinking" ? controls.thinkingCanDisable || !controls.displayedThinkingEnabled : capabilityAvailable)}
               disabled=${!settingsEditable || (toolPanel.kind === "thinking" ? !controls.thinkingCanDisable && controls.displayedThinkingEnabled : !capabilityEnabled)}
               onClick=${() => sync.setting(toolPanel.kind === "thinking" ? "thinkingEnabled" : "openAiServiceTierEnabled",
                 !(toolPanel.kind === "thinking" ? controls.displayedThinkingEnabled : controls.openAiServiceTierEnabled), toolPanel)}></button>
           </div>
           ${toolPanel.kind === "thinking" ? html`
-            <div class="tool-setting-body" data-disabled=${!settingsEditable || !controls.displayedThinkingEnabled || controls.displayedThinkingBudgetEnabled || controls.thinkingEfforts.length < 2}>
+            <div class="tool-setting-body" data-disabled=${!settingsAvailable || !controls.displayedThinkingEnabled || controls.displayedThinkingBudgetEnabled || controls.thinkingEfforts.length < 2}>
               ${icon(ICON_NEUROLOGY, "0 0 960 960")}
               <div class="tool-setting-title"><strong>${t.thinkingEffort}</strong><span>${t.efforts[controls.thinkingEfforts[slider?.key === "effort" ? slider.index : Math.max(0, controls.thinkingEfforts.indexOf(controls.displayedThinkingLevel))]] ?? controls.displayedThinkingLevel}</span></div>
               <p>${t.effortDescription}</p>
@@ -621,13 +659,15 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
             </div>
             ${controls.thinkingSupportsBudget && html`<button class="tool-advanced" aria-expanded=${advancedThinking} onClick=${() => setAdvancedThinking(!advancedThinking)}>
               ${advancedThinking ? t.hideAdvanced : t.advanced}${icon(ICON_CHEVRON_DOWN)}</button>
-              <div class="tool-budget-section" data-visible=${advancedThinking}>
+              <div class="tool-budget-section" data-visible=${advancedThinking} inert=${!advancedThinking}>
                 <div><div class="tool-setting-header" data-disabled=${!controls.displayedThinkingEnabled}>
                   ${icon(ICON_NEUROLOGY, "0 0 960 960")}
-                  <div><strong>${t.useBudget}</strong><p>${t.budgetNote}</p></div><button class="tool-switch" role="switch" aria-label=${t.useBudget}
+                  <div><strong>${t.useBudget}</strong><p class="budget-note">${t.budgetNote}</p></div><button class="tool-switch" role="switch" aria-label=${t.useBudget}
                     aria-checked=${controls.displayedThinkingBudgetEnabled} data-checked=${controls.displayedThinkingBudgetEnabled}
+                    data-pending=${settingsAvailable && controls.displayedThinkingEnabled && !!state.pendingAction}
                     disabled=${!settingsEditable || !controls.displayedThinkingEnabled} onClick=${() => sync.setting("thinkingBudgetEnabled", !controls.displayedThinkingBudgetEnabled, toolPanel)}></button></div>
-                ${controls.displayedThinkingBudgetEnabled && html`<div class="tool-setting-body tool-budget-slider" data-disabled=${!controls.displayedThinkingEnabled}>
+                <div class="tool-budget-section" data-visible=${controls.displayedThinkingBudgetEnabled} inert=${!controls.displayedThinkingBudgetEnabled}>
+                <div><div class="tool-setting-body tool-budget-slider" data-disabled=${!controls.displayedThinkingEnabled}>
                   ${icon(ICON_NEUROLOGY, "0 0 960 960")}
                   <div class="tool-setting-title"><strong>${t.budget}</strong><span>${t.tokens(slider?.key === "budget" ? controls.thinkingBudgetPresets[slider.index] : controls.displayedThinkingBudgetTokens)}</span></div>
                   <input type="range" aria-label=${t.budget} min="0" max=${controls.thinkingBudgetPresets.length - 1} step="1"
@@ -635,9 +675,9 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
                     value=${slider?.key === "budget" ? slider.index : controls.thinkingBudgetPresets.reduce((best, value, i, values) => Math.abs(value - controls.displayedThinkingBudgetTokens) < Math.abs(values[best] - controls.displayedThinkingBudgetTokens) ? i : best, 0)}
                     disabled=${!settingsEditable || !controls.displayedThinkingEnabled} onInput=${e => setSlider({ key: "budget", index: Number(e.currentTarget.value) })}
                     onChange=${e => { if (!sync.setting("thinkingBudgetTokens", controls.thinkingBudgetPresets[Number(e.currentTarget.value)], toolPanel)) setSlider(null); }} />
-                </div>`}</div>
+                </div></div></div></div>
               </div>`}
-          ` : html`<div class="tool-setting-body" data-disabled=${!capabilityEnabled || !controls.openAiServiceTierEnabled}>
+          ` : html`<div class="tool-setting-body" data-disabled=${!capabilityAvailable || !controls.openAiServiceTierEnabled}>
             ${icon(ICON_SPEED)}
             <div class="tool-setting-title"><strong>${t.serviceTier}</strong><span>${t.tiers[controls.serviceTiers[slider?.key === "tier" ? slider.index : Math.max(0, controls.serviceTiers.indexOf(controls.displayedServiceTier))]]}</span></div>
             <p>${t.tierDescription}</p><input type="range" aria-label=${t.serviceTier} min="0" max=${Math.max(1, controls.serviceTiers.length - 1)} step="1"
@@ -648,7 +688,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
           </div>`}
         </div>
       </${DetailSheet}>`}
-      ${validEditor && !retainedTools && html`<${ConversationEditor} key=${`${editor.connectionId}:${editor.seq}:${editor.kind}`}
+      ${validEditor && !retainedTools && html`<${ConversationEditor} key=${`${editor.connectionId}:${editor.seq}:${editor.kind}`} MoreMenu=${MoreMenu}
         editor=${editor} state=${state} focusReturn=${toolsButton} onClose=${() => setEditor(null)} />`}
       ${pending && html`<${AttachmentEditor} key=${`${state.connectionId}:${state.composer.seq}:${pending.id}`} attachment=${pending} editable=${editable}
         onPreview=${index => setViewer({ ...sync.attachmentTarget(), items: Array.from({ length: pending.pagePreviewCount }, (_, i) => ({ ...pending, kind: "page", index: i })), index })} />`}
@@ -657,8 +697,13 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
         onClose=${() => setViewer(current => current === viewer ? null : current)} />`}`;
 }
 
-function ConversationEditor({ editor, state, focusReturn, onClose }) {
+function ConversationEditor({ editor, state, focusReturn, onClose, MoreMenu }) {
   const dialog = useRef(null);
+  // ExposedDropdownMenuBox + AgoraExposedDropdownMenu: a read-only outlined field anchors the app's
+  // own dropdown at the field's width, never the browser's native option list.
+  const modelField = useRef(null);
+  const [modelMenu, setModelMenu] = useState(false);
+  const [retainedModelMenu, setRetainedModelMenu] = useState(false);
   const advanced = editor.kind === "advanced";
   const info = editor.initial;
   const fields = ["contextWindow", "temperature", "maxTokens", "topP", "frequencyPenalty", "presencePenalty"];
@@ -707,12 +752,23 @@ function ConversationEditor({ editor, state, focusReturn, onClose }) {
             min=${presets ? 0 : bounds[0]} max=${presets ? presets.length - 1 : bounds[1]} step=${presets ? 1 : "any"} value=${presets ? index : effective}
             onInput=${event => setDraft({ ...draft, [key]: presets ? presets[Math.round(Number(event.currentTarget.value))] : Number(event.currentTarget.value) })} />
         </div>`;
-      }) : html`<label>${t.compactModel}<select aria-label=${t.compactModel} value=${model} disabled=${busy} onChange=${event => { setModel(event.currentTarget.value); setError(null); }}>
-          ${!(model in state.composer.models) && html`<option value=${model}>${model || t.selectModel}</option>`}
-          ${Object.keys(state.composer.models).sort().map(id => html`<option value=${id}>${state.composer.models[id]}</option>`)}</select></label>
-        <label>${t.compactPrompt}<textarea rows="3" aria-label=${t.compactPrompt} value=${prompt} disabled=${busy}
+      }) : html`<div class="outlined-field"><span class="outlined-label" id="compact-model-label">${t.compactModel}</span>
+          <button ref=${modelField} class="editor-dropdown-field" type="button" aria-haspopup="menu" aria-expanded=${modelMenu}
+            aria-labelledby="compact-model-label" disabled=${busy}
+            onClick=${() => { setRetainedModelMenu(true); setModelMenu(!modelMenu); }}>
+            <span>${state.composer.models[model] ?? (model || t.selectModel)}</span>
+            <span class=${`editor-dropdown-icon ${modelMenu ? "open" : ""}`}>${icon(ICON_ARROW_DROP_DOWN)}</span>
+          </button></div>
+        ${retainedModelMenu && html`<${MoreMenu} expanded=${modelMenu} reduceMotion=${state.display.reduceMotion}
+          anchor=${modelField} matchAnchorWidth=${true} onClose=${() => setModelMenu(false)}
+          onExited=${(restoreFocus) => { setRetainedModelMenu(false); if (restoreFocus) modelField.current?.focus(); }}>
+          ${Object.keys(state.composer.models).sort().map(id => html`
+            <button class="dropdown-item" type="button" role="menuitemradio" aria-checked=${id === model}
+              onClick=${() => { setModel(id); setError(null); setModelMenu(false); }}><span>${state.composer.models[id]}</span></button>`)}
+        </${MoreMenu}>`}
+        <label class="outlined-field"><span class="outlined-label">${t.compactPrompt}</span><textarea rows="3" aria-label=${t.compactPrompt} value=${prompt} disabled=${busy}
           onInput=${event => { setPrompt(event.currentTarget.value); setError(null); }}></textarea></label>
-        <label>${t.compactRetain}<input type="text" inputmode="numeric" aria-label=${t.compactRetain} value=${retain} disabled=${busy}
+        <label class="outlined-field"><span class="outlined-label">${t.compactRetain}</span><input type="text" inputmode="numeric" aria-label=${t.compactRetain} value=${retain} disabled=${busy}
           onInput=${event => { setRetain(event.currentTarget.value.replace(/\D/g, "")); setError(null); }} /></label>
         ${error && html`<p class="conversation-editor-error" role="alert">${error}</p>`}`}
     </div>

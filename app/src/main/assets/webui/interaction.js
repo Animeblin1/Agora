@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "./vendor/preact-hooks.mjs";
 import { html } from "./html.js";
 import { sync } from "./sync.js";
 import { t } from "./i18n.js";
-import { icon, ICON_CHEVRON_DOWN, ICON_CHEVRON_RIGHT, ICON_TERMINAL, ICON_HELP } from "./icons.js";
+import { icon, ICON_COLLAPSE_CONTENT, ICON_EXPAND_CONTENT, ICON_TERMINAL, ICON_HELP } from "./icons.js";
 
 const keyOf = item => `${item.kind}:${item.id}`;
 const easing = "cubic-bezier(.4,0,.2,1)";
@@ -89,6 +89,7 @@ export function InteractionBar({ state }) {
     const from = state.progress, to = active ? 1 : 0, start = performance.now();
     const draw = () => {
       node.style.height = `${(content.offsetHeight + 8) * state.progress}px`;
+      node.closest(".chat")?.style.setProperty("--chat-interaction-lift", `${content.offsetHeight * state.progress}px`);
       content.style.opacity = String(state.progress);
       content.style.transform = `scale(${.9 + .1 * state.progress})`;
     };
@@ -113,6 +114,8 @@ export function InteractionBar({ state }) {
     const content = body.current, state = motion.current;
     if (!content || !current) return;
     const previous = state.page;
+    const fromHeight = state.animations.length ? content.parentElement.offsetHeight : previous?.height;
+    const fromTransform = state.animations.length ? getComputedStyle(content).transform : previous?.transform;
     state.animations.forEach(animation => animation.cancel());
     state.animations = [];
     if (previous?.owner === shown.owner && previous.key !== keyOf(current) && active && !reduced && !memory.folded) {
@@ -123,19 +126,20 @@ export function InteractionBar({ state }) {
       content.parentElement.append(outgoing);
       const sign = index >= previous.index ? 1 : -1;
       const enter = content.animate([{ transform: `translateX(${sign * 100}%)` }, { transform: "translateX(0)" }], { duration: 350, easing });
-      const exit = outgoing.animate([{ transform: previous.transform || "translateX(0)" }, { transform: `translateX(${-sign * 100}%)` }], { duration: 350, easing });
-      const height = content.parentElement.animate([{ height: `${previous.height}px` }, { height: `${content.offsetHeight}px` }], { duration: 350, easing });
+      const exit = outgoing.animate([{ transform: fromTransform || "translateX(0)" }, { transform: `translateX(${-sign * 100}%)` }], { duration: 350, easing });
+      const height = content.parentElement.animate([{ height: `${fromHeight}px` }, { height: `${content.offsetHeight}px` }], { duration: 350, easing });
       state.animations = [enter, exit, height];
+      height.onfinish = () => { state.animations = []; };
       exit.onfinish = () => outgoing.remove();
       exit.oncancel = () => outgoing.remove();
     }
-    state.page = { owner: shown.owner, key: keyOf(current), index, node: content.cloneNode(true), height: content.offsetHeight };
-    return () => {
-      state.page.height = content.parentElement.offsetHeight;
-      state.page.transform = getComputedStyle(content).transform;
-      state.page.node = content.cloneNode(true);
-      state.animations.forEach(animation => animation.cancel());
+    const snapshot = () => {
+      state.page = { owner: shown.owner, key: keyOf(current), index, node: content.cloneNode(true), height: content.offsetHeight };
     };
+    snapshot();
+    const observer = new ResizeObserver(snapshot);
+    observer.observe(content);
+    return () => observer.disconnect();
   }, [current && keyOf(current), memory?.folded, reduced, shown?.owner]);
 
   useLayoutEffect(() => {
@@ -169,6 +173,7 @@ export function InteractionBar({ state }) {
   }, [shown?.owner, memory?.folded, reduced]);
 
   useLayoutEffect(() => () => {
+    host.current?.closest(".chat")?.style.removeProperty("--chat-interaction-lift");
     cancelAnimationFrame(motion.current.frame);
     motion.current.animations.forEach(animation => animation.cancel());
     cancelAnimationFrame(motion.current.fold?.frame);
@@ -182,15 +187,15 @@ export function InteractionBar({ state }) {
       <button type="button" class="interaction-capsule" ref=${capsule} disabled=${busy || !memory.folded}
         aria-hidden=${memory.folded ? null : "true"} tabIndex=${memory.folded ? 0 : -1}
         onClick=${() => { memory.folded = false; change(); }}>
-        ${icon(current.kind === "shell" ? ICON_TERMINAL : ICON_HELP)}<span>${current.kind === "shell" ? t.interactionApproval : t.interactionTitle}</span>${icon(ICON_CHEVRON_RIGHT)}
+        ${icon(current.kind === "shell" ? ICON_TERMINAL : ICON_HELP)}<span>${current.kind === "shell" ? t.interactionApproval : t.interactionTitle}</span>${icon(ICON_EXPAND_CONTENT)}
       </button>
       <div class="interaction-full" ref=${full} inert=${memory.folded || !active} aria-hidden=${memory.folded ? "true" : null}>
         <header class="interaction-header">${icon(current.kind === "shell" ? ICON_TERMINAL : ICON_HELP)}
           <strong>${current.kind === "shell" ? t.shellConfirm : t.interactionTitle}</strong>
           ${current.kind === "shell" && html`<span class="interaction-server">${current.server}</span>`}
           <span class="interaction-position">${pages.length > 1 ? `${index + 1} / ${pages.length}` : ""}</span>
-          <button type="button" class="icon-button" aria-label=${t.collapse} title=${t.collapse} disabled=${busy}
-            onClick=${() => { memory.folded = true; change(); }}>${icon(ICON_CHEVRON_DOWN)}</button>
+          <button type="button" class="icon-button interaction-minimize" aria-label=${t.collapse} title=${t.collapse} disabled=${busy}
+            onClick=${() => { memory.folded = true; change(); }}>${icon(ICON_COLLAPSE_CONTENT)}</button>
         </header>
         <div class="interaction-pages"><div class="interaction-body" ref=${body}>
           ${current.kind === "shell" ? html`
@@ -218,12 +223,12 @@ export function InteractionBar({ state }) {
                     if (!value.own) event.currentTarget.closest('.interaction-body').querySelector('textarea').blur();
                     change();
                   }} />
-                <span>${t.answerHint}</span>
+                <span>${t.customAnswer}</span>
               </label>`}
             </div>
             <div class=${`interaction-answer${value.own ? " open" : ""}`} inert=${!value.own} aria-hidden=${value.own ? null : "true"}
               onTransitionEnd=${event => { if (value.own && event.propertyName === 'grid-template-rows') event.currentTarget.parentElement.scrollTop = event.currentTarget.parentElement.scrollHeight; }}>
-              <div><textarea aria-label=${t.answerHint} placeholder=${t.answerHint} value=${value.text} rows="2" disabled=${busy || !value.own}
+              <div><textarea aria-label=${t.customAnswer} placeholder=${current.options?.length ? null : t.customAnswer} value=${value.text} rows="1" disabled=${busy || !value.own}
                 onInput=${event => { value.text = event.target.value; change(); }} /></div>
             </div>
           `}

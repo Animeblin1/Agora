@@ -5,7 +5,7 @@ import { attachScrollbar } from "./material/scrollbar.js";
 import { t } from "./i18n.js";
 import {
   icon, ICON_ADD,
-  ICON_MENU, ICON_MORE_VERT, ICON_SEARCH, ICON_PIN,
+  ICON_MENU, ICON_MORE_VERT, ICON_SEARCH, ICON_PIN, ICON_CLOSE,
   ICON_DELETE, ICON_EDIT, ICON_REFRESH,
   ICON_ARROW_BACK, ICON_CHEVRON_DOWN,
 } from "./icons.js";
@@ -138,10 +138,15 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
     <h2 class="drawer-title">${t.conversations}</h2>
     <div class="drawer-search">
       ${icon(ICON_SEARCH)}
-      <input type="search" placeholder=${t.searchHint} aria-label=${t.searchHint} disabled=${!connected}
+      <input type="text" enterkeyhint="search" placeholder=${t.searchHint} aria-label=${t.searchHint} disabled=${!connected}
         value=${searchQuery} onInput=${event => sync.search(event.currentTarget.value)} />
-      <span class="drawer-search-progress" data-active=${searchLoading} aria-hidden=${!searchLoading}>
-        <${CircularProgress} size=${18} stroke=${2} label=${t.loading} />
+      <span class="drawer-search-trailing">
+        <span class="drawer-search-progress" data-active=${searchLoading} aria-hidden=${!searchLoading}>
+          <${CircularProgress} size=${18} stroke=${2} label=${t.loading} />
+        </span>
+        <button class="drawer-search-clear" type="button" aria-label=${t.clearSearch}
+          data-active=${!!searchQuery && !searchLoading} disabled=${!searchQuery || searchLoading}
+          onClick=${() => sync.search("")}>${icon(ICON_CLOSE)}</button>
       </span>
     </div>
     ${!searching && html`
@@ -169,10 +174,10 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
       ${loading && html`<div class="drawer-list-progress"><${CircularProgress} size=${32} stroke=${3} label=${t.loading} /></div>`}
       `}
     </div>
-    <div class="scrollbar-overlay drawer" ref=${bar} aria-hidden="true"><span></span></div>
+    <div class="scrollbar-overlay drawer-scrollbar" ref=${bar} aria-hidden="true"><span></span></div>
     ${menu && html`<${MoreMenu} expanded=${menuOpen} reduceMotion=${reduceMotion} anchor=${{ current: menu.anchor }}
       onClose=${() => setMenuOpen(false)} onExited=${() => setMenu(null)}>
-      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected}
+      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected || switching || menu.conversation.generating}
         onClick=${() => { sync.pin(menu.conversation.id, !menu.conversation.isPinned); setMenuOpen(false); }}>
         ${icon(ICON_PIN)}<span>${menu.conversation.isPinned ? t.unpin : t.pin}</span>
       </button>
@@ -181,11 +186,11 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
         onClick=${() => { sync.generateTitle(menu.conversation.id); setMenuOpen(false); }}>
         ${icon(ICON_REFRESH)}<span>${t.generateTitle}</span>
       </button>
-      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected}
+      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected || switching || menu.conversation.generating}
         onClick=${() => { onRequestRename({ conversationId: menu.conversation.id, title: menu.conversation.title, anchor: menu.anchor }); setMenuOpen(false); }}>
         ${icon(ICON_EDIT)}<span>${t.rename}</span>
       </button>
-      <button class="dropdown-item destructive" role="menuitem" type="button" disabled=${!connected}
+      <button class="dropdown-item destructive" role="menuitem" type="button" disabled=${!connected || switching || menu.conversation.generating}
         onClick=${() => { onRequestDelete({ conversationId: menu.conversation.id, title: menu.conversation.title, anchor: menu.anchor }); setMenuOpen(false); }}>
         ${icon(ICON_DELETE)}<span>${t.delete}</span>
       </button>
@@ -365,7 +370,10 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
 function ConversationDialog({ state, request, onClose: onClosed }) {
   const dialog = useRef(null);
   const returnFocus = useRef(document.querySelector('.actions-capsule [aria-haspopup="menu"]'));
-  const onClose = useDialog(dialog, () => { sync.dismissShare(); onClosed(); }, returnFocus);
+  const onClose = useDialog(dialog, () => {
+    if (sent.current) sync.confirmationExited(sent.current.actionId);
+    sync.dismissShare(); onClosed();
+  }, returnFocus);
   const sent = useRef(false);
   const busy = !!state.pageAction;
   const sharing = request.type === "share";
@@ -375,7 +383,7 @@ function ConversationDialog({ state, request, onClose: onClosed }) {
   useEffect(() => { setSelectedPromptId(prompt?.selectedId ?? null); }, [prompt?.selectedId]);
   const activeTitle = prompt?.items.find(item => item.id === prompt.activeId)?.title || t.noSystemPrompt;
   const heading = picking ? t.systemPrompt : sharing ? t.share
-    : request.messageId == null ? t.forkConversation : t.forkFromHere;
+    : request.messageId == null ? t.forkConversationTitle : t.forkFromHere;
   const text = state.shareText;
   function close() { if (!busy && !sent.current) onClose(); }
   useEffect(() => {
@@ -393,14 +401,14 @@ function ConversationDialog({ state, request, onClose: onClosed }) {
     link.click();
     URL.revokeObjectURL(url);
   }
-  return html`<dialog ref=${dialog} class="attachment-editor page-dialog" aria-label=${heading}
+  return html`<dialog ref=${dialog} class=${`attachment-editor page-dialog ${picking ? "prompt-dialog" : ""}`} aria-label=${heading}
     onCancel=${event => { event.preventDefault(); close(); }}
     onClick=${event => { if (event.target === dialog.current) close(); }} onKeyDown=${event => event.stopPropagation()}>
     <section><h2>${heading}</h2>
       ${picking ? html`<div class="prompt-options" role="radiogroup" aria-label=${t.systemPrompt}>
         ${[{ id: null, title: t.globalDefault(activeTitle) }, ...(prompt?.items || [])].map(item => html`
-          <label class="prompt-option"><input type="radio" name="system-prompt" checked=${selectedPromptId === item.id}
-            onChange=${() => setSelectedPromptId(item.id)} /><span>${item.title}</span></label>`)}
+          <label class="prompt-option"><span class="prompt-radio"><input type="radio" name="system-prompt" checked=${selectedPromptId === item.id}
+            onChange=${() => setSelectedPromptId(item.id)} /></span><span>${item.title}</span></label>`)}
       </div>` : sharing ? (text ? html`<textarea class="share-output" readonly aria-label=${t.share}>${text}</textarea>`
         : html`<${CircularProgress} size=${24} label=${t.loading} />`)
         : html`<p>${t.forkConfirm}</p>`}
@@ -411,9 +419,10 @@ function ConversationDialog({ state, request, onClose: onClosed }) {
           }}>${t.save}</button>` : sharing ? text && html`<button type="button" onClick=${copy}>${t.copy}</button><button type="button" onClick=${download}>${t.download}</button>`
           : html`<button type="button" disabled=${busy} onClick=${() => {
             if (sent.current) return;
-            sent.current = sync.pageCommand("fork", request);
+            sent.current = sync.pageCommand("fork", request,
+              request.messageId == null ? {} : { messageId: request.messageId });
             if (!sent.current) onClose();
-          }}>${busy ? html`<${CircularProgress} size=${20} label=${t.loading} />` : t.fork}</button>`}
+          }}>${busy ? html`<${CircularProgress} size=${20} stroke=${3} label=${t.loading} />` : t.fork}</button>`}
       </footer>
     </section></dialog>`;
 }
@@ -452,9 +461,9 @@ function ConversationRenameDialog({ conversation, onClose: onClosed }) {
  * ChatDeleteConfirmDialog: CONFIRM, then PENDING while the phone's owner runs its transaction, then
  * FAILED when it refuses. A pending delete cannot be dismissed, so the dialog cannot outlive it.
  */
-function ConversationDeleteDialog({ pending, failed, complete, onConfirm, onClose: onClosed }) {
+function ConversationDeleteDialog({ pending, failed, complete, actionId, onConfirm, onClose: onClosed }) {
   const dialog = useRef(null);
-  const onClose = useDialog(dialog, onClosed);
+  const onClose = useDialog(dialog, () => { sync.confirmationExited(actionId); onClosed(); });
   useEffect(() => { if (complete) onClose(); }, [complete]);
   function close() { if (!pending) onClose(); }
   return html`<dialog ref=${dialog} class="attachment-editor page-dialog" aria-label=${t.deleteChat}
@@ -464,13 +473,64 @@ function ConversationDeleteDialog({ pending, failed, complete, onConfirm, onClos
       ${failed && html`<p class="dialog-failure" role="alert">${t.toolStateFailed}</p>`}
       <footer><button type="button" disabled=${pending} onClick=${close}>${t.cancel}</button>
         <button class="destructive" type="button" disabled=${pending} onClick=${onConfirm}>
-          ${pending ? html`<${CircularProgress} size=${20} label=${t.loading} />` : failed ? t.retry : t.delete}
+          ${pending ? html`<${CircularProgress} size=${20} stroke=${3} label=${t.loading} />` : failed ? t.retry : t.delete}
         </button></footer>
     </section></dialog>`;
 }
 
 export function Shell({ onSignedOut }) {
   const state = useSync();
+  const snackbarNode = useRef(null);
+  const snackbarMotion = useRef(null);
+  const nextSnackbar = useRef(state.snackbar);
+  nextSnackbar.current = state.snackbar;
+  const [snackbar, setSnackbar] = useState(null);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  useEffect(() => {
+    let handoff;
+    if (state.snackbar) {
+      if (snackbar && snackbarVisible) {
+        setSnackbarVisible(false);
+        // MainActivity replaces the retained payload halfway through its 400 ms exit.
+        handoff = setTimeout(() => {
+          setSnackbar(state.snackbar);
+          setSnackbarVisible(true);
+        }, 200);
+      } else {
+        setSnackbar(state.snackbar);
+        setSnackbarVisible(true);
+      }
+    } else setSnackbarVisible(false);
+    return () => clearTimeout(handoff);
+  }, [state.snackbar?.id]);
+  useEffect(() => {
+    if (!snackbar) return;
+    const timer = setTimeout(() => sync.dismissSnackbar(snackbar.id), 4_000);
+    return () => clearTimeout(timer);
+  }, [snackbar?.id]);
+  useLayoutEffect(() => {
+    const node = snackbarNode.current;
+    if (!node) return;
+    const reduced = !!state.display?.reduceMotion;
+    const previous = snackbarMotion.current;
+    const samePayload = previous?.id === snackbar.id;
+    const style = getComputedStyle(node);
+    const from = samePayload ? { opacity: style.opacity, transform: style.transform }
+      : { opacity: 0, transform: reduced ? "none" : "scale(.8)" };
+    previous?.animation.cancel();
+    const target = { opacity: snackbarVisible ? 1 : 0,
+      transform: reduced ? "none" : `scale(${snackbarVisible ? 1 : .8})` };
+    const animation = node.animate([from, target], {
+      duration: 400, easing: "cubic-bezier(.4,0,.2,1)", fill: "both",
+    });
+    snackbarMotion.current = { id: snackbar.id, animation };
+    animation.finished.then(() => {
+      if (!snackbarVisible && snackbarMotion.current?.animation === animation && !nextSnackbar.current) {
+        setSnackbar(null);
+      }
+    }).catch(() => {});
+  }, [snackbar?.id, snackbarVisible, state.display?.reduceMotion]);
+  useLayoutEffect(() => () => snackbarMotion.current?.animation.cancel(), []);
   useEffect(() => {
     sync.start(onSignedOut);
     return () => sync.stop();
@@ -483,7 +543,11 @@ export function Shell({ onSignedOut }) {
   // The drawer row menu's own dialogs, held here as on the phone they outlive the drawer itself.
   const [rowDialog, setRowDialog] = useState(null);
   const deleteResult = state.conversationDeleteResult;
-  useEffect(() => { setPageDialog(null); }, [state.connectionId, state.openId]);
+  useEffect(() => {
+    if (pageDialog && (pageDialog.connectionId !== state.connectionId ||
+        pageDialog.seq !== sync.interactionTarget()?.seq ||
+        (pageDialog.conversationId !== state.openId && !state.switching?.confirmation))) setPageDialog(null);
+  }, [state.connectionId, state.openId, state.switching, pageDialog]);
   useEffect(() => { if (pageDialog?.type === "share" && !state.pageAction && !state.shareText) setPageDialog(null); }, [state.pageAction, state.shareText]);
   // A row names the message it forks or shares; the top bar names none and so acts on the whole
   // conversation, which is what the phone's owners do with a null message id.
@@ -704,7 +768,7 @@ export function Shell({ onSignedOut }) {
         inert=${!drawerOpen}>
         <${DrawerContent} conversations=${state.conversations} openId=${state.openId}
           connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion}
-          switching=${state.openStatus === "loading"}
+          switching=${!!state.switching || state.openStatus === "loading"}
           searchQuery=${state.searchQuery} searchResults=${state.searchResults} searchLoading=${state.searchLoading} searchFailed=${state.searchFailed}
           onRequestRename=${(request) => setRowDialog({ ...request, type: "rename" })}
           onRequestDelete=${(request) => setRowDialog({ ...request, type: "delete" })}
@@ -729,11 +793,17 @@ export function Shell({ onSignedOut }) {
         <${MessageList} state=${state} label=${openTitle || t.newChat} onPageAction=${openPageAction} />
         <div class="chat-top-blur" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
         <${Composer} state=${state} MoreMenu=${MoreMenu} expanded=${composerExpanded} onExpandedChange=${setComposerExpanded} />
-        ${state.snackbar && html`<div class="chat-snackbar" role="status">${state.snackbar.message}</div>`}
+        ${snackbar && html`<div class="chat-snackbar-host" inert=${!snackbarVisible}>
+          <div class="chat-snackbar" ref=${snackbarNode} role=${snackbarVisible ? "status" : null}
+            aria-hidden=${!snackbarVisible}>
+            <span class="chat-snackbar-text">${snackbar.message}</span>
+            <button class="chat-snackbar-close" type="button" aria-label=${t.cancel}
+              onClick=${() => sync.dismissSnackbar(snackbar.id)}>${icon(ICON_CLOSE)}</button>
+          </div></div>`}
         ${pageDialog && html`<${ConversationDialog} state=${state} request=${pageDialog} onClose=${() => setPageDialog(null)} />`}
       </main>
       ${rowDialog?.type === "rename" && html`<${ConversationRenameDialog} conversation=${rowDialog} onClose=${() => setRowDialog(null)} />`}
-      ${rowDialog?.type === "delete" && html`<${ConversationDeleteDialog}
+      ${rowDialog?.type === "delete" && html`<${ConversationDeleteDialog} actionId=${rowDialog.actionId}
         complete=${rowDialog.actionId != null && deleteResult?.actionId === rowDialog.actionId && deleteResult.success}
         pending=${rowDialog.actionId != null && state.conversationDelete?.actionId === rowDialog.actionId}
         failed=${rowDialog.failed === true ||
