@@ -100,7 +100,14 @@ data class MessageSegment(
     /** In-memory Provider delta boundaries for the active answer; never persisted to Room JSON. */
     @Transient
     val streamingTextDeltas: List<StreamingTextDelta> = emptyList(),
-)
+) {
+    /** Provider-native segments keep their own replay format, not client function results. */
+    val isProviderHostedTool: Boolean
+        get() = type == "tool" && when (toolName) {
+            "openai_search", "google_search", "code_execution" -> true
+            else -> false
+        }
+}
 
 object ToolExecutionStates {
     const val CALLING = "calling"

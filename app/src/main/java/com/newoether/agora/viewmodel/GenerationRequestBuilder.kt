@@ -16,6 +16,7 @@ import com.newoether.agora.data.providerDisplayName
 import com.newoether.agora.data.isResponsesApiEnabledForProvider
 import com.newoether.agora.data.isAnthropicCacheEnabledForProvider
 import com.newoether.agora.data.anthropicCacheTtlForProvider
+import com.newoether.agora.data.isPromptCacheKeyEnabledForProvider
 import com.newoether.agora.data.local.ChatEntity
 import com.newoether.agora.data.local.NewChatPersistEntity
 import com.newoether.agora.data.repository.ConversationRepository
@@ -508,6 +509,7 @@ class GenerationRequestBuilder(
         val config = GenerationConfig(
             anthropicCacheEnabled = isAnthropicCacheEnabledForProvider(providerName, cacheEnabled, cacheProviders),
             anthropicCacheTtl = anthropicCacheTtlForProvider(providerName, cacheTtl, cacheProviders),
+            promptCacheKeyEnabled = isPromptCacheKeyEnabledForProvider(providerName, cacheProviders),
             providerName = providerName,
             modelId = apiModelId,
             apiKey = activeKey,
