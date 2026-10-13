@@ -2,7 +2,7 @@
 // phone already split math out with the app's own parser: a formula is "\uE000<index>\uE001" in
 // the text and its TeX is in `math`. Raw HTML stays literal text, as in the app, and KaTeX builds
 // its DOM directly so the page needs no inline style attributes.
-import { useLayoutEffect, useMemo, useRef } from "./vendor/preact-hooks.mjs";
+import { useLayoutEffect, useMemo, useRef, useState } from "./vendor/preact-hooks.mjs";
 import { Marked, Renderer } from "./vendor/marked.esm.js";
 import { html } from "./html.js";
 import { t } from "./i18n.js";
@@ -126,7 +126,30 @@ function renderHtml(markdown, math, sourceMap = []) {
     breaks = token.raw.length - token.raw.replace(/\n+$/, "").length;
   }
   out += SPACER.repeat(breaks);
-  return out.replace(MATH_SLOT, (_, index) => `<span class="math" data-math="${index}"></span>`);
+  // Expand only text nodes: source attributes must retain the original token verbatim.
+  const template = document.createElement("template");
+  template.innerHTML = out;
+  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (node.parentElement?.closest("code,pre")) continue;
+    const matches = [...node.data.matchAll(MATH_SLOT)].filter(match => math?.[Number(match[1])]);
+    if (!matches.length) continue;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const match of matches) {
+      fragment.append(node.data.slice(cursor, match.index));
+      const slot = document.createElement("span");
+      slot.className = "math";
+      slot.dataset.math = match[1];
+      fragment.append(slot);
+      cursor = match.index + match[0].length;
+    }
+    fragment.append(node.data.slice(cursor));
+    node.replaceWith(fragment);
+  }
+  return template.innerHTML;
 }
 
 const copyIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_CONTENT_COPY}"/></svg>`;
@@ -181,9 +204,12 @@ export function fadeStreamingText(element, streaming, reduceMotion, timeline, so
       active ||= alpha < 1;
     }
     if (active) frame = requestAnimationFrame(paint);
+    else delete element.dataset.streamFading;
   };
+  element.dataset.streamFading = "true";
   paint();
   return () => {
+    delete element.dataset.streamFading;
     cancelAnimationFrame(frame);
     owned.forEach(group => CSS.highlights.delete(group.name));
     document.adoptedStyleSheets = document.adoptedStyleSheets.filter(current => current !== sheet);
@@ -258,8 +284,27 @@ export function highlightSearch(element, search, matches, sourceStart = 0) {
  * code block wrapping setting (off scrolls long lines sideways).
  */
 export function Markdown({ text, variant = "answer", wrap = true, search, matches = [], sourceStart = 0,
-  streaming = false, reduceMotion = false, births }) {
+  streaming = false, reduceMotion = false, births, emptyStreamingText = null }) {
   const root = useRef(null);
+  const emptyNode = useRef(null);
+  const showEmpty = streaming && !text.markdown.trim() && emptyStreamingText != null;
+  const [retainedEmpty, setRetainedEmpty] = useState(showEmpty);
+  useLayoutEffect(() => {
+    const node = emptyNode.current;
+    if (!node) return undefined;
+    if (showEmpty) setRetainedEmpty(true);
+    const animation = node.animate([{ opacity: getComputedStyle(node).opacity }, { opacity: showEmpty ? 1 : 0 }],
+      { duration: 180, easing: "linear", fill: "both" });
+    animation.onfinish = () => {
+      node.style.opacity = showEmpty ? "1" : "0";
+      animation.cancel();
+      if (!showEmpty) setRetainedEmpty(false);
+    };
+    return () => {
+      node.style.opacity = getComputedStyle(node).opacity;
+      animation.cancel();
+    };
+  }, [showEmpty, emptyStreamingText]);
   const localBirths = useRef(new Map());
   const markup = useMemo(() => renderHtml(text.markdown, text.math, text.sourceMap), [text.markdown, text.math, text.sourceMap]);
   useLayoutEffect(() => {
@@ -285,5 +330,10 @@ export function Markdown({ text, variant = "answer", wrap = true, search, matche
       births ?? localBirths.current, sourceStart, variant);
   }, [markup, search, matches, sourceStart, streaming, reduceMotion, births]);
   const className = `markdown ${variant}${wrap ? "" : " nowrap"}`;
-  return html`<div class=${className} ref=${root} dangerouslySetInnerHTML=${{ __html: markup }} />`;
+  const content = html`<div class=${className} ref=${root} dangerouslySetInnerHTML=${{ __html: markup }} />`;
+  return emptyStreamingText == null ? content : html`<div class="markdown-message">
+    ${content}
+    ${(showEmpty || retainedEmpty) && html`<div class=${`${className} markdown-empty-stream`}
+      ref=${emptyNode} aria-hidden=${!showEmpty}>${emptyStreamingText}</div>`}
+  </div>`;
 }
