@@ -487,4 +487,8 @@
     <string name="settings_interaction_desc">Fragen, die der Assistent dir stellt</string>
     <string name="ask_user_enable">Assistent darf fragen</string>
     <string name="ask_user_enable_desc">Gibt dem Modell ein Werkzeug, um dich zu fragen und auf deine Wahl zu warten</string>
+    <string name="unsaved_changes_title">Ungespeicherte Änderungen</string>
+    <string name="unsaved_changes_message">Es gibt ungespeicherte Änderungen. Verwerfen?</string>
+    <string name="unsaved_changes_discard">Verwerfen</string>
+    <string name="unsaved_changes_keep_editing">Weiter bearbeiten</string>
 </resources>

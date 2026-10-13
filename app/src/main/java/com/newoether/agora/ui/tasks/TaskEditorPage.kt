@@ -64,6 +64,7 @@ import com.newoether.agora.viewmodel.runTaskNow
 import com.newoether.agora.viewmodel.runningTaskIds
 import com.newoether.agora.viewmodel.saveTask
 import com.newoether.agora.ui.components.clearFocusOnTap
+import com.newoether.agora.ui.components.rememberUnsavedChangesBack
 import com.newoether.agora.ui.settings.AnimatedActionFab
 import com.newoether.agora.ui.settings.CollapsingSettingsLazyScaffold
 import com.newoether.agora.ui.settings.SettingsGroup
@@ -230,7 +231,13 @@ internal fun TaskDetailPage(
 
     fun current() = checkNotNull(editorSession.current(task))
 
-    BackHandler(enabled = backHandlingEnabled) { onBack() }
+    // Save calls onBack directly; only back navigation goes through the unsaved-changes guard.
+    val guardedBack = rememberUnsavedChangesBack(
+        hasUnsavedChanges = editorSession.hasUnsavedChanges,
+        onBack = onBack,
+    )
+
+    BackHandler(enabled = backHandlingEnabled) { guardedBack() }
 
     LaunchedEffect(task.id, previewPhase, liveExecutionSnapshot) {
         val latest = liveExecutionSnapshot ?: return@LaunchedEffect
@@ -258,7 +265,7 @@ internal fun TaskDetailPage(
 
     CollapsingSettingsLazyScaffold(
         title = name.ifBlank { stringResource(if (isNew) R.string.task_new else R.string.task_edit) },
-        onBack = onBack,
+        onBack = guardedBack,
         modifier = Modifier.clearFocusOnTap(),
         listState = listState,
         actions = {

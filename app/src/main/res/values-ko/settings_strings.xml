@@ -487,4 +487,8 @@
     <string name="settings_interaction_desc">어시스턴트가 보내는 질문</string>
     <string name="ask_user_enable">어시스턴트 질문 허용</string>
     <string name="ask_user_enable_desc">모델이 질문을 보내고 선택을 기다릴 수 있게 합니다</string>
+    <string name="unsaved_changes_title">저장되지 않은 변경사항</string>
+    <string name="unsaved_changes_message">저장되지 않은 변경사항이 있습니다. 삭제하시겠습니까?</string>
+    <string name="unsaved_changes_discard">삭제</string>
+    <string name="unsaved_changes_keep_editing">계속 편집</string>
 </resources>

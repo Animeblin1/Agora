@@ -55,6 +55,7 @@ import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
 import com.newoether.agora.ui.motion.MotionAwareModalBottomSheet as ModalBottomSheet
 import com.newoether.agora.ui.components.AgoraDropdownMenu
 import com.newoether.agora.ui.components.AgoraDropdownMenuItem
+import com.newoether.agora.ui.components.rememberUnsavedChangesBack
 import com.newoether.agora.ui.components.sheetOptionClickable
 
 private fun variableDisplayName(key: String): String = when (key) {
@@ -133,16 +134,29 @@ fun SystemPromptEditorPage(
         else -> assistantItems
     }
 
+    val initialTitle = remember { title }
+    val initialSystemItems = remember { systemItems.toList() }
+    val initialUserItems = remember { userItems.toList() }
+    val initialAssistantItems = remember { assistantItems.toList() }
+    val hasUnsavedChanges = title != initialTitle ||
+        systemItems.toList() != initialSystemItems ||
+        userItems.toList() != initialUserItems ||
+        assistantItems.toList() != initialAssistantItems
+    val guardedBack = rememberUnsavedChangesBack(
+        hasUnsavedChanges = hasUnsavedChanges,
+        onBack = onBack,
+    )
+
     BackHandler(enabled = showVariablePicker) {
         showVariablePicker = false
     }
     BackHandler(enabled = !showVariablePicker) {
-        onBack()
+        guardedBack()
     }
 
     CollapsingSettingsScaffold(
         title = if (isEdit) stringResource(R.string.prompts_edit_title) else stringResource(R.string.prompts_add_title),
-        onBack = onBack,
+        onBack = guardedBack,
         actions = {
             IconButton(
                 enabled = saveEnabled,

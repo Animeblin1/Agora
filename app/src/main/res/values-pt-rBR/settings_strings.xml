@@ -487,4 +487,8 @@
     <string name="settings_interaction_desc">Perguntas que o assistente faz a você</string>
     <string name="ask_user_enable">Permitir que o assistente pergunte</string>
     <string name="ask_user_enable_desc">Dá ao modelo uma ferramenta para perguntar e esperar sua escolha</string>
+    <string name="unsaved_changes_title">Alterações não salvas</string>
+    <string name="unsaved_changes_message">Há alterações não salvas. Descartá-las?</string>
+    <string name="unsaved_changes_discard">Descartar</string>
+    <string name="unsaved_changes_keep_editing">Continuar editando</string>
 </resources>

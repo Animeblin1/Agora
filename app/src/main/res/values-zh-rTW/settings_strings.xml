@@ -492,4 +492,8 @@
     <string name="settings_interaction_desc">助手向你提問的方式</string>
     <string name="ask_user_enable">允許助手提問</string>
     <string name="ask_user_enable_desc">讓模型可以用工具向你提問，並等你做出選擇</string>
+    <string name="unsaved_changes_title">未儲存的變更</string>
+    <string name="unsaved_changes_message">有未儲存的變更，確定要捨棄嗎？</string>
+    <string name="unsaved_changes_discard">捨棄</string>
+    <string name="unsaved_changes_keep_editing">繼續編輯</string>
 </resources>

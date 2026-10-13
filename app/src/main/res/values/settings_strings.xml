@@ -504,4 +504,8 @@
     <string name="settings_interaction_desc">Questions the assistant asks you</string>
     <string name="ask_user_enable">Let the assistant ask me</string>
     <string name="ask_user_enable_desc">Gives the model a tool to ask you a question and wait for your choice</string>
+    <string name="unsaved_changes_title">Unsaved changes</string>
+    <string name="unsaved_changes_message">You have unsaved changes. Discard them?</string>
+    <string name="unsaved_changes_discard">Discard</string>
+    <string name="unsaved_changes_keep_editing">Keep editing</string>
 </resources>

@@ -139,6 +139,12 @@ fun SettingsWebUiPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                             val running = status as? WebUiStatus.Running
                             val urls = running?.let { webUi.accessUrls(it.port, it.https) }.orEmpty()
                             Text(
+                                stringResource(R.string.about_links),
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
                                 stringResource(
                                     when {
                                         running == null -> R.string.webui_access_off
