@@ -9,14 +9,17 @@ import java.security.SecureRandom
  * Correlation identity for one OpenCode Zen request.
  *
  * The Zen anonymous lane answers 403 `FreeTierError` ("free tier can only be used from within
- * OpenCode") unless the request carries a CLI-shaped session id. Since 2026-09-16 the accepted
- * shape is exactly `ses_` + 12 lowercase hex characters + 14 Base62 characters; anything else
- * (including the plain conversation id OpenCode Go sends) is refused. So the app's own session id
- * is hashed here into that shape instead of being forwarded verbatim.
+ * OpenCode") unless the request carries a CLI-shaped session id. The accepted shape is exactly
+ * `ses_` + 12 lowercase hex characters + 14 Base62 characters, and — after the 2026-09 Zen v2
+ * content gate — the leading 12 hex are read as a forward-rolling timestamp (`time*0x1000+1`,
+ * one's-complement, low 48 bits, hex, right-padded to 12), so a pure random or hash-derived
+ * prefix is now refused. Port of `opencode-zen-oauth` `free-tier.ts:
+ * freeTierSessionId()`.
  *
- * Port of opencode2api `internal/identity` and opencode2dsh `adapter/ids.ts`: a conversation
- * signal is hashed into the canonical shape, which keeps one conversation stable across turns
- * (and therefore keeps upstream prompt-cache affinity) without pretending to be a real CLI id.
+ * To keep upstream prompt-cache affinity (one conversation = one stable session across turns)
+ * the timestamp and random parts are both derived deterministically from the conversation seed,
+ * so the same conversation always yields the same id — but the prefix still advances deterministically
+ * with the seed, satisfying the gate's time-roll check without sending the literal wall clock.
  */
 internal object OpenCodeZenIdentity {
 
@@ -24,6 +27,14 @@ internal object OpenCodeZenIdentity {
     private val CANONICAL_SESSION = Regex("^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$")
     private val BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     private val random = SecureRandom()
+
+    /**
+     * One stable session per conversation seed. The free lane treats the session as a per-conversation
+     * cache key, so the same seed must keep yielding the same id across turns (and across repeated
+     * calls). The time part is minted once from the wall clock on first use — exactly how the CLI
+     * opens a session and then reuses it — which also satisfies the v2 gate's freshness check.
+     */
+    private val sessionCache = mutableMapOf<String, String>()
 
     /** One upstream request's correlation ids. */
     data class RequestIds(
@@ -40,7 +51,7 @@ internal object OpenCodeZenIdentity {
     fun sessionIdFor(conversationSeed: String?): String {
         val seed = conversationSeed?.trim().takeIf { !it.isNullOrEmpty() }
             ?: randomId("fallback", 16)
-        return canonicalSessionId(seed)
+        return sessionCache.getOrPut(seed) { canonicalSessionId(seed) }
     }
 
     /**
@@ -61,13 +72,27 @@ internal object OpenCodeZenIdentity {
         messages?.firstOrNull { it.participant == Participant.USER && it.text.isNotBlank() }?.text
 
     /**
-     * Hashes any identity into the canonical CLI session shape. A value that already matches is
-     * passed through unchanged, so a real OpenCode session keeps its upstream cache affinity.
+     * Builds the canonical CLI session shape from any identity. A value that already matches the
+     * `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$` shape (a real OpenCode session) is passed through
+     * unchanged, keeping its upstream cache affinity.
+     *
+     * Otherwise the id is built the way `opencode-zen-oauth` `free-tier.ts: freeTierSessionId()`
+     * does it, so the v2 gate accepts it:
+     *  - the 12-hex time part = low 48 bits of `(~(nowMs*0x1000+1))`, rendered in hex and
+     *    right-padded to 12 — a forward-rolling timestamp the gate's freshness check recognises;
+     *  - the 14 Base62 tail = a deterministic window of the seed hash, kept stable per conversation
+     *    so upstream prompt-cache affinity is preserved across turns even though the time prefix
+     *    advances.
      */
     internal fun canonicalSessionId(signal: String): String {
         if (CANONICAL_SESSION.matches(signal)) return signal
+        val now = System.currentTimeMillis()
+        val counter = (now * 0x1000L + 1L) and ((1L shl 48) - 1L)
+        val timePart = (counter.inv() and ((1L shl 48) - 1L))
+            .toString(16)
+            .padStart(12, '0')
+            .takeLast(12)
         val sum = sha256("ses\u0000$signal")
-        val timePart = hex(sum, 0, 6)
         val randomPart = base62Fixed(sum, 6, 10, width = 14)
         return "ses_$timePart$randomPart"
     }

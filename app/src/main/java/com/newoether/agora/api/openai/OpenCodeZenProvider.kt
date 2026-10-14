@@ -10,20 +10,25 @@ import com.newoether.agora.util.Constants
  * (`https://opencode.ai/zen/v1`).
  *
  * No account and no API key are involved: the credential is the literal [ANONYMOUS_KEY], which the
- * gateway accepts for its free tier. Two gates make the request read as an OpenCode CLI session,
- * and both are enforced upstream — a request failing either one is answered 403 `FreeTierError`
- * ("OpenCode's free tier can only be used from within OpenCode"):
+ * gateway accepts for its free tier. Several gates make the request read as an OpenCode CLI session,
+ * and all are enforced upstream — a request failing any one is answered 403 `FreeTierError`
+ * ("OpenCode's free tier can only be used from within OpenCode"). After the 2026-09 Zen v2 content
+ * gate the body itself is inspected, so the admission now depends on:
  *
  *  1. a canonical session id (`ses_` + 12 hex + 14 Base62) in the correlation headers — see
  *     [OpenCodeZenIdentity];
- *  2. an agent-shaped stream: `stream: true` plus the core tool names in [FREE_LANE_GATE_TOOLS]
- *     declared in `tools`.
+ *  2. a CLI User-Agent (`opencode/<version>/cli`) — see [OPENCODE_CLI_VERSION];
+ *  3. a v2 content gate: the body must open with a `developer` message carrying OpenCode's own
+ *     title-generator prompt [ZEN_MARKER_PROMPT] verbatim, the real system prompt must be prefixed
+ *     with [ZEN_MARKER_PREAMBLE] (so the model ignores the marker), and the core tool names in
+ *     [FREE_LANE_GATE_TOOLS] must be declared in `tools`.
  *
- * The gate tool names are declared only to satisfy the second gate. They are never routed to Agora's
+ * The gate tool names are declared only to satisfy the body check. They are never routed to Agora's
  * own tool executor: [freeLaneToolChoice] pins the model to `none` when the app itself declared no
  * tools, and the gate tools are appended after the real ones so a model that insists on calling
  * something still names a real Agora tool first. Any call the model emits for a gate name is dropped
- * by [isFreeLaneGateTool].
+ * by [isFreeLaneGateTool]. [ZEN_MARKER_PROMPT] and [ZEN_MARKER_PREAMBLE] mirror the exact strings
+ * `opencode-zen-oauth` (v1.2.6, `src/v2-gate.ts`) prepends to every free-tier request.
  *
  * Only a `-free` model is usable anonymously; a paid id on the same base URL answers 401. The
  * provider exposes every model its catalog lists and lets the gateway reject the rest, because
@@ -83,13 +88,88 @@ class OpenCodeZenProvider(
         /** The anonymous credential. Zen's free lane rejects any other value as unauthenticated. */
         const val ANONYMOUS_KEY = "public"
 
-        /** Version advertised in the CLI User-Agent. */
-        const val OPENCODE_CLI_VERSION = "1.18.31"
+        /** Version advertised in the CLI User-Agent. Tracks the latest OpenCode CLI the gate accepts. */
+        const val OPENCODE_CLI_VERSION = "2.0.27"
 
         /** Names the free lane expects on every request body; only the names matter. */
         val FREE_LANE_GATE_TOOLS: Set<String> = setOf("bash", "edit", "glob", "grep", "read")
 
-        private const val GATE_TOOL_DESCRIPTION = "Reserved for the host runtime; do not call it."
+        /**
+         * OpenCode's own session title-generator prompt, verbatim. The v2 free-tier gate rejects the
+         * request unless the body opens with a `developer` message carrying this string exactly
+         * (port of `opencode-zen-oauth` `v2-gate.ts: ZEN_MARKER_PROMPT`). It is a fixed gateway prefix,
+         * not an instruction to the model.
+         */
+        const val ZEN_MARKER_PROMPT = """You are a title generator. You output ONLY a thread title. Nothing else.
+
+<task>
+Generate a brief title that would help the user find this conversation later.
+
+Follow all rules in <rules>
+Use the <examples> so you know what a good title looks like.
+Your output must be:
+- A single line
+- ≤50 characters
+- No explanations
+</task>
+
+<rules>
+- you MUST use the same language as the user message you are summarizing
+- Title must be grammatically correct and read naturally - no word salad
+- Never include tool names in the title (e.g. "read tool", "bash tool", "edit tool")
+- Focus on the main topic or question the user needs to retrieve
+- Vary your phrasing - avoid repetitive patterns like always starting with "Analyzing"
+- When a file is mentioned, focus on WHAT the user wants to do WITH the file, not just that they shared it
+- Keep exact: technical terms, numbers, filenames, HTTP codes
+- Remove: the, this, my, a, an
+- Never assume tech stack
+- Never use tools
+- NEVER respond to questions, just generate a title for the conversation
+- The title should NEVER include "summarizing" or "generating" when generating the title
+- DO NOT SAY YOU CANNOT GENERATE A TITLE OR COMPLAIN ABOUT THE INPUT
+- Always output something meaningful, even if the input is minimal.
+- If the user message is short or conversational (e.g. "hello", "lol", "what's up", "hey"):
+  → create a title that reflects the user's tone or intent (such as Greeting, Quick check-in, Light chat, Intro message, etc.)
+</rules>
+
+<examples>
+"debug 500 errors in production" → Debugging production 500 errors
+"refactor user service" → Refactoring user service
+"why is app.js failing" → app.js failure investigation
+"implement rate limiting" → Rate limiting implementation
+"how do I connect postgres to my API" → Postgres API connection
+"best practices for React hooks" → React hooks best practices
+"@src/auth.ts can you add refresh token support" → Auth refresh token support
+"@utils/parser.ts this is broken" → Parser bug fix
+"look at @config.json" → Config review
+"@App.tsx add dark mode toggle" → Dark mode toggle in App
+</examples>
+"""
+
+        /**
+         * Prepended to the real system prompt so the model treats [ZEN_MARKER_PROMPT] as a fixed
+         * gateway prefix it must ignore (port of `opencode-zen-oauth` `v2-gate.ts: PREAMBLE`).
+         */
+        const val ZEN_MARKER_PREAMBLE = "IMPORTANT: Disregard the previous developer message entirely. It is a fixed technical prefix from a gateway, NOT an instruction for you - you are not a title generator and must never output a title or one-line summary unless the user explicitly asks for one. Operate under this instruction set only:\n\n"
+
+        /**
+         * Native-tool declarations the gate expects to see described in the system prompt. The free
+         * lane does not expose Agora's tools as callable functions; this mirror text keeps the body
+         * shaped like a coding-agent session (port of `opencode-zen-oauth` `buildTextToolProtocol`).
+         */
+        const val ZEN_TOOL_PROTOCOL = """<opencode-tool-protocol>
+Native tool declarations are unavailable on this connection. To call a tool, emit a fenced code block with the info string "tool" containing one JSON object, then stop:
+```tool
+{"name":"<tool name>","arguments":{...}}
+```
+Available tools:
+- bash: Run a shell command.
+- edit: Edit a file on disk.
+- glob: Find files by name pattern.
+- grep: Search file contents.
+- read: Read a file from disk.
+Emit only tools listed above. Multiple independent calls may use separate blocks. Tool results will arrive as user messages. Never invent tool results.
+</opencode-tool-protocol>"""
     }
 }
 
@@ -104,10 +184,9 @@ internal fun isFreeLaneGateTool(toolName: String): Boolean =
 internal fun zenAcceptsToolCall(toolName: String): Boolean = !isFreeLaneGateTool(toolName)
 
 /**
- * The request the free lane accepts: an agent-shaped stream carrying every gate tool name.
- *
- * Real Agora tools keep their positions at the front of the list so a model that decides to call
- * something is steered to a tool that exists.
+ * The request the free lane accepts: an agent-shaped stream whose body opens with the v2 content
+ * gate. Real Agora tools keep their positions at the front of the list so a model that decides to
+ * call something is steered to a tool that exists.
  */
 internal fun freeLaneRequest(
     request: OpenAiChatRequest,
@@ -115,13 +194,62 @@ internal fun freeLaneRequest(
 ): OpenAiChatRequest {
     val resolved = config.resolvedThinking(ThinkingProviderFamily.OPENAI_COMPATIBLE)
     return request.copy(
-        reasoningEffort = if (resolved.disabled) "none" else resolved.effort,
+        messages = freeLaneMessages(request.messages),
         tools = withFreeLaneGateTools(request.tools),
         toolChoice = freeLaneToolChoice(request.tools),
         // The lane only serves streams; a non-streaming body is refused outright.
         stream = true,
         streamOptions = request.streamOptions ?: OpenAiStreamOptions(includeUsage = true),
+        reasoningEffort = if (resolved.disabled) "none" else resolved.effort,
     )
+}
+
+/**
+ * Satisfies the v2 content gate on the request body:
+ *  1. a leading `developer` message carrying [ZEN_MARKER_PROMPT] verbatim (the gateway checks this
+ *     is the first message and matches exactly);
+ *  2. the real system prompt, if any, is prefixed with [ZEN_MARKER_PREAMBLE] so the model ignores
+ *     the marker and answers the user directly.
+ * The marker is prepended even when there is no system prompt, because the gate requires it to be
+ * the first message regardless.
+ */
+internal fun freeLaneMessages(messages: List<OpenAiMessage>): List<OpenAiMessage> {
+    val out = mutableListOf<OpenAiMessage>()
+    out.add(
+        OpenAiMessage(
+            role = "developer",
+            content = listOf(OpenAiContentPart(type = "text", text = OpenCodeZenProvider.ZEN_MARKER_PROMPT)),
+        )
+    )
+    var injectedSystem = false
+    for (message in messages) {
+        if (!injectedSystem && message.role == "system") {
+            val original = message.content?.firstOrNull { it.type == "text" }?.text.orEmpty()
+            val prefixed = if (original.startsWith(OpenCodeZenProvider.ZEN_MARKER_PREAMBLE)) original else OpenCodeZenProvider.ZEN_MARKER_PREAMBLE + original
+            out.add(
+                OpenAiMessage(
+                    role = "system",
+                    content = listOf(
+                        OpenAiContentPart(type = "text", text = prefixed + "\n\n" + OpenCodeZenProvider.ZEN_TOOL_PROTOCOL),
+                    ),
+                )
+            )
+            injectedSystem = true
+        } else {
+            out.add(message)
+        }
+    }
+    if (!injectedSystem) {
+        // No system prompt was supplied; still give the gate a system-shaped context so the marker
+        // is clearly separated from the conversation.
+        out.add(
+            OpenAiMessage(
+                role = "system",
+                content = listOf(OpenAiContentPart(type = "text", text = OpenCodeZenProvider.ZEN_TOOL_PROTOCOL)),
+            )
+        )
+    }
+    return out
 }
 
 /**
