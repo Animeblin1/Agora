@@ -218,6 +218,10 @@ and WebUI share this contract.
   its existing credential-cleaned diagnostic fidelity.
 - Page text inherits the application Material typography. Do not apply a
   page-local monospace family to capture summaries, context, or raw details.
+- Diagnostic JSON and Summary Text export filenames include the device-local
+  export date and time with milliseconds in `yyyy-MM-dd_HH-mm-ss-SSS` form.
+  Filename and content `generatedAtMillis` derive from the same export instant.
+  Existing format identifiers, extensions, MIME types and capture content remain unchanged.
 
 ## Copy and localization
 

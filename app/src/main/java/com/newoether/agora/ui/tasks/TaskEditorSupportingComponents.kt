@@ -619,7 +619,8 @@ internal fun ModelPickerDialog(
 @Composable
 private fun ChoiceRow(label: String, sub: String?, selected: Boolean, onClick: () -> Unit) {
     SettingsItem(
-        modifier = Modifier.clickable(onClick = onClick),
+        // Dialog options press inside the shared rounded option highlight, never a bare rectangle.
+        modifier = Modifier.optionClickable(onClick = onClick),
         headlineContent = {
             Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
         },

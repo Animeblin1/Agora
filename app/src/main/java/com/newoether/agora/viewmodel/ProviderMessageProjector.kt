@@ -12,13 +12,13 @@ import com.newoether.agora.util.Constants
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** Removes duplicate aggregate tool segments after their durable protocol rows are expanded. */
+/** Removes duplicate client tool segments while retaining provider-native replay segments. */
 internal fun stripAggregatedToolSegments(toolCallJson: String?): String? {
     val raw = toolCallJson ?: return null
     val segments = runCatching {
         Json.decodeFromString<List<MessageSegment>>(raw)
     }.getOrNull() ?: return null
-    val retained = segments.filterNot { it.type == "tool" }
+    val retained = segments.filterNot { it.type == "tool" && !it.isProviderHostedTool }
     return retained.takeIf { it.isNotEmpty() }?.let { Json.encodeToString(it) }
 }
 

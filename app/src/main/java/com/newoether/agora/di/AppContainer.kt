@@ -371,6 +371,7 @@ class AppContainer(
             },
             toolImages = com.newoether.agora.webui.WebUiToolImages(
                 directory = java.io.File(appContext.filesDir, "tool-media"),
+                attachmentDirectory = appContext.filesDir,
                 loadMessage = { conversationId, messageId ->
                     com.newoether.agora.viewmodel.ConversationMessagePayloadHydration(
                         conversations = conversationRepository,
@@ -409,6 +410,31 @@ class AppContainer(
                     sandboxHomeDir = { sandboxManagerFactory?.takeIf { it.isAvailable() }?.let { java.io.File(appContext.filesDir, "sandbox-home") } },
                 )
             },
+            forkShare = chatRuntime.conversationForkShare,
+            conversationLifecycle = chatRuntime.conversationLifecycle,
+            generation = chatRuntime.messageGeneration,
+            askUser = askUserController,
+            shellConfirmation = shellConfirmationController,
+            contextAccounting = com.newoether.agora.webui.WebUiContextAccounting(
+                conversations = conversationRepository,
+                requestBuilder = chatRuntime.requestBuilder,
+                generationManager = { chatRuntime.generationManager },
+                generationErrorFormatter = { raw ->
+                    com.newoether.agora.viewmodel.normalizePersistedGenerationErrorText(appContext, raw)
+                },
+                compactThresholdPercent = settingsRepository.contextCompactThresholdPercent,
+                compactEnabled = settingsRepository.contextCompactEnabled,
+            ),
+            search = { query ->
+                if (settingsRepository.manualSearchMethod.value == com.newoether.agora.util.Constants.SEARCH_METHOD_RAG) {
+                    com.newoether.agora.viewmodel.SemanticSearchService(
+                        settings = settingsRepository,
+                        activeEmbeddingConfig = { chatRuntime.ragManager.activeEmbeddingModel.value },
+                        resolveEmbeddingApiKey = chatRuntime.ragManager::resolveEmbeddingApiKey,
+                        search = chatRuntime.generationManager::semanticSearch,
+                    ).search(query, 20)
+                } else conversationRepository.searchMessages(query, 20).map { it to 0f }
+            },
             display = kotlinx.coroutines.flow.combine(
                 settingsRepository.appLanguage,
                 settingsRepository.toolCallDisplayMode,
@@ -437,6 +463,14 @@ class AppContainer(
                 ),
             ) { context, (blur, reduceMotion) ->
                 context.copy(blurEffectsEnabled = blur, reduceMotion = reduceMotion)
+            }.combine(
+                kotlinx.coroutines.flow.combine(
+                    settingsRepository.modelAliases,
+                    settingsRepository.modelProviderNames,
+                    ::Pair,
+                ),
+            ) { context, (aliases, providerNames) ->
+                context.copy(modelAliases = aliases, modelProviderNames = providerNames)
             },
         )
     }

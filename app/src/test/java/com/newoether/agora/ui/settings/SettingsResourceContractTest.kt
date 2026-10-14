@@ -12,7 +12,7 @@ class SettingsResourceContractTest {
     @Test
     fun anthropicCacheControlsFollowProviderScopeAndAppearanceInteractions() {
         val detail = readSettingsSource("SettingsProviderDetailPage.kt")
-        val gate = "if (isAnthropicProtocolProvider(currentName, customProviders))"
+        val gate = "if (supportsPromptCacheSetting(currentName, customProviders))"
         val apiKeys = readSettingsSource("ProviderApiKeysSettings.kt")
         val keysPosition = detail.indexOf("ProviderApiKeysSettings(")
         assertTrue(keysPosition >= 0 && detail.indexOf(gate) > keysPosition)
@@ -23,7 +23,12 @@ class SettingsResourceContractTest {
         assertTrue(controls.contains("Switch(checked = cacheEnabled, onCheckedChange = null)"))
         assertTrue(controls.contains("role = Role.Switch"))
         assertTrue(controls.contains("setAnthropicCacheEnabled(providerId, it)"))
-        assertTrue(controls.indexOf("if (cacheEnabled)") < controls.indexOf("R.string.provider_cache_duration"))
+        // OpenAI endpoints share the switch; only Anthropic exposes the TTL picker.
+        assertTrue(controls.contains("val cacheTtlSupported = isAnthropicProtocolProvider(currentName, customProviders)"))
+        assertTrue(
+            controls.indexOf("if (cacheEnabled && cacheTtlSupported)") in
+                0 until controls.indexOf("R.string.provider_cache_duration"),
+        )
         assertTrue(controls.contains("listOf(\"5m\", \"1h\")"))
         assertTrue(controls.contains("setAnthropicCacheTtl(providerId, ttl)"))
         assertTrue(controls.contains("Modifier.clickable { expanded = true }"))

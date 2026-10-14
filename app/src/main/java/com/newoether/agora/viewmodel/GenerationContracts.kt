@@ -41,6 +41,8 @@ data class GenerationConfig(
     val responsesApiEnabled: Boolean = false,
     val anthropicCacheEnabled: Boolean = true,
     val anthropicCacheTtl: String = "1h",
+    /** Send the conversation ID as prompt_cache_key on OpenAI-protocol requests. */
+    val promptCacheKeyEnabled: Boolean = false,
     val openAiWebSearchEnabled: Boolean = false,
     val baseUrl: String?,
     val userPrepend: String? = null,

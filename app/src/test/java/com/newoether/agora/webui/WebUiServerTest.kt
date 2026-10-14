@@ -29,6 +29,12 @@ import org.junit.Test
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import androidx.datastore.core.okio.OkioStorage
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.PreferencesSerializer
+import kotlinx.coroutines.*
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.model.MessageStatus
@@ -70,6 +76,7 @@ class WebUiServerTest {
         assertTrue(cookie.startsWith("${WebUiServer.SESSION_COOKIE}="))
         assertTrue(cookie.contains("HttpOnly"))
         assertTrue(cookie.contains("SameSite=Strict"))
+        assertTrue(cookie.contains("Max-Age=${WebUiServer.COOKIE_MAX_AGE}"))
         val token = cookie.substringAfter('=').substringBefore(';')
         assertTrue(auth.isValidSession(token))
 
@@ -77,6 +84,7 @@ class WebUiServerTest {
             header(HttpHeaders.Cookie, "${WebUiServer.SESSION_COOKIE}=$token")
         }
         assertEquals("""{"signedIn":true}""", session.bodyAsText())
+        assertTrue(session.headers[HttpHeaders.SetCookie]!!.contains("Max-Age=${WebUiServer.COOKIE_MAX_AGE}"))
 
         val logout = client.post("/api/logout") {
             header(HttpHeaders.Cookie, "${WebUiServer.SESSION_COOKIE}=$token")
@@ -84,6 +92,7 @@ class WebUiServerTest {
             setBody("{}")
         }
         assertEquals(HttpStatusCode.NoContent, logout.status)
+        assertTrue(logout.headers[HttpHeaders.SetCookie]!!.contains("Max-Age=0"))
         assertFalse(auth.isValidSession(token))
         assertEquals("""{"signedIn":false}""", client.get("/api/session").bodyAsText())
     }
@@ -316,6 +325,41 @@ class WebUiServerTest {
             assertEquals(beforeLogout, loads)
         }
     }
+    @Test
+    fun persistedMessageAttachmentRequiresAuthAndOwnedPath() {
+        val root = temporary.newFolder("attachment-root")
+        val imageRoot = File(root, "images").apply { mkdir() }
+        val image = File(imageRoot, "photo.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val outside = temporary.newFile("outside.jpg").apply { writeBytes(byteArrayOf(4)) }
+        val normalized = File(root, "img_00000000-0000-0000-0000-000000000001.jpg")
+            .apply { writeBytes(byteArrayOf(5)) }
+        var loads = 0
+        val images = WebUiToolImages(root, root) { conversation, id ->
+            loads++
+            if (conversation != "c") null else ChatMessage(id = id, text = "", participant = Participant.USER,
+                images = listOf(when (id) { "outside" -> outside.path; "normalized" -> normalized.path; else -> image.path }))
+        }
+        webUi(toolImages = images) { auth ->
+            val path = "/api/message-attachments/c/m/0"
+            assertEquals(HttpStatusCode.Forbidden, client.get(path).status)
+            assertEquals(0, loads)
+            val token = sessionToken()
+            suspend fun request(target: String, origin: String? = null) = client.get(target) {
+                header(HttpHeaders.Cookie, "${WebUiServer.SESSION_COOKIE}=$token")
+                origin?.let { header(HttpHeaders.Origin, it) }
+            }
+            assertEquals(HttpStatusCode.Forbidden, request(path, "https://other.example").status)
+            val response = request(path)
+            assertEquals(HttpStatusCode.OK, response.status)
+            org.junit.Assert.assertArrayEquals(byteArrayOf(1, 2, 3), response.body<ByteArray>())
+            assertEquals("no-store", response.headers[HttpHeaders.CacheControl])
+            assertEquals(HttpStatusCode.OK, request("/api/message-attachments/c/normalized/0").status)
+            assertEquals(HttpStatusCode.NotFound, request("/api/message-attachments/c/outside/0").status)
+            assertEquals(HttpStatusCode.NotFound, request("/api/message-attachments/c/m/4").status)
+            auth.logout(token)
+            assertEquals(HttpStatusCode.Forbidden, request(path).status)
+        }
+    }
 
     @Test
     fun imageSessionRevokedDuringMessageReadNeverReceivesBytes() {
@@ -461,7 +505,13 @@ class WebUiServerTest {
             { _, _, _, _, _, _, _ -> false },
         block: suspend ApplicationTestBuilder.(WebUiAuth) -> Unit,
     ) {
-        val auth = WebUiAuth(passwordHash = { hash }, hasher = hasher, clock = { 0L })
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val path = temporary.newFolder().resolve("auth.preferences_pb")
+        val store = WebUiSettingsStore(PreferenceDataStoreFactory.create(scope = scope,
+            storage = OkioStorage(FileSystem.SYSTEM, PreferencesSerializer) { path.absolutePath.toPath() },
+        ))
+        if (hash != null) runBlocking { store.savePasswordHash(hash) }
+        val auth = WebUiAuth(store = store, hasher = hasher, clock = { 0L })
         val server = WebUiServer(
             auth = auth,
             readAsset = assets::get,
@@ -471,9 +521,11 @@ class WebUiServerTest {
             upload = upload,
             previewAttachment = previewAttachment,
         )
-        testApplication {
-            application { server.install(this) }
-            block(auth)
-        }
+        try {
+            testApplication {
+                application { server.install(this) }
+                block(auth)
+            }
+        } finally { runBlocking { scope.cancel(); scope.coroutineContext[Job]!!.join() } }
     }
 }

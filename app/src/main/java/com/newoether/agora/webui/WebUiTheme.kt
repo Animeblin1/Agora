@@ -26,9 +26,16 @@ internal data class WebUiTheme(
     /** CSS custom properties consumed by `style.css`: `--md-<role>` and `--app-font`. */
     fun toCss(): String = buildString {
         if (font != WebUiFont.System) {
-            append("@font-face{font-family:\"AgoraApp\";src:url(\"$FONT_PATH?v=")
-            append(fontVersion())
-            append("\");font-weight:100 900;font-display:swap}\n")
+            // One face per weight the Compose FontFamily registers (OutfitFamily and the custom
+            // family both list exactly these). CSS font matching then resolves a requested weight
+            // the way Compose's FontMatcher does - SemiBold (600) lands on the 700 face - and a
+            // variable font's wght axis is clamped to that face's single weight, so the browser
+            // never draws a weight the phone cannot.
+            for (weight in COMPOSE_FAMILY_WEIGHTS) {
+                append("@font-face{font-family:\"AgoraApp\";src:url(\"$FONT_PATH?v=")
+                append(fontVersion())
+                append("\");font-weight:").append(weight).append(";font-display:swap}\n")
+            }
         }
         append(":root{color-scheme:")
         append(if (dark) "dark" else "light")
@@ -50,6 +57,9 @@ internal data class WebUiTheme(
 
     companion object {
         const val FONT_PATH = "/fonts/app"
+
+        /** ExtraLight, Light, Normal, Medium and Bold: the entries of OutfitFamily in Type.kt. */
+        internal val COMPOSE_FAMILY_WEIGHTS = listOf(200, 300, 400, 500, 700)
         private const val SYSTEM_STACK = "system-ui,-apple-system,\"Segoe UI\",Roboto,sans-serif"
 
         private fun String.toKebabCase(): String =

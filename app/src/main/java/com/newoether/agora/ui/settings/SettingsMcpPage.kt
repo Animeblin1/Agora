@@ -63,6 +63,7 @@ import com.newoether.agora.ui.components.AgoraDropdownMenu
 import com.newoether.agora.ui.components.AgoraDropdownMenuItem
 import com.newoether.agora.ui.components.SecretVisibilityToggle
 import com.newoether.agora.ui.components.rememberSecretVisible
+import com.newoether.agora.ui.components.rememberUnsavedChangesBack
 import com.newoether.agora.ui.components.secretVisualTransformation
 
 private data class McpEditorRoute(
@@ -353,6 +354,13 @@ private fun McpServerEditor(
     val parsedHeaders = remember(headerRows) { buildMcpHeaders(headerRows) }
     val validUrl = remember(draft.url) { isValidMcpUrl(draft.url) }
     val canSave = draft.name.isNotBlank() && validUrl
+    val hasUnsavedChanges = draft != initial || parsedHeaders != initial.headers
+    val guardedBack = rememberUnsavedChangesBack(
+        hasUnsavedChanges = hasUnsavedChanges,
+        onBack = onBack,
+    )
+    // Registered after the page-level handler, so it takes system back while the editor is shown.
+    BackHandler { guardedBack() }
     val scrollState = rememberScrollState()
     fun save() {
         if (!canSave) return
@@ -372,7 +380,7 @@ private fun McpServerEditor(
 
     CollapsingSettingsScaffold(
         title = stringResource(if (isNew) R.string.mcp_add_server else R.string.mcp_edit_server),
-        onBack = onBack,
+        onBack = guardedBack,
         scrollState = scrollState,
         floatingActionButton = { if (showDocFab) DocumentationFab("mcp.md") },
         actions = {

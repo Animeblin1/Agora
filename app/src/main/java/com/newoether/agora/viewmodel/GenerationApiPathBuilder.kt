@@ -123,7 +123,7 @@ internal class GenerationApiPathBuilder(
                     frequencyPenalty = config.frequencyPenalty,
                     presencePenalty = config.presencePenalty,
                     promptCacheKey = request.conversationId.takeIf {
-                        config.providerName == Constants.PROVIDER_OPENAI
+                        config.promptCacheKeyEnabled
                     },
                     // Zen's free lane refuses any session id that is not in the OpenCode CLI
                     // shape, so the conversation id is the seed the provider hashes, not the

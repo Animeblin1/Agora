@@ -44,7 +44,8 @@ import com.newoether.agora.data.ApiKeyEntry
 import com.newoether.agora.data.CustomEndpointProtocol
 import com.newoether.agora.data.CustomProviderNamePolicy
 import com.newoether.agora.data.isAnthropicProtocolProvider
-import com.newoether.agora.data.isAnthropicCacheEnabledForProvider
+import com.newoether.agora.data.isPromptCacheSettingEnabledForProvider
+import com.newoether.agora.data.supportsPromptCacheSetting
 import com.newoether.agora.data.anthropicCacheTtlForProvider
 import com.newoether.agora.data.LocalChatModelConfig
 import com.newoether.agora.ui.components.CustomEndpointProtocolSelector
@@ -493,9 +494,11 @@ fun SettingsProviderDetailPage(
                     onEditKey = { showKeyDialog = it },
                     onDeleteKey = { showDeleteKeyConfirm = it },
                 )
-                if (isAnthropicProtocolProvider(currentName, customProviders)) {
+                if (supportsPromptCacheSetting(currentName, customProviders)) {
                     val providerId = customConfig?.providerId ?: currentName
-                    val cacheEnabled = isAnthropicCacheEnabledForProvider(
+                    // OpenAI-protocol endpoints share the switch (prompt_cache_key) but have no TTL.
+                    val cacheTtlSupported = isAnthropicProtocolProvider(currentName, customProviders)
+                    val cacheEnabled = isPromptCacheSettingEnabledForProvider(
                         providerId, anthropicCacheEnabled, customProviders,
                     )
                     val cacheTtl = anthropicCacheTtlForProvider(
@@ -526,7 +529,7 @@ fun SettingsProviderDetailPage(
                                     ),
                                 )
                             }
-                            if (cacheEnabled) {
+                            if (cacheEnabled && cacheTtlSupported) {
                                 add {
                                     var expanded by remember(providerId) { mutableStateOf(false) }
                                     SettingsItem(
