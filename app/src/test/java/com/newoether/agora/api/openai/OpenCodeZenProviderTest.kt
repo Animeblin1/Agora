@@ -20,6 +20,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class OpenCodeZenProviderTest {
 
@@ -79,6 +82,26 @@ class OpenCodeZenProviderTest {
         // Tool choice passes through unchanged: no `none` is forced when the app declared no tools.
         assertNull(customized.toolChoice)
         assertTrue(customized.stream)
+    }
+
+    @Test
+    fun gateToolsSerializeExactlyLikeTheReferenceSnapshot() {
+        val snapshot = requireNotNull(javaClass.getResourceAsStream("/opencode/core-tools.json"))
+            .bufferedReader().use { it.readText() }
+        val expected = Json.parseToJsonElement(snapshot).jsonObject
+        val actual = freeLaneRequest(request(), config()).tools.orEmpty()
+        assertEquals(expected.keys, actual.map { it.function.name }.toSet())
+        actual.forEach { tool ->
+            val reference = requireNotNull(expected[tool.function.name]).jsonObject
+            assertEquals(reference["description"]?.jsonPrimitive?.content, tool.function.description)
+            // Exercise the real serializer, not only the in-memory schema field: parameter
+            // descriptions and all JSON Schema keywords must survive onto the wire.
+            val wire = Json.parseToJsonElement(
+                Json.encodeToString(ToolDefinition.serializer(), tool),
+            ).jsonObject
+            val function = requireNotNull(wire["function"]).jsonObject
+            assertEquals(reference["parameters"], function["parameters"])
+        }
     }
 
     @Test
