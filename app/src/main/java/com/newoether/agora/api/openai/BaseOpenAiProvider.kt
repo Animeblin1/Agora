@@ -88,6 +88,18 @@ abstract class BaseOpenAiProvider : LlmProvider {
     open fun resolveApiKey(apiKey: String): String = apiKey
 
     /**
+     * The base URL chat and responses requests are posted to. The default honors an explicit
+     * per-profile base URL and falls back to [defaultBaseUrl]; a provider whose traffic must
+     * move off that base depending on the configuration (an anonymous lane on a separate
+     * endpoint, for instance) overrides this.
+     *
+     * Open rather than protected for the same reason as [modelFetchHeaders]: routing is
+     * verifiable unit-test surface, and a test double cannot override a protected member.
+     */
+    open fun chatEndpointBaseUrl(config: ProviderConfig): String =
+        config.baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
+
+    /**
      * Parse one OpenAI-compatible delta into native thought and raw answer events.
      * Provider-neutral inline marker recovery is owned by ProviderStreamNormalizer.
      */
@@ -128,7 +140,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
         messages: List<ChatMessage>,
         config: ProviderConfig
     ): Flow<StreamEvent> = flow {
-        val baseUrl = config.baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
+        val baseUrl = chatEndpointBaseUrl(config)
         val endpointUrls = openAiEndpointCandidates(
             baseUrl = baseUrl,
             path = if (config.responsesApiEnabled) "responses" else "chat/completions",

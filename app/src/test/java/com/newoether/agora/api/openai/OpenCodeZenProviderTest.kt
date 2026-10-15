@@ -301,6 +301,37 @@ class OpenCodeZenProviderTest {
     }
 
     @Test
+    fun anonymousGenerationMovesToTheInferenceBase() {
+        // Proven by A/B probe: the genuine free-lane body is 403 on /zen/v1 and streams 200
+        // on /inference/v1, so a blank key with no custom base must leave the Zen base.
+        assertEquals(
+            "https://opencode.ai/inference/v1",
+            provider.chatEndpointBaseUrl(config()),
+        )
+        assertEquals(
+            "https://opencode.ai/inference/v1",
+            provider.chatEndpointBaseUrl(config().copy(baseUrl = "https://opencode.ai/zen/v1")),
+        )
+        // A real Zen key keeps the paid lane: its ids live on the Zen base.
+        assertEquals(
+            "https://opencode.ai/zen/v1",
+            provider.chatEndpointBaseUrl(config().copy(apiKey = "sk-zen")),
+        )
+        // An explicitly configured base (a local proxy, for instance) is never hijacked,
+        // keyed or not.
+        assertEquals(
+            "http://localhost:8080",
+            provider.chatEndpointBaseUrl(config().copy(baseUrl = "http://localhost:8080/")),
+        )
+        assertEquals(
+            "http://localhost:8080",
+            provider.chatEndpointBaseUrl(
+                config().copy(apiKey = "sk-zen", baseUrl = "http://localhost:8080/"),
+            ),
+        )
+    }
+
+    @Test
     fun reasoningArrivesOnceWhetherStructuredOrBare() {
         // Zen repeats the same text in reasoning_details and in the bare `reasoning` string.
         assertEquals(

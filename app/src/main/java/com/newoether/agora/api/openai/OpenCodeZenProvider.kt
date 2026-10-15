@@ -8,31 +8,35 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
 /**
- * OpenCode Zen's anonymous free lane, served through the OpenAI-compatible contract
- * (`https://opencode.ai/zen/v1`).
+ * OpenCode Zen's anonymous free lane, served through the OpenAI-compatible contract.
  *
  * No account and no API key are involved: the credential is the literal [ANONYMOUS_KEY], which the
  * gateway accepts for its free tier. Several gates make the request read as an OpenCode CLI session,
  * and all are enforced upstream — a request failing any one is answered 403 `FreeTierError`
  * ("OpenCode's free tier can only be used from within OpenCode"). The admission depends on:
  *
- *  1. a canonical session id (`ses_` + 12 hex + 14 Base62) mirrored across the correlation headers —
+ *  1. the anonymous endpoint (`https://opencode.ai/inference/v1`): the same body posted to
+ *     `https://opencode.ai/zen/v1` is refused 403 `FreeTierError` even with identical headers;
+ *  2. a canonical session id (`ses_` + 12 hex + 14 Base62) mirrored across the correlation headers —
  *     see [OpenCodeZenIdentity];
- *  2. a CLI User-Agent (`opencode/latest/<version>/cli`) — see [OPENCODE_CLI_VERSION];
- *  3. a bare 40-character hex `x-opencode-project` id (the gateway's own `prj_` form is rejected);
- *  4. an agent-shaped streaming body whose `tools` declare the genuine OpenCode core tools
+ *  3. a CLI User-Agent (`opencode/latest/<version>/cli`) — see [OPENCODE_CLI_VERSION];
+ *  4. a bare 40-character hex `x-opencode-project` id (the gateway's own `prj_` form is rejected);
+ *  5. an agent-shaped streaming body whose `tools` declare the genuine OpenCode core tools
  *     ([FREE_LANE_GATE_TOOLS]: `shell/edit/glob/grep/read`) with their real parameter schemas, so the
  *     upstream model sees a coding-agent context.
  *
  * The body is otherwise sent verbatim: messages and tool_choice pass through unchanged, no `developer`
  * message or marker text is injected, and the model is free to call the tools. The gate tools are
  * declared only to shape the request; if the model emits one, Agora has no executor for it and drops
- * the call (see [zenAcceptsToolCall]). This mirrors the opencode2api gateway, which proxies the very
- * same `https://opencode.ai/zen/v1` endpoint on the anonymous `Bearer public` credential.
+ * the call (see [zenAcceptsToolCall]). This mirrors the opencode2api gateway, whose anonymous lane
+ * (`Bearer public`) targets `https://opencode.ai/inference` while the keyed lane stays on
+ * `https://opencode.ai/zen`.
  *
  * Only a `-free` model is usable anonymously; a paid id on the same base URL answers 401. The
  * provider exposes every model its catalog lists and lets the gateway reject the rest, because
- * `/v1/models` publishes no per-model tier and the roster rotates constantly.
+ * `/v1/models` publishes no per-model tier and the roster rotates constantly. Model discovery
+ * stays on `https://opencode.ai/zen/v1/models`, which answers the anonymous credential; only
+ * generation moves to the inference base.
  */
 class OpenCodeZenProvider(
     private val appVersion: String = "?",
@@ -41,9 +45,22 @@ class OpenCodeZenProvider(
     override val defaultBaseUrl: String = "https://opencode.ai/zen/v1"
 
     /**
+     * Anonymous generation is admitted only on the inference base; a keyed request keeps the
+     * Zen base its paid ids live on, and an explicitly configured base (a local proxy, for
+     * instance) is never hijacked. Model discovery is unaffected and stays on the Zen base.
+     */
+    override fun chatEndpointBaseUrl(config: ProviderConfig): String {
+        val configured = config.baseUrl?.trimEnd('/')?.ifBlank { null }
+        if (config.apiKey.isBlank() && (configured == null || configured == defaultBaseUrl)) {
+            return ANONYMOUS_BASE_URL
+        }
+        return configured ?: defaultBaseUrl
+    }
+
+    /**
      * A blank key is the normal configuration here, not a misconfiguration: the lane is anonymous
      * and [ANONYMOUS_KEY] is the credential it accepts. A user-supplied key still wins, so someone
-     * with a real Zen key can use the paid ids on the same endpoint.
+     * with a real Zen key can use the paid ids on the Zen base.
      */
     override fun resolveApiKey(apiKey: String): String =
         apiKey.ifBlank { ANONYMOUS_KEY }
@@ -87,6 +104,13 @@ class OpenCodeZenProvider(
     internal companion object {
         /** The anonymous credential. Zen's free lane rejects any other value as unauthenticated. */
         const val ANONYMOUS_KEY = "public"
+
+        /**
+         * The base anonymous generation is posted to. Proven by A/B probe: the genuine free-lane
+         * body answers 403 `FreeTierError` on `https://opencode.ai/zen/v1/chat/completions` and
+         * streams 200 on `https://opencode.ai/inference/v1/chat/completions`.
+         */
+        const val ANONYMOUS_BASE_URL = "https://opencode.ai/inference/v1"
 
         /** Version advertised in the CLI User-Agent. Tracks the latest OpenCode CLI the gate accepts. */
         const val OPENCODE_CLI_VERSION = "2.0.29"
