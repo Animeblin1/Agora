@@ -63,7 +63,9 @@ internal object OpenCodeZenIdentity {
         return RequestIds(
             session = session,
             request = randomId("req", 16),
-            project = stableId("prj", "agora:opencode-zen"),
+            // The free lane rejects the gateway's `prj_`-prefixed project id with 403 since
+            // 2026-10-14; it wants the client's bare 40-hex shape (sha256("opencode-project\u0000"+project)[:20]).
+            project = clientProjectID("agora:opencode-zen"),
         )
     }
 
@@ -97,9 +99,14 @@ internal object OpenCodeZenIdentity {
         return "ses_$timePart$randomPart"
     }
 
-    internal fun stableId(prefix: String, value: String): String {
-        val sum = sha256("$prefix\u0000$value")
-        return "${prefix}_${hex(sum, 0, 12)}"
+    /**
+     * The client-shaped project id the free lane accepts: a bare 40-hex string, the first 20 bytes
+     * of `sha256("opencode-project\u0000" + project)` rendered in lowercase hex. The value itself is
+     * not checked upstream, only its shape, but hashing keeps one conversation pinned to one project.
+     */
+    internal fun clientProjectID(project: String): String {
+        val sum = sha256("opencode-project\u0000$project")
+        return hex(sum, 0, 20)
     }
 
     private fun randomId(prefix: String, size: Int): String {

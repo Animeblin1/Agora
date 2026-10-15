@@ -1,6 +1,7 @@
 package com.newoether.agora.api.openai
 
 import com.newoether.agora.api.OpenAiChatRequest
+import com.newoether.agora.api.OpenAiContentPart
 import com.newoether.agora.api.OpenAiDelta
 import com.newoether.agora.api.OpenAiMessage
 import com.newoether.agora.api.OpenAiReasoningDetail
@@ -67,12 +68,16 @@ class OpenCodeZenProviderTest {
     }
 
     @Test
-    fun everyGateToolIsDeclaredEvenWithoutAnyRealTool() {
+    fun everyGateToolIsDeclaredWithGenuineSchemasEvenWithoutAnyRealTool() {
         val customized = freeLaneRequest(request(tools = null), config())
         val names = customized.tools.orEmpty().map { it.function.name }
         assertEquals(OpenCodeZenProvider.FREE_LANE_GATE_TOOLS.toList(), names)
-        // Without real tools the model must not be allowed to call a stub.
-        assertEquals("none", customized.toolChoice)
+        // The gate tools carry genuine schemas, not empty stubs.
+        customized.tools.orEmpty().forEach { def ->
+            assertTrue(def.function.name, def.function.parameters.schema != null)
+        }
+        // Tool choice passes through unchanged: no `none` is forced when the app declared no tools.
+        assertNull(customized.toolChoice)
         assertTrue(customized.stream)
     }
 
@@ -83,11 +88,45 @@ class OpenCodeZenProviderTest {
             config(),
         )
         val names = customized.tools.orEmpty().map { it.function.name }
-        assertEquals(listOf("file_read"), names.take(1))
+        assertEquals(listOf("file_read", "read"), names.take(2))
         assertTrue(names.containsAll(OpenCodeZenProvider.FREE_LANE_GATE_TOOLS))
+        // No duplicate `read`: the caller's declaration is kept, not duplicated.
         assertEquals(names.toSet().size, names.size)
         // Real tools exist, so the model keeps its own choice.
         assertNull(customized.toolChoice)
+    }
+
+    @Test
+    fun aRealToolSharingAGateNameKeepsItsBodyAndIsNotDuplicated() {
+        val customized = freeLaneRequest(
+            request(tools = listOf(tool("shell"))),
+            config(),
+        )
+        val names = customized.tools.orEmpty().map { it.function.name }
+        // The caller's `shell` is one entry; the genuine rest are appended once.
+        assertEquals(listOf("shell") + (OpenCodeZenProvider.FREE_LANE_GATE_TOOLS - "shell").toList(), names)
+        assertEquals(names.toSet().size, names.size)
+    }
+
+    @Test
+    fun messagesPassThroughVerbatimWithNoDeveloperMarker() {
+        val customized = freeLaneRequest(
+            request(tools = null, ).copy(messages = listOf(OpenAiMessage(role = "user", content = listOf(OpenAiContentPart(type = "text", text = "hi"))))),
+            config(),
+        )
+        // No `developer` role is ever injected into the body.
+        assertFalse(customized.messages.any { it.role == "developer" })
+        assertEquals(1, customized.messages.size)
+        assertEquals("user", customized.messages.first().role)
+    }
+
+    @Test
+    fun aProvidedToolChoiceIsPreserved() {
+        val customized = freeLaneRequest(
+            request(tools = listOf(tool("shell"))).copy(toolChoice = "auto"),
+            config(),
+        )
+        assertEquals("auto", customized.toolChoice)
     }
 
     @Test
@@ -98,16 +137,20 @@ class OpenCodeZenProviderTest {
     }
 
     @Test
-    fun headersCarryACanonicalSessionAcrossAllThreeNames() {
+    fun headersCarryACanonicalSessionAcrossAllNames() {
         val headers = zenHeaders(config(sessionId = "conversation-1"), "1.0")
         val session = requireNotNull(headers["x-opencode-session"])
         assertTrue(session, session.matches(Regex("^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$")))
+        assertEquals(session, headers["x-opencode-session-id"])
         assertEquals(session, headers["x-session-affinity"])
         assertEquals(session, headers["X-Session-Id"])
         assertEquals("cli", headers["x-opencode-client"])
-        assertTrue(requireNotNull(headers["User-Agent"]).startsWith("opencode/"))
-        assertTrue(requireNotNull(headers["x-opencode-request"]).startsWith("req_"))
-        assertTrue(requireNotNull(headers["x-opencode-project"]).startsWith("prj_"))
+        // OpenCode CLI User-Agent shape (no OS/arch/runtime suffix).
+        assertEquals("opencode/latest/2.0.29/cli", headers["User-Agent"])
+        // The gateway's own correlation header is dropped (rejected with 403 by the lane).
+        assertFalse(headers.containsKey("x-opencode-request"))
+        // Bare 40-hex project id, not the gateway's `prj_` form.
+        assertTrue(requireNotNull(headers["x-opencode-project"]), headers["x-opencode-project"]!!.matches(Regex("^[0-9a-f]{40}$")))
     }
 
     @Test
