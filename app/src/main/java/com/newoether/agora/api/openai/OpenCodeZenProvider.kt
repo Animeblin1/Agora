@@ -5,6 +5,7 @@ import com.newoether.agora.api.util.resolvedThinking
 import com.newoether.agora.model.ThinkingProviderFamily
 import com.newoether.agora.util.Constants
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 /**
  * OpenCode Zen's anonymous free lane, served through the OpenAI-compatible contract
