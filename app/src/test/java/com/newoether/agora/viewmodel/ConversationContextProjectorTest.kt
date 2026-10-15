@@ -462,9 +462,17 @@ class ConversationContextProjectorTest {
         )
         val firstLoad = CompletableDeferred<DurableSelectedContext>()
         val secondLoad = CompletableDeferred<DurableSelectedContext>()
-        var loadIndex = 0
+        val firstLoadStarted = CompletableDeferred<Unit>()
+        val secondLoadStarted = CompletableDeferred<Unit>()
+        val loadIndex = AtomicInteger()
         coEvery { contextLoader.load(any()) } coAnswers {
-            if (loadIndex++ == 0) firstLoad.await() else secondLoad.await()
+            if (loadIndex.getAndIncrement() == 0) {
+                firstLoadStarted.complete(Unit)
+                firstLoad.await()
+            } else {
+                secondLoadStarted.complete(Unit)
+                secondLoad.await()
+            }
         }
         val admission = testGenerationAdmissionSnapshot(conversationId = "conversation")
         val snapshot = GenerationContextProjectionSnapshot(admission.config, admission.context)
@@ -487,11 +495,14 @@ class ConversationContextProjectorTest {
         val firstJob = launch {
             projector.project("conversation", firstSelection, "provider:model", 4_096)
         }
-        runCurrent()
+        // project() dispatches to Dispatchers.Default, which runCurrent() does not drive.
+        // Wait for the actual worker before starting the next projection; otherwise the
+        // second request can take firstLoad and deadlock while we join it below.
+        firstLoadStarted.await()
         val secondJob = launch {
             projector.project("conversation", secondSelection, "provider:model", 4_096)
         }
-        runCurrent()
+        secondLoadStarted.await()
         secondLoad.complete(secondContext)
         secondJob.join()
 
