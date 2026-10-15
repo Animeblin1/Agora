@@ -87,15 +87,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
      */
     open fun resolveApiKey(apiKey: String): String = apiKey
 
-    /**
-     * The base URL chat and responses requests are posted to. The default honors an explicit
-     * per-profile base URL and falls back to [defaultBaseUrl]; a provider whose traffic must
-     * move off that base depending on the configuration (an anonymous lane on a separate
-     * endpoint, for instance) overrides this.
-     *
-     * Open rather than protected for the same reason as [modelFetchHeaders]: routing is
-     * verifiable unit-test surface, and a test double cannot override a protected member.
-     */
+    /** Base URL for chat/responses traffic: the profile base URL or [defaultBaseUrl]. A provider
+     * whose lane lives on another endpoint overrides this; open so tests can verify routing. */
     open fun chatEndpointBaseUrl(config: ProviderConfig): String =
         config.baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
 
