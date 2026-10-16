@@ -2,49 +2,44 @@
  * One floating scrollbar owns paint and pointer input for its scrollable host.
  * Native bars are hidden without a layout gutter; wheel and keyboard remain with the host.
  */
-const IDLE_MS = 900;
 
-/**
- * Draws `bar` over the right gutter of the scrollable `host`.
- *
- * Returns the detach function, so a component owns the lifetime of one scroller.
- */
-export function attachScrollbar(host, bar) {
-  let idleTimer = 0;
+/** Draws one overlay and returns the detach function owned by the presentation. */
+export function attachScrollbar(host, suppliedBar) {
+  const bar = suppliedBar ?? document.createElement("div");
+  if (!suppliedBar) {
+    bar.className = "scrollbar-overlay";
+    bar.setAttribute("aria-hidden", "true");
+    bar.append(document.createElement("span"));
+    host.parentElement.append(bar);
+  }
+  const hadHostClass = host.classList.contains("scrollbar-host");
+  host.classList.add("scrollbar-host");
   const controller = new AbortController();
   const thumb = bar.firstElementChild;
-  // The bar lives beside the scroller, so it copies the box the scroller actually paints: the chat
-  // column starts under the top bar and runs under the composer.
   const place = () => {
     const box = host.getBoundingClientRect();
-    const parent = bar.offsetParent?.getBoundingClientRect() ?? box;
-    bar.style.top = `${Math.round(box.top - parent.top)}px`;
-    bar.style.height = `${Math.round(box.height)}px`;
-    // Pin the gutter to the scroller's own right edge, whatever box the overlay is positioned in.
-    bar.style.left = `${Math.round(box.right - parent.left - bar.offsetWidth)}px`;
+    const parentNode = bar.offsetParent;
+    const parent = parentNode?.getBoundingClientRect() ?? box;
+    const scaleX = parentNode?.offsetWidth ? parent.width / parentNode.offsetWidth : 1;
+    const scaleY = parentNode?.offsetHeight ? parent.height / parentNode.offsetHeight : 1;
+    bar.style.top = `${(box.top - parent.top) / (scaleY || 1)}px`;
+    bar.style.height = `${box.height / (scaleY || 1)}px`;
+    bar.style.left = `${(box.right - parent.left) / (scaleX || 1) - bar.offsetWidth}px`;
     bar.style.right = "auto";
   };
   const paint = () => {
     const scrollable = host.scrollHeight - host.clientHeight;
     bar.classList.toggle("scrollable", scrollable > 1);
     if (scrollable <= 1) return;
-    const height = Math.max(28, (host.clientHeight * host.clientHeight) / host.scrollHeight);
-    const top = (host.scrollTop / scrollable) * (host.clientHeight - height);
-    thumb.style.top = `${Math.round(top)}px`;
-    thumb.style.height = `${Math.round(height)}px`;
-  };
-  const wake = () => {
-    paint();
-    bar.classList.add("scrolling");
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => bar.classList.remove("scrolling"), IDLE_MS);
+    const height = Math.min(host.clientHeight, Math.max(28, host.clientHeight ** 2 / host.scrollHeight));
+    thumb.style.top = `${(host.scrollTop / scrollable) * (host.clientHeight - height)}px`;
+    thumb.style.height = `${height}px`;
   };
   let drag = null;
   const pointerDown = (event) => {
-    if (event.button !== 0 || !bar.classList.contains("scrollable") || host.inert) return;
+    if (event.button !== 0 || !bar.classList.contains("scrollable") || host.closest("[inert]")) return;
     event.preventDefault();
     event.stopPropagation();
-    // The host's existing scroll owner receives the same user-input cancellation as a content drag.
     host.dispatchEvent(new Event("pointerdown"));
     bar.setPointerCapture(event.pointerId);
     const box = thumb.getBoundingClientRect();
@@ -56,7 +51,6 @@ export function attachScrollbar(host, bar) {
     }
     drag = { id: event.pointerId, y: event.clientY, top: host.scrollTop };
     bar.classList.add("dragging");
-    wake();
   };
   const pointerMove = (event) => {
     if (drag?.id !== event.pointerId) return;
@@ -71,57 +65,52 @@ export function attachScrollbar(host, bar) {
     bar.classList.remove("dragging");
     if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId);
   };
-  const entered = (event) => { if (event.pointerType !== "touch") bar.classList.add("hover"); };
-  const left = () => bar.classList.remove("hover");
-  bar.addEventListener("pointerdown", pointerDown);
-  bar.addEventListener("pointermove", pointerMove);
-  bar.addEventListener("pointerup", pointerUp);
-  bar.addEventListener("pointercancel", pointerUp);
-  bar.addEventListener("lostpointercapture", pointerUp);
-  bar.addEventListener("pointerenter", entered);
-  bar.addEventListener("pointerleave", left);
+  const entered = (event) => { if (event.pointerType === "mouse") bar.classList.add("hover"); };
+  const touched = (event) => { if (event.pointerType === "touch") bar.classList.remove("hover"); };
+  const left = (event) => {
+    if (event.relatedTarget instanceof Node && (host.contains(event.relatedTarget) || bar.contains(event.relatedTarget))) return;
+    bar.classList.remove("hover");
+  };
+  for (const [type, listener] of [["pointerdown", pointerDown], ["pointermove", pointerMove],
+    ["pointerup", pointerUp], ["pointercancel", pointerUp], ["lostpointercapture", pointerUp],
+    ["pointerenter", entered], ["pointerleave", left]]) {
+    bar.addEventListener(type, listener, { signal: controller.signal });
+  }
   bar.addEventListener("wheel", (event) => {
     event.preventDefault();
-    host.dispatchEvent(new Event("wheel"));
+    const forwarded = new WheelEvent("wheel", { deltaY: event.deltaY, deltaX: event.deltaX,
+      deltaMode: event.deltaMode, bubbles: true, cancelable: true });
+    if (!host.dispatchEvent(forwarded)) return;
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1;
     host.scrollTop += event.deltaY * unit;
   }, { passive: false, signal: controller.signal });
-  host.addEventListener("scroll", wake, { passive: true });
-  host.addEventListener("pointerenter", entered);
-  host.addEventListener("pointerleave", left);
-  const observer = new ResizeObserver(() => { place(); paint(); });
+  host.addEventListener("scroll", paint, { passive: true, signal: controller.signal });
+  host.addEventListener("input", paint, { signal: controller.signal });
+  host.addEventListener("pointerenter", entered, { signal: controller.signal });
+  host.addEventListener("pointerdown", touched, { signal: controller.signal });
+  host.addEventListener("pointerleave", left, { signal: controller.signal });
+  const refresh = () => { place(); paint(); };
+  document.addEventListener("scroll", refresh, { capture: true, passive: true, signal: controller.signal });
+  window.addEventListener("resize", refresh, { signal: controller.signal });
+  const observer = new ResizeObserver(refresh);
   observer.observe(host);
-  /* The scroll box alone is not enough. A list that grows inside a box that keeps its own size never
-   * resizes, so a bar watching only the box stays sized for the list that was there when it mounted.
-   * Watch the content too, and re-arm when the host hands over a different content element. */
-  let content = null;
+  let content = new Set();
   const watchContent = () => {
-    const next = host.firstElementChild;
-    if (next === content) return;
-    if (content) observer.unobserve(content);
+    const next = new Set(host.children);
+    for (const node of content) if (!next.has(node)) observer.unobserve(node);
+    for (const node of next) if (!content.has(node)) observer.observe(node);
     content = next;
-    if (content) observer.observe(content);
-    paint();
+    refresh();
   };
   const children = new MutationObserver(watchContent);
-  children.observe(host, { childList: true });
-  place();
-  paint();
+  children.observe(host, { childList: true, subtree: true, characterData: true });
   watchContent();
+  if (matchMedia("(hover: hover) and (pointer: fine)").matches && host.matches(":hover")) bar.classList.add("hover");
   return () => {
-    host.removeEventListener("scroll", wake);
     controller.abort();
-    host.removeEventListener("pointerenter", entered);
-    host.removeEventListener("pointerleave", left);
-    bar.removeEventListener("pointerdown", pointerDown);
-    bar.removeEventListener("pointermove", pointerMove);
-    bar.removeEventListener("pointerup", pointerUp);
-    bar.removeEventListener("pointercancel", pointerUp);
-    bar.removeEventListener("lostpointercapture", pointerUp);
-    bar.removeEventListener("pointerenter", entered);
-    bar.removeEventListener("pointerleave", left);
-    clearTimeout(idleTimer);
     children.disconnect();
     observer.disconnect();
+    if (!hadHostClass) host.classList.remove("scrollbar-host");
+    if (!suppliedBar) bar.remove();
   };
 }

@@ -49,6 +49,67 @@ class WebUiMessagePresentationTest {
         )
 
     @Test
+    fun citationWireUsesCanonicalGroupsAndPreservesOriginalSearchOffsetsAndCopy() {
+        val answer = "Alpha beta after \\(x^2\\) tail"
+        val citations = listOf("https://first.example/a", "https://second.example/b").map { url ->
+            requireNotNull(com.newoether.agora.model.CitationPolicy.create(
+                provider = "openai", kind = "url", title = "Source $url", url = url,
+                anchors = listOf(com.newoether.agora.model.CitationAnchor(0, 5, "Alpha")), answerText = answer,
+            ))
+        }
+        val segments = listOf(MessageSegment("answer", answer)) + citations.map {
+            MessageSegment("citation", com.newoether.agora.model.CitationPolicy.encode(it))
+        }
+        for (mode in listOf(ToolCallDisplayModes.COMPACT, ToolCallDisplayModes.GROUPED_TIMELINE)) {
+            for (status in listOf(MessageStatus.SUCCESS, MessageStatus.ERROR, MessageStatus.STOPPED)) {
+                val message = model(status, *segments.toTypedArray(), text = answer)
+                val wire = webPresentation(message, false, display(toolMode = mode))!!
+                val text = wire.answer ?: (wire.blocks.single() as WebTimelineBlock.Answer).text
+                assertEquals(2, text.citations.single().sources.size)
+                assertEquals("first.example", text.citations.single().label)
+                assertEquals(2, wire.sources.size)
+                assertEquals("2 Sources", wire.sourcesTitle)
+                assertTrue(wire.copyText!!.contains("## Sources"))
+                assertTrue(wire.copyText!!.contains("https://second.example/b"))
+                for (word in listOf("beta", "after", "tail")) {
+                    val index = text.markdown.indexOf(word)
+                    val mapping = text.sourceMap.lastOrNull { it[0] <= index }
+                    assertEquals(word, answer.indexOf(word), index + (mapping?.let { it[1] - it[0] } ?: 0))
+                }
+                val encoded = WebUiSync.json.encodeToString(WebPresentation.serializer(), wire)
+                assertEquals(wire, WebUiSync.json.decodeFromString(WebPresentation.serializer(), encoded))
+                val live = webPresentation(message.copy(status = MessageStatus.SENDING), true, display(toolMode = mode))!!
+                val liveText = live.answer ?: (live.blocks.single() as WebTimelineBlock.Answer).text
+                assertTrue(liveText.citations.isEmpty())
+                assertEquals(answer, message.text)
+            }
+        }
+    }
+
+    @Test
+    fun compactDetailErrorsUseTheNativeResolverForEveryParticipantAndKeepSummarySeparate() {
+        for (participant in Participant.entries) {
+            for (body in listOf("", "Partial summary")) {
+                val message = model(MessageStatus.ERROR, MessageSegment("error", "Network failure"), text = body)
+                    .copy(id = "compact_test", participant = participant)
+                val projected = webPresentation(message, false, display())!!
+                assertEquals("Network failure", projected.compactDetailErrorText)
+                assertEquals(body, message.toWeb(projected).text.markdown)
+                val encoded = WebUiSync.json.encodeToString(WebPresentation.serializer(), projected)
+                assertEquals(projected, WebUiSync.json.decodeFromString(WebPresentation.serializer(), encoded))
+            }
+            val empty = model(MessageStatus.ERROR).copy(id = "compact_test", participant = participant)
+            assertEquals(display().resources.getString(R.string.failed_to_generate),
+                webPresentation(empty, false, display())!!.compactDetailErrorText)
+            for (status in listOf(MessageStatus.SENDING, MessageStatus.SUCCESS, MessageStatus.STOPPED)) {
+                assertNull(webPresentation(empty.copy(status = status, participant = Participant.MODEL),
+                    status == MessageStatus.SENDING, display())!!.compactDetailErrorText)
+            }
+        }
+        assertNull(webPresentation(model(MessageStatus.ERROR), false, display())!!.compactDetailErrorText)
+    }
+
+    @Test
     fun branchWireUsesTheCanonicalUserEditAndAssistantRegenerationProjection() {
         val user = ChatMessage(id = "u", text = "input", participant = Participant.USER, timestamp = 1, runId = "r1")
         val edited = user.copy(id = "edited", timestamp = 2, runId = "r2")

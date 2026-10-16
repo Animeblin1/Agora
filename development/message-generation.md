@@ -401,6 +401,13 @@ normally.
 
 A terminal Compact error remains visible in both locations:
 
+The WebUI projects the Compact detail error through the existing Kotlin message-presentation owner,
+using the same `assistantErrorContent` resolver as Compose, including legacy Compact participants.
+The browser renders that projected value beside its existing Markdown with the shared selectable
+neutral terminal text. It does not parse errors from summary text or infer failure from empty output.
+The Compact capsule's 18px error glyph is the filled Compose `Icons.Default.Error`; attachment and
+media error glyphs are unaffected.
+
 - the detail Bottom Sheet places the shared neutral-gray generation error bar beside the Markdown
   body;
 - the capsule uses a theme-derived neutral-gray palette independently of the neutral terminal bar,

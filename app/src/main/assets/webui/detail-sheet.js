@@ -1,8 +1,10 @@
 // Shared message-detail and Composer settings sheet presentation.
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/preact-hooks.mjs";
-import { html, runSpring, useDialog } from "./html.js";
+import { html, runSpring } from "./html.js";
 import { Spinner } from "./material/progress.js";
-import { Markdown } from "./markdown.js";
+import { attachScrollbar } from "./material/scrollbar.js";
+import { Markdown, fadeStreamingText } from "./markdown.js";
+import { AttachmentViewer } from "./composer.js";
 import { icon, ICON_BUILD, ICON_CHEVRON_RIGHT, ICON_IMAGE, ICON_NEUROLOGY } from "./icons.js";
 const SHEET_BACK_PATH = "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z";
 // Material Icons.Default.Close, centred on (12, 12). The previous path was offset to the left,
@@ -68,7 +70,7 @@ function ToolBody({ body }) {
     case "failed":
       return html`<div class=${body.type === "active" ? "tool-active" : "tool-terminal"}>${body.text}</div>
         ${body.output && html`<div class="tool-gap"><${ToolOutput} text=${body.output} /></div>`}`;
-    case "stopped": return html`<div class="tool-terminal">${body.text}</div>`;
+    case "stopped": return html`<div class="tool-terminal stopped">${body.text}</div>`;
     case "muted": return html`<div class="tool-muted">${body.text}</div>`;
     case "documents": return body.values.map((document, index) => html`
       <div class="tool-result-document" key=${index}><${ToolDocument} document=${document} /></div>`);
@@ -133,36 +135,11 @@ function ToolImage({ src, image, detail, full = false, onClick }) {
   </${Tag}>`;
 }
 
-function ToolMediaPreview({ detail, urls, initialIndex, onClose: onClosed }) {
-  const dialog = useRef(null);
-  const onClose = useDialog(dialog, onClosed);
+function ToolMediaPreview({ detail, urls, initialIndex, onClose }) {
   const [index, setIndex] = useState(initialIndex);
-  const [scale, setScale] = useState(1);
-  function navigate(next) { setIndex(next); setScale(1); }
-  return html`<dialog class="tool-media-viewer" ref=${dialog} aria-label=${detail.imageLabel}
-    onCancel=${(event) => { event.preventDefault(); onClose(); }}
-    onKeyDown=${(event) => {
-      event.stopPropagation();
-      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        event.preventDefault();
-        if (event.key === "ArrowLeft" && index > 0) navigate(index - 1);
-        if (event.key === "ArrowRight" && index < urls.length - 1) navigate(index + 1);
-      }
-    }}>
-    <div class="tool-media-scroll" onDblClick=${() => setScale((value) => value === 1 ? 3 : 1)}>
-      <div class="tool-media-frame" style=${{ width: `${scale * 100}%`, height: `${scale * 100}%` }}>
-        <${ToolImage} key=${urls[index]} src=${urls[index]} image=${detail.images[index]} detail=${detail} full />
-      </div>
-    </div>
-    <div class="tool-media-controls">
-      ${urls.length > 1 && html`<span class="tool-media-count">${index + 1} / ${urls.length}</span>`}
-      <button class="detail-sheet-icon" type="button" aria-label="Close" onClick=${onClose}>${icon(SHEET_CLOSE_PATH)}</button>
-    </div>
-    ${urls.length > 1 && html`<button class="tool-media-previous detail-sheet-icon" type="button"
-      aria-label="Previous image" disabled=${index === 0} onClick=${() => navigate(index - 1)}>${icon(SHEET_BACK_PATH)}</button>
-      <button class="tool-media-next detail-sheet-icon" type="button" aria-label="Next image"
-        disabled=${index === urls.length - 1} onClick=${() => navigate(index + 1)}>${icon(ICON_CHEVRON_RIGHT)}</button>`}
-  </dialog>`;
+  return html`<${AttachmentViewer} viewer=${{ index, items: urls.map((url, i) => ({
+    url, type: "image", kind: "source", name: detail.imageLabel, index: i,
+  })) }} onNavigate=${setIndex} onClose=${onClose} />`;
 }
 
 function ToolDetail({ item, conversationId, messageId }) {
@@ -219,10 +196,55 @@ export function useCardTitle(group, strings) {
 }
 
 /** Activate only segments whose detail projection is available. */
-export function InfoItem({ item, compact = false, onClick }) {
-  const text = item.type === "thought" ? item.content?.markdown?.replace(/\n/g, " ")
-    : item.type === "transcription" ? item.content?.markdown?.replace(/\n/g, " ") || "Image transcription is empty."
-      : item.summary;
+export function InfoItem({ item, compact = false, onClick, reduceMotion = false }) {
+  const flat = item.content?.markdown?.replace(/\n/g, " ") ?? "";
+  const points = [...flat];
+  const text = item.type === "thought" ? item.streaming && points.length > 60 ? `\u2026${points.slice(-60).join("")}` : flat
+    : item.type === "transcription" ? flat || "Image transcription is empty." : item.summary;
+  const summaryNode = useRef(null);
+  const summaryMotion = useRef({ state: item.toolState, animation: null, outgoing: null });
+  const births = useRef(new Map());
+  const previousText = useRef({ text: "", start: 0 });
+  const [fading, redraw] = useState(0);
+  useLayoutEffect(() => {
+    const node = summaryNode.current, motion = summaryMotion.current;
+    if (!node) return;
+    const changed = item.type === "tool" && motion.state !== item.toolState;
+    const old = previousText.current;
+    const previous = [...old.text], next = [...(text ?? "")];
+    let start = old.start;
+    if (item.type === "thought" && item.streaming && previous.length) {
+      const a = old.text.startsWith("\u2026") ? previous.slice(1) : previous;
+      const b = text.startsWith("\u2026") ? next.slice(1) : next;
+      let overlap = Math.min(a.length, b.length);
+      while (overlap && a.slice(-overlap).join("") !== b.slice(0, overlap).join("")) overlap--;
+      start += a.length - overlap;
+    }
+    if (changed) {
+      motion.animation?.cancel();
+      motion.outgoing?.remove();
+      births.current.clear();
+      motion.state = item.toolState;
+      const outgoing = node.cloneNode(true);
+      outgoing.textContent = old.text;
+      outgoing.classList.add("summary-outgoing");
+      outgoing.setAttribute("aria-hidden", "true");
+      outgoing.inert = true;
+      node.parentElement.append(outgoing);
+      motion.outgoing = outgoing;
+      outgoing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, easing: "linear" });
+      motion.animation = node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 280, easing: "linear" });
+      motion.animation.onfinish = () => { motion.animation = null; outgoing.remove(); motion.outgoing = null; redraw(v => v + 1); };
+    }
+    previousText.current = { text: text ?? "", start };
+    const active = item.streaming && (item.type !== "tool" || ["calling", "running"].includes((item.toolState ?? "").toLowerCase())) && !motion.animation;
+    return fadeStreamingText(node, active, reduceMotion, births.current,
+      start - (item.type === "thought" && text?.startsWith("\u2026") ? 1 : 0), "summary", 42, 6, .38);
+  }, [text, item.streaming, item.toolState, reduceMotion, fading]);
+  useLayoutEffect(() => () => {
+    summaryMotion.current.animation?.cancel();
+    summaryMotion.current.outgoing?.remove();
+  }, []);
   const interactive = typeof onClick === "function";
   const Tag = interactive ? "button" : "div";
   return html`
@@ -234,13 +256,13 @@ export function InfoItem({ item, compact = false, onClick }) {
       </span>`}
       <div class="info-item-text">
         <span class="info-item-title">${item.title}</span>
-        ${text && html`<span class="info-item-summary">${text}</span>`}
+        ${text && html`<span class="info-summary-stack"><span class="info-item-summary" ref=${summaryNode}>${text}</span></span>`}
       </div>
       ${!compact && interactive && html`<span class="info-item-arrow">${icon(ICON_CHEVRON_RIGHT)}</span>`}
     </${Tag}>`;
 }
 
-export function DetailSheet({ group, items, page, detailIndex, selectedItem, conversationId, messageId, display, wrap, onSelectItem, onBack, onClose, title: suppliedTitle, children, focusReturn, settings = false }) {
+export function DetailSheet({ group, items, page, detailIndex, selectedItem, conversationId, messageId, display, wrap, onSelectItem, onBack, onClose, title: suppliedTitle, children, focusReturn, settings = false, closing: closeRequested = false }) {
   const reduceMotion = !!display?.reduceMotion;
   const [anchor, setAnchor] = useState({ fraction: .45 });
   const [settingsHeight, setSettingsHeight] = useState(0);
@@ -248,6 +270,7 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
   const partialFraction = settings ? Math.min(.5, fullFraction) : .45;
   const expanded = anchor.fraction === .94 || (settings && fullFraction <= .5);
   const [closing, setClosing] = useState(false);
+  useLayoutEffect(() => { if (closeRequested) setClosing(true); }, [closeRequested]);
   const motion = useRef({ fraction: 0, fractionVelocity: 0, cancel: null });
   const layer = useRef(null);
   const backdrop = useRef(null);
@@ -273,6 +296,7 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
   const restoreFocus = useRef(null);
   const sheet = useRef(null);
   const contentBody = useRef(null);
+  useEffect(() => attachScrollbar(sheet.current.querySelector(".detail-sheet-content")), []);
   useLayoutEffect(() => {
     if (!settings) return;
     const measure = () => setSettingsHeight(Math.min(innerHeight,
@@ -414,7 +438,7 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
               <div class="detail-sheet-list">
                 ${items.map((item, index) => html`
                   <div class=${`detail-sheet-list-row ${index === 0 ? "first" : index === items.length - 1 ? "last" : "middle"}`} key=${item.detailIndex}>
-                    <${InfoItem} item=${item}
+                    <${InfoItem} item=${item} reduceMotion=${reduceMotion}
                       onClick=${canOpenSheetItem(item) ? () => onSelectItem(item.detailIndex) : undefined} />
                   </div>`)}
               </div>` : selectedItem?.type === "tool" ? html`

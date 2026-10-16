@@ -7,9 +7,9 @@ import { CircularProgress, Spinner } from "./material/progress.js";
 import { Markdown, highlightSearch } from "./markdown.js";
 import {
   icon, ICON_WEB, ICON_BUILD, ICON_CALL_SPLIT, ICON_CHEVRON_DOWN, ICON_CHEVRON_RIGHT,
-  ICON_COMPRESS, ICON_CONTENT_COPY, ICON_DELETE, ICON_EDIT, ICON_ERROR, ICON_IMAGE, ICON_INFO,
+  ICON_COMPRESS, ICON_COMPACT_ERROR, ICON_CONTENT_COPY, ICON_DELETE, ICON_EDIT, ICON_ERROR, ICON_IMAGE, ICON_INFO,
   ICON_MORE_VERT, ICON_NEUROLOGY, ICON_QUESTION_ANSWER, ICON_REFRESH, ICON_REPEAT,
-  ICON_SCHEDULE, ICON_SELECT_ALL, ICON_SHARE, ICON_STOP_CIRCLE,
+  ICON_SCHEDULE, ICON_SELECT_ALL, ICON_SHARE, ICON_STOP_CIRCLE, ICON_LINK,
 } from "./icons.js";
 import { MoreMenu } from "./menu.js";
 import { t } from "./i18n.js";
@@ -114,7 +114,7 @@ function readableText(message) {
 /** The phone answers a copy with a haptic; the nearest browser answer is the app's own notice. */
 async function copyRowText(message) {
   try {
-    await navigator.clipboard.writeText(readableText(message));
+    await navigator.clipboard.writeText(message.presentation?.copyText ?? readableText(message));
     sync.notify(t.copied);
   } catch (_) {
     sync.notify(t.copyFailed);
@@ -151,13 +151,18 @@ function fillAskUserPairs(node, items) {
   node.replaceChildren();
   // Separate blocks, as on the phone: an inline 14/20 question inside the 24.2 px body would sit on
   // the body's line strut and keep the body's line spacing. style.css adds the blank line.
+  let sourceStart = 0;
   items.forEach((item) => {
     const question = document.createElement("div");
     question.className = "ask-user-question";
+    question.dataset.sourceStart = String(sourceStart);
     question.textContent = item.question;
+    sourceStart += item.question.length + 1;
     const answer = document.createElement("div");
     answer.className = item.answer == null ? "ask-user-answer unanswered" : "ask-user-answer";
+    answer.dataset.sourceStart = String(sourceStart);
     answer.textContent = item.answer ?? t.sourceUnanswered;
+    sourceStart += answer.textContent.length + 2;
     node.append(question, answer);
   });
 }
@@ -180,16 +185,17 @@ function RowMenuItem({ path, label, enabled = true, destructive = false, onClick
  * The 32 dp overflow button of a row and the AgoraDropdownMenu it anchors. [items] draws the items
  * with the close action; the menu hands focus back to the button when it was holding it.
  */
-function RowMore({ reduceMotion, items }) {
+function RowMore({ reduceMotion, items, enabled = true }) {
   const anchor = useRef(null);
   const [open, setOpen] = useState(false);
   const [retained, setRetained] = useState(false);
   const close = () => setOpen(false);
+  useEffect(() => { if (!enabled) setOpen(false); }, [enabled]);
   return html`
-    <button class="row-action" type="button" ref=${anchor} title=${t.options} aria-label=${t.options}
+    <button class="row-action" type="button" ref=${anchor} title=${t.options} aria-label=${t.options} disabled=${!enabled}
       aria-haspopup="menu" aria-expanded=${open ? "true" : "false"}
       onClick=${() => { setRetained(true); setOpen(!open); }}>${icon(ICON_MORE_VERT)}</button>
-    ${(open || retained) && html`<${MoreMenu} expanded=${open} reduceMotion=${reduceMotion} anchor=${anchor}
+    ${(open || retained) && html`<${MoreMenu} expanded=${open && enabled} reduceMotion=${reduceMotion} anchor=${anchor}
       onClose=${close}
       onExited=${(ownedFocus) => { setRetained(false); if (ownedFocus) anchor.current?.focus(); }}>
       ${items(close)}
@@ -322,11 +328,27 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
   }));
   const askUser = message.source?.kind === "ask_user" ? message.source.askUser : null;
   const visible = readableText(message);
+  const hasText = (message.text?.markdown ?? "").length > 0;
+  const askUserKey = JSON.stringify(askUser);
+  const searchKey = JSON.stringify([!!search?.query.trim(), matches.map(match =>
+    [match.key, match.start, match.endExclusive])]);
+  const activeMatch = search?.matches[search.index]?.key;
   useLayoutEffect(() => {
+    if (!text.current) return;
     if (askUser) fillAskUserPairs(text.current, askUser);
     else text.current.textContent = visible;
-    highlightSearch(text.current, search, matches);
-  }, [visible, askUser, search, matches]);
+  }, [visible, askUserKey, hasText]);
+  useLayoutEffect(() => {
+    return text.current ? highlightSearch(text.current, search, matches) : undefined;
+  }, [visible, askUserKey, hasText, searchKey]);
+  useLayoutEffect(() => {
+    const active = CSS.highlights.get("agora-search-active");
+    for (const range of CSS.highlights.get("agora-search") ?? []) {
+      if (!text.current?.contains(range.startContainer)) continue;
+      if (range.searchKey === activeMatch) active?.add(range);
+      else active?.delete(range);
+    }
+  }, [visible, askUserKey, hasText, searchKey, activeMatch]);
   return html`
     <div class="user-row" onContextMenu=${(event) => {
       event.preventDefault();
@@ -343,7 +365,7 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
             ${icon(ICON_MORE_VERT)}</button>
         </div>
         <div class="user-bubble">
-          ${attachments.length > 0 && html`<div class="user-attachments">
+          ${attachments.length > 0 && html`<div class="user-attachments" data-body-gap=${hasText}>
             ${attachments.map(item => {
               const index = media.findIndex(current => current.index === item.index);
               const failed = item.unavailable || failedImages.has(item.index);
@@ -361,7 +383,7 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
               </span>` : html`<span key=${item.index} class="user-attachment-media">${thumbnail}</span>`;
             })}
           </div>`}
-          <div class="user-text" ref=${text}></div>
+          ${(hasText || askUser) && html`<div class="user-text" ref=${text}></div>`}
         </div>
       </div>
       ${branchControl}
@@ -369,7 +391,7 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
         anchor=${menuButton} onClose=${() => setMenuOpen(false)}
         onExited=${(ownedFocus) => {
           setRetainedMenu(false);
-          if (ownedFocus) text.current.closest(".user-row").querySelector(".user-bubble")?.focus?.();
+          if (ownedFocus) menuButton.current?.focus();
         }}>
         <${RowMenuItem} path=${ICON_CONTENT_COPY} label=${t.copy} enabled=${visible.trim().length > 0}
           onClick=${() => { setMenuOpen(false); copyRowText(message); }} />
@@ -418,7 +440,7 @@ function CompactPill({ message, reduceMotion, generating, display, wrap, onRecom
         <button class=${`compact-pill ${presentation}`} type="button" onClick=${() => setDetail(true)}>
           <span class="compact-mark">
             ${running && html`<${CircularProgress} size=${18} stroke=${2} color="var(--md-on-secondary-container)" />`}
-            ${message.status === "ERROR" && icon(ICON_ERROR)}
+            ${message.status === "ERROR" && icon(ICON_COMPACT_ERROR)}
             ${message.status === "STOPPED" && icon(ICON_STOP_CIRCLE, "0 0 24 24", "evenodd")}
             ${message.status === "SUCCESS" && icon(ICON_COMPRESS)}
           </span>
@@ -434,7 +456,9 @@ function CompactPill({ message, reduceMotion, generating, display, wrap, onRecom
       </div>
       ${detail && html`<${DetailSheet} title=${t.compact} display=${display} onClose=${() => setDetail(false)}>
         <div class="detail-sheet-markdown"><${Markdown} text=${message.text} variant="thought" wrap=${wrap}
-          streaming=${running} reduceMotion=${reduceMotion} emptyStreamingText=${t.compactStreaming} /></div>
+          streaming=${running} reduceMotion=${reduceMotion} emptyStreamingText=${t.compactStreaming} />
+          ${message.presentation?.compactDetailErrorText != null && html`<div class="generation-activity generation-terminal">${message.presentation.compactDetailErrorText}</div>`}
+        </div>
       </${DetailSheet}>`}
     </div>`;
 }
@@ -444,24 +468,34 @@ function CompactPill({ message, reduceMotion, generating, display, wrap, onRecom
  * Copy and MoreVert are the information group, Regenerate, Fork and Share the terminal group, and
  * both ride one alpha: 320 ms in, 220 ms out, linear.
  */
-function AssistantActions({ message, generating, reduceMotion, onFork, onShare, onInfo, onDelete, branchControl }) {
-  const terminalEnabled = !generating;
-  const copyTextValue = readableText(message);
+function AssistantActions({ message, visible, generating, reduceMotion, onFork, onShare, onInfo, onDelete, branchControl, onSources }) {
+  const terminalEnabled = visible && !generating;
+  const copyTextValue = message.presentation?.copyText ?? readableText(message);
+  const [retainSources, setRetainSources] = useState(visible);
+  useLayoutEffect(() => { if (visible) setRetainSources(true); }, [visible]);
+  const sources = message.presentation?.sources ?? [];
   return html`
-    <div class="message-actions">
+    <div class="message-information" data-visible=${visible} inert=${!visible} aria-hidden=${visible ? null : "true"}
+      onTransitionEnd=${event => {
+        if (event.target === event.currentTarget && event.propertyName === "opacity" && !visible) setRetainSources(false);
+      }}>
+      ${(visible || retainSources) && sources.length > 0 && html`<button class="citation-summary" type="button" disabled=${!visible}
+        onClick=${onSources}>${icon(ICON_LINK)}<span>${message.presentation.sourcesTitle}</span></button>`}
+      <div class="message-actions">
       ${copyTextValue.trim().length > 0 && html`<${RowAction} path=${ICON_CONTENT_COPY} size=${16}
-        label=${t.copy} onClick=${() => copyRowText(message)} />`}
+        label=${t.copy} enabled=${visible} onClick=${() => copyRowText(message)} />`}
       <${RowAction} path=${ICON_REFRESH} size=${19} enabled=${terminalEnabled} label=${t.regenerate}
         onClick=${() => sync.rowCommand("regenerate", message.id)} />
       <${RowAction} path=${ICON_CALL_SPLIT} size=${18} enabled=${terminalEnabled} label=${t.forkFromHere}
         onClick=${onFork} />
       <${RowAction} path=${ICON_SHARE} size=${16} enabled=${terminalEnabled} label=${t.share}
         onClick=${onShare} />
-      <${RowMore} reduceMotion=${reduceMotion} items=${(close) => html`
-        <${RowMenuItem} path=${ICON_INFO} label=${t.info} onClick=${() => { close(); onInfo(); }} />
+      <${RowMore} reduceMotion=${reduceMotion} enabled=${visible} items=${(close) => html`
+        <${RowMenuItem} path=${ICON_INFO} label=${t.info} enabled=${visible} onClick=${() => { close(); onInfo(); }} />
         <${RowMenuItem} path=${ICON_DELETE} label=${t.delete} destructive enabled=${terminalEnabled}
           onClick=${() => { close(); onDelete(); }} />`} />
       ${branchControl}
+      </div>
     </div>`;
 }
 
@@ -541,6 +575,28 @@ function InfoGroup({ group, messageId, display, expansion, expansionController, 
   const surface = useRef(null);
   const titleNode = useRef(null);
   const title = useCardTitle(group, display?.liveThinking);
+  const titleMotion = useRef({ text: title, animation: null, outgoing: null });
+  useLayoutEffect(() => {
+    const motion = titleMotion.current, node = titleNode.current;
+    if (motion.text === title || !node) return;
+    motion.animation?.cancel();
+    motion.outgoing?.remove();
+    const outgoing = node.cloneNode(true);
+    outgoing.textContent = motion.text;
+    outgoing.classList.add("title-outgoing");
+    outgoing.setAttribute("aria-hidden", "true");
+    outgoing.inert = true;
+    node.parentElement.append(outgoing);
+    motion.text = title;
+    motion.outgoing = outgoing;
+    outgoing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, easing: "linear" });
+    motion.animation = node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 280, easing: "linear" });
+    motion.animation.onfinish = () => { outgoing.remove(); motion.animation = null; motion.outgoing = null; };
+  }, [title]);
+  useLayoutEffect(() => () => {
+    titleMotion.current.animation?.cancel();
+    titleMotion.current.outgoing?.remove();
+  }, []);
   const [widths, setWidths] = useState(null);
   const firstAppearance = useRef(!appearances.has(key) && streaming);
   useEffect(() => { appearances.add(key); }, [key]);
@@ -608,7 +664,7 @@ function InfoGroup({ group, messageId, display, expansion, expansionController, 
           aria-haspopup=${opensSheet ? "dialog" : null}
           onClick=${opensSheet ? () => onOpenSheet?.(messageId, group.key) : toggle}>
           <span class="info-header-icon"><${CardIcon} kind=${group.icon} /></span>
-          <span class="info-header-title" ref=${titleNode}>${title}</span>
+          <span class="info-title-stack"><span class="info-header-title" ref=${titleNode}>${title}</span></span>
           <span class="info-disclosure">${icon(ICON_CHEVRON_DOWN)}</span>
         </button>
         <div class="info-group-reveal" inert=${!targetExpanded}>
@@ -616,7 +672,7 @@ function InfoGroup({ group, messageId, display, expansion, expansionController, 
             ${group.items.map((item) => html`<${SegmentAppearance} key=${item.detailIndex}
               appearanceKey=${`${messageId}:segment:${item.detailIndex}:${item.type}`}
               appearances=${appearances} streaming=${streaming} opaque=${item.type === "tool"}>
-              <${InfoItem} item=${item} compact
+              <${InfoItem} item=${item} compact reduceMotion=${!!display?.reduceMotion}
                 onClick=${canOpenSheetItem(item)
                   ? () => onOpenDetail(messageId, group.key, item.detailIndex) : undefined} />
             </${SegmentAppearance}>`)}
@@ -626,14 +682,14 @@ function InfoGroup({ group, messageId, display, expansion, expansionController, 
     </div>`;
 }
 
-function InfoCard({ block, messageId, appearances, streaming, onOpenDetail }) {
+function InfoCard({ block, messageId, appearances, streaming, onOpenDetail, display }) {
   const key = `${messageId}:card:${block.item.detailIndex}`;
   const entering = useRef(!appearances.has(key) && streaming);
   useEffect(() => { appearances.add(key); }, [key]);
   return html`
     <div class=${`info-card ${block.groupPosition.toLowerCase()} ${block.precededByAnswer ? "after-answer" : ""} ${block.item.type === "tool" ? "has-tool" : ""} ${entering.current ? "entering" : ""}`}
       data-detail=${block.item.detailIndex}>
-      <div class="info-card-surface"><${InfoItem} item=${block.item}
+      <div class="info-card-surface"><${InfoItem} item=${block.item} reduceMotion=${!!display?.reduceMotion}
         onClick=${canOpenSheetItem(block.item)
           ? () => onOpenDetail(messageId, null, block.item.detailIndex) : undefined} /></div>
     </div>`;
@@ -704,26 +760,55 @@ function RetryActivity({ label, reduceMotion }) {
 }
 
 /** The phone hands this line from activity to terminal text; Stop hides it and keeps the slot. */
-function GenerationActivity({ activity, terminal, error, stopping, reduceMotion }) {
-  const terminalText = error != null ? error : terminal;
+function GenerationActivity({ activity, terminal, stopping, reduceMotion, precededByCard, failed }) {
+  const retainedActivity = useRef(activity);
+  if (activity) retainedActivity.current = activity;
+  const terminalText = terminal;
   const active = stopping ? null : activity;
-  if (!active && terminalText == null) return null;
-  if (active && active.kind === "retry") {
-    return html`<${RetryActivity} label=${`${active.retryText || ""}...`} reduceMotion=${reduceMotion} />`;
-  }
-  return html`<div class=${`generation-activity ${terminalText != null ? "generation-terminal" : ""}`}>${terminalText != null
-    ? terminalText
-    : html`<span class="generation-dot" role="status" aria-label="Generating"></span>`}</div>`;
+  const retainLayout = stopping && activity != null;
+  if (!active && !retainLayout && terminalText == null) return null;
+  const drawn = active ?? retainedActivity.current;
+  return html`<div class=${`generation-inline-slot${precededByCard ? " after-card" : ""}`}>
+    <div class="generation-inline-draw" data-hidden=${!active} data-stopping=${stopping}
+      aria-hidden=${!active ? "true" : null}>
+      ${drawn?.kind === "retry"
+        ? html`<${RetryActivity} label=${`${drawn.retryText || ""}...`} reduceMotion=${reduceMotion} />`
+        : html`<div class="generation-activity"><span class="generation-dot" role=${active ? "status" : null} aria-label="Generating"></span></div>`}
+    </div>
+    ${terminalText != null && html`<div class="generation-activity generation-inline-terminal" data-failed=${failed}>${terminalText}</div>`}
+  </div>`;
 }
 
 /** AssistantMessageContent reads the same presentation decisions as the phone. */
-function ModelMessage({ message, wrap, display, expansion, expansionController, appearances, streaming, stopping,
+export function ModelMessage({ message, wrap, display, expansion, expansionController, appearances, streaming, stopping,
   generating, reduceMotion, deletesConversation, onOpenSheet, onOpenDetail, search, matches, onFork, onShare, births, branchControl, onDelete }) {
   const presentation = message.presentation;
   const error = message.participant === "ERROR";
   const [info, setInfo] = useState(false);
+  const [sources, setSources] = useState(null);
+  const [sourceDetail, setSourceDetail] = useState(null);
+  const [pendingSource, setPendingSource] = useState(null);
+  function activateSource(source) {
+    if (source.url && /^https?:\/\//i.test(source.url)) window.open(source.url, "_blank", "noopener,noreferrer");
+    else setSourceDetail(source);
+  }
+  function openCitation(values) {
+    if (values.length === 1) activateSource(values[0]);
+    else setSources(values);
+  }
   const dialogs = html`
-    ${info && html`<${MessageInfoDialog} message=${message} onClose=${() => setInfo(false)} />`}`;
+    ${info && html`<${MessageInfoDialog} message=${message} onClose=${() => setInfo(false)} />`}
+    ${sources && html`<${DetailSheet} display=${display} title=${`${sources.length} ${presentation.sourcesLabel}`}
+      closing=${!!pendingSource} onClose=${() => { setSources(null); if (pendingSource) { activateSource(pendingSource); setPendingSource(null); } }}>
+      <div class="citation-sources">${sources.map((source, index) => html`<button class="citation-source" type="button" key=${source.id}
+        onClick=${() => setPendingSource(source)}><span class="citation-number">${index + 1}</span><span class="citation-source-content">
+          <span class="citation-source-title">${source.title}</span>
+          ${(source.location || source.fileName) && html`<span class="citation-source-meta">${[source.fileName, source.location].filter(Boolean).join(" - ")}</span>`}
+        </span></button>`)}</div>
+    </${DetailSheet}>`}
+    ${sourceDetail && html`<${DetailSheet} display=${display} title=${sourceDetail.title} onClose=${() => setSourceDetail(null)}>
+      <div class="citation-detail">${[sourceDetail.fileName, sourceDetail.location, sourceDetail.excerpt].filter(Boolean).map(text => html`<p>${text}</p>`)}</div>
+    </${DetailSheet}>`}`;
   // The compact summary never reads as prose: MessageItem owns a pill for it instead.
   if (message.compact) {
     return html`<div class="model-message">
@@ -739,7 +824,7 @@ function ModelMessage({ message, wrap, display, expansion, expansionController, 
         case "answer":
           return html`<div class="answer-block" key=${`a${block.index}`}>
             <${Markdown} text=${block.text} wrap=${wrap} search=${search} sourceStart=${block.sourceStart}
-              streaming=${streaming && block.streaming} reduceMotion=${reduceMotion} births=${births}
+              streaming=${streaming && block.streaming} reduceMotion=${reduceMotion} births=${births} onCitation=${openCitation}
               matches=${matches.filter(match => match.start >= block.sourceStart && match.endExclusive <= block.sourceStart + block.sourceLength)} />
           </div>`;
         case "group":
@@ -750,7 +835,7 @@ function ModelMessage({ message, wrap, display, expansion, expansionController, 
             appearances=${appearances} streaming=${streaming} opensSheet=${presentation.useThinkingSheet} />`;
         case "card":
           return html`<${InfoCard} key=${`card:${block.item.detailIndex}`} block=${block}
-            messageId=${message.id} appearances=${appearances} streaming=${streaming}
+            messageId=${message.id} appearances=${appearances} streaming=${streaming} display=${display}
             onOpenDetail=${onOpenDetail} />`;
         default:
           return null;
@@ -763,21 +848,24 @@ function ModelMessage({ message, wrap, display, expansion, expansionController, 
         onOpenSheet=${onOpenSheet} onOpenDetail=${onOpenDetail}
         appearances=${appearances} streaming=${streaming} opensSheet=${presentation.useThinkingSheet} />`}
       ${presentation?.answer && html`<${Markdown} text=${presentation.answer} wrap=${wrap} search=${search} matches=${matches}
-        streaming=${streaming} reduceMotion=${reduceMotion} births=${births} />`}`;
+        streaming=${streaming} reduceMotion=${reduceMotion} births=${births} onCitation=${openCitation} />`}`;
   }
-  // assistantActionsVisible: the action line leaves while the answer still streams and returns
-  // 320 ms after it settles, never as a disabled ghost.
+  // The fixed native action slot owns layout; availability changes only paint and interaction.
   const actionsVisible = !error && !streaming && !stopping;
   return html`<div class=${error ? "model-message error" : "model-message"}>${body}<${GenerationActivity}
     activity=${presentation?.inlineActivity} terminal=${presentation?.inlineTerminalText}
-    error=${presentation?.errorBarText} stopping=${stopping}
+    stopping=${stopping} precededByCard=${presentation?.terminalFollowsCard} failed=${message.status === "ERROR"}
     reduceMotion=${!!display?.reduceMotion} />
-    ${presentation?.stoppedBar && html`<div class=${`generation-activity generation-terminal stopped-bar${presentation.terminalFollowsCard ? " after-card" : ""}`}>${t.generationStopped}</div>`}
-    ${presentation?.answerTailVisible && !stopping &&
-      html`<div class="message-actions answer-tail"><span class="generation-dot" role="status" aria-label="Generating"></span></div>`}
-    ${actionsVisible && html`<${AssistantActions} message=${message} generating=${generating}
-      reduceMotion=${reduceMotion} branchControl=${branchControl} onInfo=${() => setInfo(true)}
-      onDelete=${onDelete} onFork=${onFork} onShare=${onShare} />`}
+    ${presentation?.errorBarText != null && html`<div class=${`generation-activity generation-terminal terminal-bar${presentation.terminalFollowsCard ? " after-card" : ""}`}>${presentation.errorBarText}</div>`}
+    ${presentation?.stoppedBar && html`<div class=${`generation-activity generation-terminal terminal-bar stopped-bar${presentation.terminalFollowsCard ? " after-card" : ""}`}>${t.generationStopped}</div>`}
+    ${!error && html`<div class="message-action-slot">
+      ${streaming && presentation?.answerTailVisible && !stopping &&
+        html`<div class="message-actions answer-tail"><span class="generation-dot" role="status" aria-label="Generating"></span></div>`}
+      <${AssistantActions} message=${message} visible=${actionsVisible} generating=${generating}
+        reduceMotion=${reduceMotion} branchControl=${branchControl} onInfo=${() => setInfo(true)}
+        onSources=${() => setSources(presentation.sources)}
+        onDelete=${onDelete} onFork=${onFork} onShare=${onShare} />
+    </div>`}
     ${dialogs}</div>`;
 }
 
@@ -1020,11 +1108,7 @@ export function MessageList({ state, label, onPageAction }) {
     const row = [...root.querySelectorAll(".message-row")].find((node) => node.dataset.id === anchor.id);
     if (row) root.scrollTop += row.getBoundingClientRect().top - root.getBoundingClientRect().top - anchor.offset;
   }, [pageKey]);
-  // A reply streaming below a page the reader moved away from brings the page back to the newest round.
-  const streamingRound = state.streaming ? roundOfId(state.streaming.id) : -1;
-  useEffect(() => {
-    if (streamingRound >= 0 && streamingRound >= requested.end) setPageRequest(null);
-  }, [streamingRound, requested.end]);
+  // Explicit history requests are not displaced by an out-of-page streaming reply.
   const ids = pagePath.map((entry) => entry.id).join(",");
   const branchVisual = useRef({ id: null, entries: [], bodies: new Map() });
   const branchScroll = useRef(null);
@@ -1436,7 +1520,7 @@ export function MessageList({ state, label, onPageAction }) {
         if (!request.scrollFinished && row && state.bodies.has(branchTarget)) {
           if (branchScroll.current?.id !== request.id || branchScroll.current.target !== branchTarget) {
             branchScroll.current = { id: request.id, target: branchTarget, started: performance.now(),
-              from: root.scrollTop, distance: row.getBoundingClientRect().top - root.getBoundingClientRect().top,
+              from: root.scrollTop, distance: row.getBoundingClientRect().top - root.getBoundingClientRect().top - parseFloat(getComputedStyle(column).paddingTop),
               done: false };
           }
           const motion = branchScroll.current;
@@ -1462,15 +1546,16 @@ export function MessageList({ state, label, onPageAction }) {
         const bottom = Math.min(viewport.bottom, root.closest(".chat").querySelector(".composer-host").getBoundingClientRect().top);
         const center = (top + bottom) / 2;
         const geometry = new Map();
-        root.querySelectorAll("mark[data-search-key]").forEach(mark => {
-          for (const rect of mark.getClientRects()) {
-            const old = geometry.get(mark.dataset.searchKey);
-            geometry.set(mark.dataset.searchKey, {
+        for (const range of CSS.highlights.get("agora-search") ?? []) {
+          if (!root.contains(range.startContainer)) continue;
+          for (const rect of range.getClientRects()) {
+            const old = geometry.get(range.searchKey);
+            geometry.set(range.searchKey, {
               top: Math.min(old?.top ?? rect.top, rect.top),
               bottom: Math.max(old?.bottom ?? rect.bottom, rect.bottom),
             });
           }
-        });
+        }
         const midpoint = bounds => (bounds.top + bounds.bottom) / 2;
         if (search.index < 0) {
           let nearest = -1, distance = Infinity;
@@ -1720,7 +1805,7 @@ export function MessageList({ state, label, onPageAction }) {
             appearances=${appearances.current} glyphBirths=${glyphBirths.current} conversationId=${state.openId}
             onOpenSheet=${openSheet} onOpenDetail=${openDetail}
             streaming=${state.streaming?.id === entry.id}
-            stopping=${!!state.composer?.stopping}
+            stopping=${!!state.composer?.stopping && state.streaming?.id === entry.id}
             body=${exitIds.has(entry.id) ? branchVisual.current.bodies.get(entry.id)
               : state.streaming?.id === entry.id ? state.streaming : state.bodies.get(entry.id)} /></${RowEntrance}>`)}
         ${!hasNewerRounds && html`<div class="message-tail-minimum" key="tail-minimum" ref=${tailSpacer} aria-hidden="true"></div>`}

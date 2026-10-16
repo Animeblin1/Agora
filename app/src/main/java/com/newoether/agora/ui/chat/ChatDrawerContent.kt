@@ -161,6 +161,7 @@ internal fun ChatDrawerContent(
     drawerWidth: Dp,
     scope: CoroutineScope,
     inputFocusRequester: FocusRequester,
+    drawerVisible: Boolean,
     onRequestClose: suspend () -> Unit,
     onSettingsButtonTop: (Float) -> Unit,
     onOpenSettings: () -> Unit,
@@ -288,13 +289,11 @@ internal fun ChatDrawerContent(
                 .padding(horizontal = 16.dp, vertical = 20.dp)
                 .clearFocusOnTap()
         ) {
-            Text(stringResource(R.string.conversations), style = ChatType.conversationsTitle)
-            Spacer(modifier = Modifier.height(12.dp))
-
             DrawerSearchBar(
                 query = search.query,
                 onQueryChange = { search.query = it },
                 searching = search.isSearching,
+                drawerVisible = drawerVisible,
             )
             Spacer(modifier = Modifier.height(12.dp))
 

@@ -57,10 +57,10 @@ function ConversationRow({ conversation, selected, onSelect, onMenu }) {
       aria-current=${selected ? "true" : null} onClick=${() => onSelect(conversation.id)}
       onContextMenu=${event => { event.preventDefault(); onMenu(conversation, event.currentTarget); }}>
       <span class="conversation-title">${conversation.title}</span>
-      <span class="conversation-indicator">
+      ${indicator && html`<span class="conversation-indicator">
         ${indicator === "generating" && html`<${CircularProgress} size=${18} stroke=${2} />`}
         ${indicator === "unread" && html`<span class="unread-dot" role="img" aria-label=${t.unreadGeneration}></span>`}
-      </span>
+      </span>`}
     </button>
     <button class="conversation-more" type="button" title=${t.options} aria-label=${t.options}
       onClick=${event => onMenu(conversation, event.currentTarget)}>${icon(ICON_MORE_VERT)}</button>
@@ -69,9 +69,20 @@ function ConversationRow({ conversation, selected, onSelect, onMenu }) {
 
 /** ChatDrawerContent: title, search, New Chat, then the conversation list. */
 function DrawerContent({ conversations, openId, onSelect, connected, loading, hasMore, reduceMotion,
-  searchQuery, searchResults, searchLoading, searchFailed, onRequestRename, onRequestDelete, switching }) {
+  searchQuery, searchResults, searchLoading, searchFailed, drawerVisible = true, onRequestRename, onRequestDelete, switching }) {
   const searching = !!searchQuery.trim();
   const list = useRef(null), bar = useRef(null), focusIndex = useRef(null);
+  const placements = useRef(new Map());
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchField = useRef(null);
+  useLayoutEffect(() => {
+    if (!drawerVisible) {
+      if (searchExpanded || searchQuery) sync.search("");
+      searchField.current?.blur();
+      setSearchExpanded(false);
+    }
+  }, [drawerVisible]);
+  useLayoutEffect(() => { if (searchExpanded && drawerVisible) searchField.current?.focus({ preventScroll: true }); }, [searchExpanded]);
   const [viewport, setViewport] = useState({ top: 0, height: 500 });
   const [menu, setMenu] = useState(null), [menuOpen, setMenuOpen] = useState(false);
   // Chrome runs no CSS transition on its own scrollbar, so this list draws its bar beside the native
@@ -100,6 +111,11 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
     return () => observer.disconnect();
   }, []);
   useLayoutEffect(() => {
+    const node = list.current;
+    node.style.setProperty("--drawer-edge-top", node.scrollTop <= 2 ? "0" : "1");
+    node.style.setProperty("--drawer-edge-bottom", node.scrollHeight - node.clientHeight - node.scrollTop <= 2 ? "0" : "1");
+  }, [viewport, rows, searching, searchResults, loading]);
+  useLayoutEffect(() => {
     if (!searching && connected && hasMore && !loading && viewport.top + viewport.height >= rows.height - 88) sync.loadMore();
     if (focusIndex.current != null) {
       const target = rows.items[focusIndex.current]?.conversation;
@@ -108,6 +124,47 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
     }
     if (menu && !menu.anchor.isConnected) setMenuOpen(false);
   }, [viewport, rows, hasMore, loading, connected, searching]);
+  useLayoutEffect(() => {
+    const active = placements.current;
+    const mounted = new Set();
+    for (const node of list.current.querySelectorAll("[data-drawer-position]")) {
+      const key = node.dataset.drawerPosition;
+      const top = parseFloat(node.style.top);
+      const previous = active.get(key);
+      mounted.add(key);
+      if (searching || reduceMotion) {
+        previous?.animation?.cancel();
+        active.set(key, { node, top, animation: null });
+        continue;
+      }
+      if (previous?.node === node && previous.top !== top) {
+        const transform = getComputedStyle(node).transform;
+        const offset = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+        const from = previous.top + offset - top;
+        previous.animation?.cancel();
+        const animation = node.animate([{ transform: `translateY(${from}px)` }, { transform: "translateY(0px)" }],
+          { duration: 400, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "both" });
+        const placement = { node, top, animation };
+        active.set(key, placement);
+        animation.onfinish = () => {
+          if (active.get(key) !== placement) return;
+          placement.animation = null;
+          animation.cancel();
+        };
+      } else if (!previous || previous.node !== node) {
+        previous?.animation?.cancel();
+        active.set(key, { node, top, animation: null });
+      }
+    }
+    for (const [key, placement] of active) if (!mounted.has(key)) {
+      placement.animation?.cancel();
+      active.delete(key);
+    }
+  });
+  useLayoutEffect(() => () => {
+    placements.current.forEach(placement => placement.animation?.cancel());
+    placements.current.clear();
+  }, []);
   useLayoutEffect(() => { list.current.scrollTop = 0; }, [searching]);
   function highlight(text) {
     if (!searchQuery.trim()) return text;
@@ -135,19 +192,28 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
     setViewport({ top: list.current.scrollTop, height: list.current.clientHeight });
   }
   return html`
-    <h2 class="drawer-title">${t.conversations}</h2>
-    <div class="drawer-search">
-      ${icon(ICON_SEARCH)}
-      <input type="text" enterkeyhint="search" placeholder=${t.searchHint} aria-label=${t.searchHint} disabled=${!connected}
-        value=${searchQuery} onInput=${event => sync.search(event.currentTarget.value)} />
-      <span class="drawer-search-trailing">
-        <span class="drawer-search-progress" data-active=${searchLoading} aria-hidden=${!searchLoading}>
-          <${CircularProgress} size=${18} stroke=${2} label=${t.loading} />
-        </span>
-        <button class="drawer-search-clear" type="button" aria-label=${t.clearSearch}
-          data-active=${!!searchQuery && !searchLoading} disabled=${!searchQuery || searchLoading}
-          onClick=${() => sync.search("")}>${icon(ICON_CLOSE)}</button>
-      </span>
+    <div class="drawer-header" data-search-expanded=${searchExpanded}>
+      <h2 class="drawer-title" aria-hidden=${searchExpanded}>${t.title}</h2>
+      <div class="drawer-search" data-expanded=${searchExpanded}>
+        <button class="drawer-search-toggle" type="button" aria-label=${searchExpanded ? t.close : t.searchHint}
+          aria-expanded=${searchExpanded} onClick=${event => {
+            if (searchExpanded) {
+              sync.search(""); searchField.current?.blur(); setSearchExpanded(false);
+              event.currentTarget.focus({ preventScroll: true });
+            } else setSearchExpanded(true);
+          }}>${icon(searchExpanded ? ICON_ARROW_BACK : ICON_SEARCH)}</button>
+        ${searchExpanded && html`
+        <input ref=${searchField} type="text" enterkeyhint="search" placeholder=${t.searchHint} aria-label=${t.searchHint} disabled=${!connected}
+          value=${searchQuery} onInput=${event => sync.search(event.currentTarget.value)} />
+        <span class="drawer-search-trailing">
+          <span class="drawer-search-progress" data-active=${searchLoading} aria-hidden=${!searchLoading}>
+            <${CircularProgress} size=${18} stroke=${2} label=${t.loading} />
+          </span>
+          <button class="drawer-search-clear" type="button" aria-label=${t.clearSearch}
+            data-active=${!!searchQuery && !searchLoading} disabled=${!searchQuery || searchLoading}
+            onClick=${() => sync.search("")}>${icon(ICON_CLOSE)}</button>
+        </span>`}
+      </div>
     </div>
     ${!searching && html`
     <${DrawerButton} className="filled new-chat" iconPath=${ICON_ADD} label=${t.newChat}
@@ -164,7 +230,7 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
         </button></div>`)}
         ${!searchLoading && !searchResults.length && html`<p class="drawer-search-empty" role="status">${searchFailed ? t.searchFailed : t.searchNoResults}</p>`}
       ` : html`<div class="drawer-list-window" style=${{ height: `${rows.height}px` }}>
-        ${visible.map(item => html`<div key=${item.key} class="drawer-list-position" style=${{ top: `${item.top}px`, height: `${item.height}px` }}>
+        ${visible.map(item => html`<div key=${item.key} class="drawer-list-position" data-drawer-position=${item.key} style=${{ top: `${item.top}px`, height: `${item.height}px` }}>
           ${item.conversation ? html`<${ConversationRow} conversation=${item.conversation}
             selected=${item.key === openId} onSelect=${onSelect}
             onMenu=${(conversation, anchor) => { setMenu({ conversation, anchor }); setMenuOpen(true); }} />`
@@ -205,7 +271,41 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
   const [menuOpen, setMenuOpen] = useState(false);
   const [retainedMenu, setRetainedMenu] = useState(false);
   const moreButton = useRef(null);
+  const bar = useRef(null);
+  const searchTransition = useRef({ active: !!search, animation: null, outgoing: null });
   const searchField = useRef(null);
+  useLayoutEffect(() => {
+    const node = bar.current, motion = searchTransition.current;
+    const active = !!search;
+    if (!node || motion.active === active) return;
+    motion.animation?.cancel();
+    motion.outgoing?.remove();
+    const previous = motion.snapshot?.cloneNode(true) ?? node.cloneNode(true);
+    previous.querySelectorAll("input").forEach(input => input.removeAttribute("id"));
+    previous.inert = true;
+    previous.setAttribute("aria-hidden", "true");
+    previous.classList.add("top-bar-outgoing");
+    node.parentElement.append(previous);
+    motion.outgoing = previous;
+    const enterMs = reduceMotion ? 360 : active ? 400 : 360;
+    const exitMs = reduceMotion ? 300 : active ? 300 : 320;
+    const fromScale = reduceMotion ? 1 : active ? .94 : .97;
+    const toScale = reduceMotion ? 1 : active ? .97 : .94;
+    previous.animate([{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: `scale(${toScale})` }],
+      { duration: exitMs, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" });
+    motion.animation = node.animate([{ opacity: 0, transform: `scale(${fromScale})` }, { opacity: 1, transform: "scale(1)" }],
+      { duration: enterMs, easing: "cubic-bezier(.4,0,.2,1)" });
+    motion.animation.onfinish = () => { previous.remove(); motion.outgoing = null; motion.animation = null; };
+    motion.active = active;
+  }, [!!search, reduceMotion]);
+  useLayoutEffect(() => {
+    const motion = searchTransition.current;
+    motion.snapshot = bar.current.cloneNode(true);
+  });
+  useLayoutEffect(() => () => {
+    searchTransition.current.animation?.cancel();
+    searchTransition.current.outgoing?.remove();
+  }, []);
   useLayoutEffect(() => { if (search) searchField.current?.focus(); }, [!!search]);
   const titleIdentity = title ? JSON.stringify([conversationId, title]) : "brand";
   const titled = titleFrames => {
@@ -220,7 +320,7 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
   const [titleFrames, setTitleFrames] = useState([{ identity: titleIdentity, title, subtitle, initialAlpha: 1 }]);
   const presentations = titled(titleFrames);
   const titleCanvas = useRef(null);
-  const titleClip = useRef({ identity: null, target: 0, deadline: 0, animation: null });
+  const titleClip = useRef({ identity: null, target: 0, deadline: 0, animation: null, canvas: null });
   const titleFade = useRef({ identity: titleIdentity, animations: new Map() });
   useLayoutEffect(() => {
     const canvas = titleCanvas.current;
@@ -232,9 +332,9 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
       const label = [...canvas.querySelectorAll("h1")].find((node) => node.dataset.titleIdentity === titleIdentity);
       if (!label) return;
       const target = Math.min(canvas.clientWidth, 74 + Math.min(label.scrollWidth, 180));
-      const initial = clip.identity === null;
+      const initial = clip.identity === null || clip.canvas !== canvas;
       const changed = clip.identity !== titleIdentity;
-      if (!changed && clip.target === target && (!reduceMotion || !clip.animation)) return;
+      if (!initial && !changed && clip.target === target && (!reduceMotion || !clip.animation)) return;
       const now = performance.now();
       const from = initial ? target : parseFloat(getComputedStyle(canvas).getPropertyValue("--title-clip-width"));
       canvas.style.setProperty("--title-clip-width", `${from}px`);
@@ -242,6 +342,7 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
       clip.animation = null;
       if (changed) clip.deadline = now + 400;
       clip.identity = titleIdentity;
+      clip.canvas = canvas;
       clip.target = target;
       if (initial || reduceMotion || now >= clip.deadline) {
         canvas.style.setProperty("--title-clip-width", `${target}px`);
@@ -310,7 +411,7 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
     setMenuOpen(false);
   }
   return html`
-    <header class="top-bar">
+    <header class="top-bar" ref=${bar}>
       ${search ? html`<div class="capsule conversation-search-bar" aria-busy=${search.searching}>
         <button class="bar-button" type="button" aria-label=${t.close} onClick=${() => sync.dismissConversationSearch()}>${icon(ICON_ARROW_BACK)}</button>
         <input ref=${searchField} type="search" value=${search.query} placeholder=${t.conversationSearch}
@@ -767,7 +868,7 @@ export function Shell({ onSignedOut }) {
         role=${sideBySide ? null : "dialog"} aria-modal=${modalOpen ? "true" : null}
         inert=${!drawerOpen}>
         <${DrawerContent} conversations=${state.conversations} openId=${state.openId}
-          connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion}
+          connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion} drawerVisible=${drawerOpen}
           switching=${!!state.switching || state.openStatus === "loading"}
           searchQuery=${state.searchQuery} searchResults=${state.searchResults} searchLoading=${state.searchLoading} searchFailed=${state.searchFailed}
           onRequestRename=${(request) => setRowDialog({ ...request, type: "rename" })}

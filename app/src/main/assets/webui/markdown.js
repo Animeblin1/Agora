@@ -68,7 +68,7 @@ const lineBreaks = (text) => text.split("\n").length - 1;
  * is a node of its own, so a blank line between two paragraphs is three spacers. Display math
  * is its own paragraph with a blank line on each side, as latexToMarkdown writes it.
  */
-function renderHtml(markdown, math, sourceMap = []) {
+function renderHtml(markdown, math, sourceMap = [], citations = []) {
   const positions = [];
   let source = "", boundary = 0, delta = 0;
   for (let index = 0; index < markdown.length; index++) {
@@ -132,21 +132,51 @@ function renderHtml(markdown, math, sourceMap = []) {
   const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
+  const citationByToken = new Map(citations.map(marker => [marker.token, marker]));
   for (const node of nodes) {
     if (node.parentElement?.closest("code,pre")) continue;
     const matches = [...node.data.matchAll(MATH_SLOT)].filter(match => math?.[Number(match[1])]);
+    for (let index = 0; index < node.data.length; index++) {
+      const citation = citationByToken.get(node.data[index]);
+      if (citation) matches.push({ index, 0: citation.token, citation });
+    }
+    matches.sort((a, b) => a.index - b.index);
     if (!matches.length) continue;
     const fragment = document.createDocumentFragment();
     let cursor = 0;
+    const appendText = end => {
+      if (end <= cursor) return;
+      const span = document.createElement("span");
+      span.dataset.sourceTextStart = String(cursor);
+      span.textContent = node.data.slice(cursor, end);
+      fragment.append(span);
+    };
     for (const match of matches) {
-      fragment.append(node.data.slice(cursor, match.index));
-      const slot = document.createElement("span");
-      slot.className = "math";
-      slot.dataset.math = match[1];
+      appendText(match.index);
+      const slot = document.createElement(match.citation ? "button" : "span");
+      if (match.citation) {
+        const marker = match.citation;
+        slot.className = "citation-inline";
+        slot.type = "button";
+        slot.dataset.citationToken = marker.token;
+        slot.setAttribute("aria-label", marker.accessibilityLabel || (marker.sources.length > 1 ? `${marker.label} +${marker.sources.length - 1}` : marker.sources[0].title));
+        const alternate = document.createElement("span");
+        alternate.className = "citation-alternate";
+        alternate.textContent = `[${marker.label}${marker.sources.length > 1 ? ` +${marker.sources.length - 1}` : ""}]`;
+        slot.append(alternate);
+        const label = document.createElement("span"); label.className = "citation-primary"; label.textContent = marker.label; slot.append(label);
+        if (marker.sources.length > 1) {
+          const suffix = document.createElement("span"); suffix.className = "citation-suffix";
+          suffix.textContent = `+${marker.sources.length - 1}`; slot.append(suffix);
+        }
+      } else {
+        slot.className = "math";
+        slot.dataset.math = match[1];
+      }
       fragment.append(slot);
       cursor = match.index + match[0].length;
     }
-    fragment.append(node.data.slice(cursor));
+    appendText(node.data.length);
     node.replaceWith(fragment);
   }
   return template.innerHTML;
@@ -156,12 +186,16 @@ const copyIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_CO
 let fadeIdentity = 0;
 
 /** Draw-only alpha preserves the text nodes, shaping, wrapping, selection and search geometry. */
-export function fadeStreamingText(element, streaming, reduceMotion, timeline, sourceStart = 0, variant = "answer") {
-  if (!element || reduceMotion) return;
+export function fadeStreamingText(element, streaming, reduceMotion, timeline, sourceStart = 0, variant = "answer", tailCodePoints = null, spatialBands = 0, initialAlpha = 0) {
+  if (!element || reduceMotion || (tailCodePoints != null && !streaming)) return;
   const published = performance.now();
   const groups = new Map();
+  const count = [...element.textContent].length;
+  const fadedCount = tailCodePoints == null ? count : Math.min(count, tailCodePoints);
+  const prefix = count - fadedCount;
+  const bands = Math.min(spatialBands, fadedCount);
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
-    acceptNode: node => node.parentElement.closest(".code-header,.md-marker,.math")
+    acceptNode: node => node.parentElement.closest(".code-header,.md-marker,.math,.citation-inline")
       ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
   });
   let index = sourceStart;
@@ -172,11 +206,13 @@ export function fadeStreamingText(element, streaming, reduceMotion, timeline, so
       const key = `${variant}:${index++}`;
       let birth = timeline.get(key);
       if (birth == null && streaming) { birth = published; timeline.set(key, birth); }
-      if (birth != null && published - birth < 500) {
+      const suffix = index - sourceStart - 1 - prefix;
+      const spatial = bands > 0 ? 1 - (Math.floor(suffix * bands / fadedCount) + 1) / bands * (1 - initialAlpha) : initialAlpha;
+      if (birth != null && suffix >= 0 && published - birth < 500) {
         const color = getComputedStyle(node.parentElement).color;
-        const groupKey = `${birth}:${color}`;
+        const groupKey = `${birth}:${color}:${spatial}`;
         let group = groups.get(groupKey);
-        if (!group) { group = { birth, color, ranges: [] }; groups.set(groupKey, group); }
+        if (!group) { group = { birth, color, spatial, ranges: [] }; groups.set(groupKey, group); }
         const range = new Range();
         range.setStart(node, offset);
         range.setEnd(node, offset + glyph.length);
@@ -199,7 +235,7 @@ export function fadeStreamingText(element, streaming, reduceMotion, timeline, so
     const now = performance.now();
     let active = false;
     for (const group of owned) {
-      const alpha = Math.min(1, Math.max(0, (now - group.birth) / 500));
+      const alpha = Math.min(1, Math.max(0, group.spatial + (now - group.birth) / 500));
       group.rule.style.color = `color-mix(in srgb, ${group.color} ${alpha * 100}%, transparent)`;
       active ||= alpha < 1;
     }
@@ -217,19 +253,25 @@ export function fadeStreamingText(element, streaming, reduceMotion, timeline, so
 }
 /** Projects server match identities onto visible glyphs without supplying result counts. */
 export function highlightSearch(element, search, matches, sourceStart = 0) {
-  element.querySelectorAll("mark[data-search-key]").forEach(mark => mark.replaceWith(...mark.childNodes));
-  element.normalize();
   if (!search?.query.trim() || !matches.length) return;
+  const highlights = CSS.highlights.get("agora-search") ?? new Highlight();
+  const active = CSS.highlights.get("agora-search-active") ?? new Highlight();
+  CSS.highlights.set("agora-search", highlights);
+  CSS.highlights.set("agora-search-active", active);
+  const owned = [];
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
-    acceptNode: node => node.parentElement.closest(".code-header,.md-marker,.math") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    acceptNode: node => node.parentElement.closest(".code-header,.md-marker,.math,.citation-inline") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
   });
   const nodes = [];
   let node;
   while ((node = walker.nextNode())) nodes.push({ node });
   for (const entry of nodes) {
     const token = entry.node.parentElement.closest("[data-source-positions]");
+    if (!token && element.classList.contains("markdown")) continue;
     const raw = token?.dataset.sourceRaw ?? entry.node.textContent;
-    const positions = token ? token.dataset.sourcePositions.split(",").map(Number) : Array.from({ length: raw.length }, (_, index) => index);
+    const plainStart = Number(entry.node.parentElement.closest("[data-source-start]")?.dataset.sourceStart ?? 0);
+    const positions = token ? token.dataset.sourcePositions.split(",").map(Number) :
+      Array.from({ length: raw.length }, (_, index) => plainStart + index);
     const value = entry.node.textContent;
     let decoded = "", decodedPositions = [], cursor = Number(token?.dataset.sourceContentStart ?? 0);
     for (let index = cursor; index < raw.length; index++) {
@@ -247,7 +289,7 @@ export function highlightSearch(element, search, matches, sourceStart = 0) {
         decodedPositions.push(positions[index]);
       }
     }
-    cursor = 0;
+    cursor = Number(entry.node.parentElement.closest("[data-source-text-start]")?.dataset.sourceTextStart ?? 0);
     for (let index = 0; index < value.length; index++) {
       const found = decoded.indexOf(value[index], cursor);
       if (found < 0) break;
@@ -262,21 +304,24 @@ export function highlightSearch(element, search, matches, sourceStart = 0) {
     }
   }
   for (const entry of nodes) {
-    if (!entry.ranges) continue;
-    const fragment = document.createDocumentFragment(), value = entry.node.textContent;
-    let cursor = 0;
-    for (const range of entry.ranges) {
-      fragment.append(value.slice(cursor, range.start));
-      const mark = document.createElement("mark");
-      mark.dataset.searchKey = range.key;
-      mark.classList.toggle("active", search.matches[search.index]?.key === range.key);
-      mark.textContent = value.slice(range.start, range.end);
-      fragment.append(mark);
-      cursor = range.end;
+    for (const match of entry.ranges ?? []) {
+      const range = new Range();
+      range.setStart(entry.node, match.start);
+      range.setEnd(entry.node, match.end);
+      range.searchKey = match.key;
+      owned.push(range);
+      highlights.add(range);
+      if (search.matches[search.index]?.key === match.key) active.add(range);
     }
-    fragment.append(value.slice(cursor));
-    entry.node.replaceWith(fragment);
   }
+  active.priority = 1;
+  return () => {
+    for (const range of owned) { highlights.delete(range); active.delete(range); }
+    if (!highlights.size) {
+      CSS.highlights.delete("agora-search");
+      CSS.highlights.delete("agora-search-active");
+    }
+  };
 }
 
 /**
@@ -284,7 +329,7 @@ export function highlightSearch(element, search, matches, sourceStart = 0) {
  * code block wrapping setting (off scrolls long lines sideways).
  */
 export function Markdown({ text, variant = "answer", wrap = true, search, matches = [], sourceStart = 0,
-  streaming = false, reduceMotion = false, births, emptyStreamingText = null }) {
+  streaming = false, reduceMotion = false, births, emptyStreamingText = null, onCitation }) {
   const root = useRef(null);
   const emptyNode = useRef(null);
   const showEmpty = streaming && !text.markdown.trim() && emptyStreamingText != null;
@@ -306,7 +351,24 @@ export function Markdown({ text, variant = "answer", wrap = true, search, matche
     };
   }, [showEmpty, emptyStreamingText]);
   const localBirths = useRef(new Map());
-  const markup = useMemo(() => renderHtml(text.markdown, text.math, text.sourceMap), [text.markdown, text.math, text.sourceMap]);
+  const citationKey = JSON.stringify(text.citations ?? []);
+  const markup = useMemo(() => renderHtml(text.markdown, text.math, text.sourceMap, text.citations), [text.markdown, text.math, text.sourceMap, citationKey]);
+  const activateCitation = useRef(onCitation);
+  activateCitation.current = onCitation;
+  const mathKey = JSON.stringify(text.math ?? []);
+  const searchKey = JSON.stringify([!!search?.query.trim(), matches.map(match =>
+    [match.key, match.start, match.endExclusive])]);
+  const activeMatch = search?.matches[search.index]?.key;
+  // Semantic markup is the only body commit; parent refreshes preserve text and KaTeX nodes.
+  useLayoutEffect(() => { root.current.innerHTML = markup; }, [markup]);
+  useLayoutEffect(() => {
+    root.current.querySelectorAll("[data-citation-token]").forEach(button => {
+      button.onclick = () => {
+        const marker = text.citations?.find(marker => marker.token === button.dataset.citationToken);
+        if (marker) activateCitation.current?.(marker.sources);
+      };
+    });
+  }, [markup, citationKey]);
   useLayoutEffect(() => {
     const element = root.current;
     if (!element) return;
@@ -323,14 +385,22 @@ export function Markdown({ text, variant = "answer", wrap = true, search, matche
         navigator.clipboard?.writeText(code).catch(() => {});
       };
     });
-  }, [markup, text.math]);
-  useLayoutEffect(() => { highlightSearch(root.current, search, matches, sourceStart); }, [markup, search, matches, sourceStart]);
+  }, [markup, mathKey]);
+  useLayoutEffect(() => highlightSearch(root.current, search, matches, sourceStart), [markup, searchKey, sourceStart]);
+  useLayoutEffect(() => {
+    const active = CSS.highlights.get("agora-search-active");
+    for (const range of CSS.highlights.get("agora-search") ?? []) {
+      if (!root.current.contains(range.startContainer)) continue;
+      if (range.searchKey === activeMatch) active?.add(range);
+      else active?.delete(range);
+    }
+  }, [markup, searchKey, sourceStart, activeMatch]);
   useLayoutEffect(() => {
     return fadeStreamingText(root.current, streaming, reduceMotion,
       births ?? localBirths.current, sourceStart, variant);
-  }, [markup, search, matches, sourceStart, streaming, reduceMotion, births]);
+  }, [markup, searchKey, sourceStart, streaming, reduceMotion, births]);
   const className = `markdown ${variant}${wrap ? "" : " nowrap"}`;
-  const content = html`<div class=${className} ref=${root} dangerouslySetInnerHTML=${{ __html: markup }} />`;
+  const content = html`<div class=${className} ref=${root} />`;
   return emptyStreamingText == null ? content : html`<div class="markdown-message">
     ${content}
     ${(showEmpty || retainedEmpty) && html`<div class=${`${className} markdown-empty-stream`}

@@ -103,6 +103,9 @@ export function InteractionBar({ state }) {
       else if (!active) {
         const next = desired.current;
         if (shown.owner === owner && !next) saved.current.delete(shown.owner);
+        state.animations.forEach(animation => animation.cancel());
+        state.animations = [];
+        state.page = null;
         setShown(next);
       }
     }
@@ -120,6 +123,7 @@ export function InteractionBar({ state }) {
     state.animations = [];
     if (previous?.owner === shown.owner && previous.key !== keyOf(current) && active && !reduced && !memory.folded) {
       const outgoing = previous.node.cloneNode(true);
+      outgoing.querySelectorAll('input[type="radio"]').forEach(input => input.removeAttribute("name"));
       outgoing.inert = true;
       outgoing.setAttribute("aria-hidden", "true");
       outgoing.classList.add("interaction-outgoing");
@@ -206,7 +210,7 @@ export function InteractionBar({ state }) {
             <div class="interaction-question">${current.question}</div>
             <div class="interaction-options" role="group" aria-label=${current.question}>
               ${(current.options || []).map(option => html`<label key=${option} class=${`interaction-option${value.choices.includes(option) ? " selected" : ""}`}>
-                <input type=${current.allowMultiple ? "checkbox" : "radio"} name=${`question-${current.id}`} checked=${value.choices.includes(option)} disabled=${busy}
+                <input key=${current.allowMultiple ? "checkbox" : "radio"} type=${current.allowMultiple ? "checkbox" : "radio"} name=${`question-${current.id}`} checked=${value.choices.includes(option)} disabled=${busy}
                   onChange=${event => {
                     value.choices = current.allowMultiple ? value.choices.includes(option) ? value.choices.filter(choice => choice !== option) : [...value.choices, option] : [option];
                     if (!current.allowMultiple) { value.own = false; event.currentTarget.closest('.interaction-body').querySelector('textarea').blur(); }
@@ -215,7 +219,7 @@ export function InteractionBar({ state }) {
                 <span>${option}</span>
               </label>`)}
               ${current.options?.length > 0 && html`<label class=${`interaction-option${value.own ? " selected" : ""}`}>
-                <input type=${current.allowMultiple ? "checkbox" : "radio"} name=${`question-${current.id}`} checked=${value.own} disabled=${busy}
+                <input key=${current.allowMultiple ? "checkbox" : "radio"} type=${current.allowMultiple ? "checkbox" : "radio"} name=${`question-${current.id}`} checked=${value.own} disabled=${busy}
                   onChange=${event => {
                     value.own = current.allowMultiple ? !value.own : true;
                     if (!current.allowMultiple) value.choices = [];

@@ -356,6 +356,7 @@ fun ChatApp(
                 drawerWidth = drawerWidth,
                 scope = scope,
                 inputFocusRequester = inputFocusRequester,
+                drawerVisible = drawerState.isVisible,
                 onRequestClose = onRequestClose,
                 onSettingsButtonTop = { settingsButtonTopDp = it },
                 onOpenSettings = onOpenSettings,

@@ -5,6 +5,16 @@ Status: authoritative, 2026-08-14.
 This contract owns Agora's complete citation lifecycle. It applies to structured citations from
 Providers, compatible relays, supported conversation imports, durable message storage, streaming
 projection, message reload, copy/search/selection, and answer rendering.
+The WebUI follows this complete native contract as confirmed on 2026-10-14: Kotlin projects the
+canonical normalized citation records and Markdown presentation through its existing sync payload;
+the browser renders terminal inline/group capsules, the Sources summary and shared source sheet,
+safe URL and non-URL details, portable Copy output, and body-search metadata exclusion. It must not
+parse Provider-private dialects or become a second normalization, persistence or generation owner.
+The canonical Markdown projection optionally tracks original UTF-16 positions through citation
+insertion, wrapper replacement, grouping and private-marker removal. The WebUI composes that map
+with its existing math source map, so body search after a capsule keeps original message offsets.
+Inline placeholder expansion retains each remaining text leaf's position within its Markdown token;
+capsule labels never enter body-search ranges.
 
 Citation presentation is answer metadata. It is not Markdown syntax, ordinary answer text, a tool
 call, a tool result, or Provider-history content.

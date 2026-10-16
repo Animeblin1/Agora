@@ -246,6 +246,25 @@ internal data class WebText(
     val markdown: String,
     val math: List<WebMath> = emptyList(),
     val sourceMap: List<List<Int>> = emptyList(),
+    val citations: List<WebCitationMarker> = emptyList(),
+)
+
+@Serializable
+internal data class WebCitationMarker(
+    val token: String,
+    val label: String,
+    val sources: List<WebCitation>,
+    val accessibilityLabel: String = "",
+)
+
+@Serializable
+internal data class WebCitation(
+    val id: String,
+    val title: String,
+    val url: String?,
+    val fileName: String?,
+    val location: String?,
+    val excerpt: String?,
 )
 
 @Serializable
