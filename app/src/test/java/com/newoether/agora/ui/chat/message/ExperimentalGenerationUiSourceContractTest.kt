@@ -326,7 +326,7 @@ class ExperimentalGenerationUiSourceContractTest {
             .substringBefore("internal fun toolDetailHorizontalPadding(")
         val errorContent = toolResult
             .substringAfter("private fun ToolErrorContent(")
-            .substringBefore("private fun ToolMutedContent(")
+            .substringBefore("internal fun ToolMutedContent(")
         val terminalText = source(locateMainSourceRoot(), "message/GenerationErrorBar.kt")
             .substringAfter("internal fun GenerationTerminalText(")
             .substringBefore("internal fun GenerationErrorBar(")

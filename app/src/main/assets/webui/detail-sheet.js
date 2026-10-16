@@ -64,6 +64,71 @@ function ToolOutput({ text }) {
   return html`<div class="tool-output tool-code">${text}</div>`;
 }
 
+/** File name in primary color, directory as small grey text that keeps its tail visible. */
+function ToolPath({ path }) {
+  if (!path) return null;
+  return html`<div class="tool-path" title=${path.directory || null}>
+    <div class="tool-path-name tool-code">${path.name}</div>
+    ${path.directory && html`<div class="tool-path-dir"><bdi>${path.directory}</bdi></div>`}
+  </div>`;
+}
+
+function highlightedText(text, highlights) {
+  if (!highlights || highlights.length === 0) return text;
+  const parts = [];
+  let cursor = 0;
+  highlights.forEach(([start, end], index) => {
+    if (start < cursor || end <= start) return;
+    if (start > cursor) parts.push(text.slice(cursor, start));
+    parts.push(html`<mark class="tool-hit" key=${index}>${text.slice(start, end)}</mark>`);
+    cursor = end;
+  });
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return parts;
+}
+
+/** Numbered rows with a non-selectable gutter; wrapped text stays aligned with its column. */
+function ToolCodeRows({ rows }) {
+  return html`<div class="tool-output tool-code-rows">
+    ${rows.map((row, index) => row.gap
+      ? html`<div class="tool-code-gap" key=${index} aria-hidden="true">\u22ef</div>`
+      : html`<div class=${`tool-code-row ${row.context ? "context" : ""}`} key=${index}>
+        <span class="tool-gutter" aria-hidden="true">${row.number ?? "\u2014"}</span>
+        <span class="tool-code">${highlightedText(row.text ?? "", row.highlights)}</span>
+      </div>`)}
+  </div>`;
+}
+
+/** A string argument (shell command, written file content) shown as code under its key name. */
+function ToolCodeArgument({ code }) {
+  return html`<div class="tool-code-argument">
+    <div class="tool-code-argument-name tool-code">${code.name}</div>
+    ${code.rows && code.rows.length > 0 ? html`<${ToolCodeRows} rows=${code.rows} />` : html`<${ToolOutput} text=${code.text} />`}
+  </div>`;
+}
+
+function ToolDiff({ body }) {
+  const sign = { removed: "-", added: "+", context: " " };
+  return html`<div class="tool-meta-row tool-file-meta">
+      <${ToolPath} path=${body.path} /><${ToolPill} text=${body.editCount} />
+    </div>
+    <div class="tool-diff-hunks">
+      ${body.hunks.map((hunk, index) => html`<div key=${index}>
+        ${(hunk.index != null || hunk.replaceAll) && html`<div class="tool-meta-row tool-diff-meta">
+          ${hunk.index != null && html`<${ToolPill} text=${`#${hunk.index}`} />`}
+          ${hunk.replaceAll && html`<${ToolPill} text=${body.replaceAllLabel} emphasized />`}
+        </div>`}
+        <div class="tool-output tool-diff">
+          ${hunk.lines.map((line, i) => html`<div class=${`tool-diff-line ${line.kind}`} key=${i}>
+            <span class="tool-diff-sign" aria-hidden="true">${sign[line.kind] ?? " "}</span>
+            <span class="tool-code">${line.text}</span>
+          </div>`)}
+        </div>
+      </div>`)}
+    </div>
+    <div class="tool-muted tool-gap">${body.status}</div>`;
+}
+
 function ToolBody({ body }) {
   switch (body.type) {
     case "active":
@@ -80,23 +145,21 @@ function ToolBody({ body }) {
       ${body.error && html`<div class="tool-terminal tool-gap">${body.error}</div>`}
       <div class="tool-gap"><${ToolOutput} text=${body.output} /></div>`;
     case "paths": return html`<div class="tool-paths">
-      ${body.values.map((path, index) => html`<div class="tool-indexed-line" key=${index}>
-        <span class="tool-index">${index + 1}</span><span class="tool-code">${path}</span>
-      </div>`)}
+      ${body.values.map((path, index) => html`<${ToolPath} key=${index} path=${path} />`)}
     </div>`;
     case "grep": return html`<div class="tool-grep">
       ${body.groups.map((group, index) => html`<div key=${index}>
-        <div class="tool-grep-path tool-code">${group.path}</div>
-        <div class="tool-matches">${group.matches.map((match, i) => html`<div class="tool-match" key=${i}>
-          <span class="tool-line-number">${match.line ?? "\u2014"}</span><span class="tool-code">${match.content}</span>
-        </div>`)}</div>
+        <div class="tool-grep-path"><${ToolPath} path=${group.path} /></div>
+        <${ToolCodeRows} rows=${group.rows} />
       </div>`)}
     </div>`;
+    case "edit": return html`<${ToolDiff} body=${body} />`;
     case "file": return html`
       ${(body.path || body.lineCount) && html`<div class="tool-meta-row tool-file-meta">
-        <${ToolPill} text=${body.path} /><${ToolPill} text=${body.lineCount} />
+        <${ToolPath} path=${body.path} /><${ToolPill} text=${body.lineCount} />
       </div>`}
-      ${body.content ? html`<${ToolOutput} text=${body.content} />` : html`<div class="tool-muted">${body.emptyText}</div>`}
+      ${!body.content ? html`<div class="tool-muted">${body.emptyText}</div>`
+        : body.lines != null ? html`<${ToolCodeRows} rows=${body.lines} />` : html`<${ToolOutput} text=${body.content} />`}
       ${body.truncationText && html`<div class="tool-muted tool-gap">${body.truncationText}</div>`}`;
     case "search": return html`<div class="tool-search-results">
       ${body.results.map((result, index) => {
@@ -149,8 +212,10 @@ function ToolDetail({ item, conversationId, messageId }) {
   const previewVersion = urls.join("\n");
   useEffect(() => { setPreview(null); }, [previewVersion]);
   return html`<div class=${`tool-detail ${detail.kind === "WEB_SEARCH" ? "search" : ""}`}>
-    ${detail.arguments && html`<div class="tool-arguments">
-      <div class="tool-section-label">${detail.argumentsLabel}</div><${ToolDocument} document=${detail.arguments} />
+    ${(detail.arguments || detail.codeArgument) && html`<div class="tool-arguments">
+      <div class="tool-section-label">${detail.argumentsLabel}</div>
+      ${detail.arguments && html`<${ToolDocument} document=${detail.arguments} />`}
+      ${detail.codeArgument && html`<${ToolCodeArgument} code=${detail.codeArgument} />`}
     </div>`}
     ${detail.kind === "MCP" && html`<div class="tool-mcp-meta tool-meta-row">
       <${ToolPill} text="MCP" emphasized /><${ToolPill} text=${detail.mcpDevice} />

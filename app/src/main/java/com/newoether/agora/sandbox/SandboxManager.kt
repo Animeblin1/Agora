@@ -1,7 +1,10 @@
 package com.newoether.agora.sandbox
 
+import com.newoether.agora.util.ShellFileEdit
 import com.newoether.agora.util.ShellFileEditResult
 import com.newoether.agora.util.ShellFileReadResult
+import com.newoether.agora.util.ShellGrepOptions
+import com.newoether.agora.util.ShellGrepResult
 import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,15 +97,14 @@ interface SandboxManager {
     suspend fun fileGrep(
         pattern: String,
         basePath: String = "",
-        fileGlob: String = ""
-    ): Result<Pair<List<GrepMatch>, Boolean>>
+        fileGlob: String = "",
+        options: ShellGrepOptions = ShellGrepOptions(),
+    ): Result<ShellGrepResult>
 
-    /** Edit a file atomically within the sandbox mutation boundary. */
+    /** Apply ordered edits atomically within the sandbox mutation boundary; all or nothing. */
     suspend fun fileEdit(
         path: String,
-        oldString: String,
-        newString: String,
-        replaceAll: Boolean = false
+        edits: List<ShellFileEdit>,
     ): ShellFileEditResult
 
     /** Install a package via Alpine apk. */

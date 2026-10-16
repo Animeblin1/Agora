@@ -286,7 +286,7 @@ internal object ToolPresentationResolver {
         "stop_shell_job" -> ToolKind.SHELL_JOB_STOP
         "file_read" -> ToolKind.FILE_READ
         "file_write" -> ToolKind.FILE_WRITE
-        "file_edit" -> ToolKind.FILE_EDIT
+        "file_edit", "file_multi_edit" -> ToolKind.FILE_EDIT
         "file_glob" -> ToolKind.FILE_GLOB
         "file_grep" -> ToolKind.FILE_GREP
         "view_image" -> ToolKind.IMAGE_VIEW

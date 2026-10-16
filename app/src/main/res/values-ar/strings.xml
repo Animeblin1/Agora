@@ -789,6 +789,9 @@
     <string name="tool_edit_skill">تعديل المهارة</string>
     <string name="tool_delete_skill">حذف المهارة</string>
     <string name="tool_read_file_truncated">تم عرض محتوى جزئي · تابع من البايت %1$d</string>
+    <string name="tool_read_file_truncated_line">تم عرض محتوى جزئي · تابع من السطر %1$d</string>
+    <string name="tool_edit_count">%1$d تعديلات</string>
+    <string name="tool_edit_replace_all">استبدال الكل</string>
     <string name="low_context_mode">وضع السياق المنخفض</string>
     <string name="low_context_mode_default_desc">تفعيل وضع السياق المنخفض افتراضيًا</string>
     <string name="learn_more">معرفة المزيد...</string>

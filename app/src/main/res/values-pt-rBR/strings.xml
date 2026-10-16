@@ -789,6 +789,9 @@
     <string name="tool_edit_skill">Editar habilidade</string>
     <string name="tool_delete_skill">Excluir habilidade</string>
     <string name="tool_read_file_truncated">Conteúdo parcial exibido · continuar no byte %1$d</string>
+    <string name="tool_read_file_truncated_line">Conteúdo parcial exibido · continuar na linha %1$d</string>
+    <string name="tool_edit_count">%1$d alterações</string>
+    <string name="tool_edit_replace_all">Substituir tudo</string>
     <string name="low_context_mode">Modo de contexto reduzido</string>
     <string name="low_context_mode_default_desc">Ativar o modo de contexto reduzido por padrão</string>
     <string name="learn_more">Saiba mais...</string>

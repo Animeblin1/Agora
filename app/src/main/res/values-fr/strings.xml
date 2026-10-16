@@ -789,6 +789,9 @@
     <string name="tool_edit_skill">Modifier la compétence</string>
     <string name="tool_delete_skill">Supprimer la compétence</string>
     <string name="tool_read_file_truncated">Contenu partiel affiché · continuer à l’octet %1$d</string>
+    <string name="tool_read_file_truncated_line">Contenu partiel affiché · continuer à la ligne %1$d</string>
+    <string name="tool_edit_count">%1$d modifications</string>
+    <string name="tool_edit_replace_all">Tout remplacer</string>
     <string name="low_context_mode">Mode à faible contexte</string>
     <string name="low_context_mode_default_desc">Activer le mode à faible contexte par défaut</string>
     <string name="learn_more">En savoir plus...</string>

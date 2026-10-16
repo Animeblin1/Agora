@@ -86,7 +86,7 @@
     <string name="tool_file_write">Ghi tệp</string>
     <string name="tool_file_edit">Sửa tệp</string>
     <string name="tool_file_glob">Tìm tệp</string>
-    <string name="tool_file_grep">Tìm kiếm tệp</string>
+    <string name="tool_file_grep">Tìm trong tệp</string>
 
     <!-- Tool in-progress states (doing) -->
     <string name="tool_listing_conversations">Đang liệt kê cuộc trò chuyện…</string>
@@ -95,7 +95,7 @@
     <string name="tool_writing_file">Đang ghi %1$s…</string>
     <string name="tool_editing_file">Đang sửa %1$s…</string>
     <string name="tool_finding_files">Đang tìm %1$s…</string>
-    <string name="tool_searching_file">Đang tìm kiếm %1$s…</string>
+    <string name="tool_searching_file">Đang tìm %1$s trong tệp…</string>
     <string name="tool_executing_shell">Đang thực thi: %1$s…</string>
     <string name="tool_reading_memory">Đang đọc %1$s…</string>
     <string name="tool_saving_memory">Đang lưu %1$s…</string>
@@ -795,6 +795,9 @@
     <string name="tool_edit_skill">Sửa kỹ năng</string>
     <string name="tool_delete_skill">Xóa kỹ năng</string>
     <string name="tool_read_file_truncated">Đang hiển thị một phần nội dung · tiếp tục từ byte %1$d</string>
+    <string name="tool_read_file_truncated_line">Đang hiển thị một phần nội dung · tiếp tục từ dòng %1$d</string>
+    <string name="tool_edit_count">%1$d thay đổi</string>
+    <string name="tool_edit_replace_all">Thay thế tất cả</string>
     <string name="low_context_mode">Chế độ ngữ cảnh thấp</string>
     <string name="low_context_mode_default_desc">Bật chế độ ngữ cảnh thấp theo mặc định</string>
     <string name="learn_more">Tìm hiểu thêm...</string>

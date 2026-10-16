@@ -5,8 +5,11 @@ import com.newoether.agora.data.ShellDeviceConfig
 import com.newoether.agora.sandbox.SandboxManager
 import com.newoether.agora.util.SHELL_FILE_READ_MAX_BYTES
 import com.newoether.agora.util.ShellClient
+import com.newoether.agora.util.ShellFileEdit
 import com.newoether.agora.util.ShellFileEditResult
 import com.newoether.agora.util.ShellFileReadResult
+import com.newoether.agora.util.ShellGrepOptions
+import com.newoether.agora.util.ShellGrepResult
 import com.newoether.agora.util.SshClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -32,12 +35,8 @@ internal sealed interface Backend {
     }
     suspend fun fileRead(path: String, offset: Long, limit: Long): ShellFileReadResult
     suspend fun fileWrite(path: String, content: String): String?
-    suspend fun fileEdit(
-        path: String,
-        oldString: String,
-        newString: String,
-        replaceAll: Boolean,
-    ): ShellFileEditResult
+    /** Applies ordered edits atomically: all succeed or nothing is written. */
+    suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult
     suspend fun fileGlob(
         pattern: String,
         basePath: String,
@@ -47,7 +46,8 @@ internal sealed interface Backend {
         pattern: String,
         basePath: String,
         fileGlob: String,
-    ): Result<Pair<List<ShellClient.GrepMatch>, Boolean>>
+        options: ShellGrepOptions,
+    ): Result<ShellGrepResult>
     fun close()
 }
 
@@ -157,12 +157,8 @@ internal class ConchBackend(override val device: ShellDeviceConfig) : Backend {
     override suspend fun fileWrite(path: String, content: String): String? =
         client.fileWrite(path, content)?.let { jsonError("file_write", it, server = deviceName) }
 
-    override suspend fun fileEdit(
-        path: String,
-        oldString: String,
-        newString: String,
-        replaceAll: Boolean,
-    ): ShellFileEditResult = client.fileEdit(path, oldString, newString, replaceAll)
+    override suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult =
+        client.fileEdit(path, edits)
 
     override suspend fun fileGlob(
         pattern: String,
@@ -175,8 +171,9 @@ internal class ConchBackend(override val device: ShellDeviceConfig) : Backend {
         pattern: String,
         basePath: String,
         fileGlob: String,
-    ): Result<Pair<List<ShellClient.GrepMatch>, Boolean>> =
-        client.fileGrep(pattern, basePath, fileGlob)
+        options: ShellGrepOptions,
+    ): Result<ShellGrepResult> =
+        client.fileGrep(pattern, basePath, fileGlob, options)
 
     override fun close() {}
 
@@ -243,27 +240,27 @@ internal class SshBackend(override val device: ShellDeviceConfig) : Backend {
     override suspend fun fileWrite(path: String, content: String): String? =
         client.fileWrite(path, content)?.let { jsonError("file_write", it, server = deviceName) }
 
-    override suspend fun fileEdit(
-        path: String,
-        oldString: String,
-        newString: String,
-        replaceAll: Boolean,
-    ): ShellFileEditResult = client.fileEdit(path, oldString, newString, replaceAll)
+    override suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult =
+        client.fileEdit(path, edits)
 
     override suspend fun fileGlob(
         pattern: String,
         basePath: String,
         depth: Int?,
-    ): Result<Pair<List<String>, Boolean>> = Result.success(client.fileGlob(pattern, basePath, depth))
+    ): Result<Pair<List<String>, Boolean>> = try {
+        Result.success(client.fileGlob(pattern, basePath, depth))
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 
     override suspend fun fileGrep(
         pattern: String,
         basePath: String,
         fileGlob: String,
-    ): Result<Pair<List<ShellClient.GrepMatch>, Boolean>> =
-        client.fileGrep(pattern, basePath, fileGlob).map { (matches, truncated) ->
-            matches.map { ShellClient.GrepMatch(it.path, it.line, it.content) } to truncated
-        }
+        options: ShellGrepOptions,
+    ): Result<ShellGrepResult> = client.fileGrep(pattern, basePath, fileGlob, options)
 
     override fun close() { client.close() }
 }
@@ -301,12 +298,8 @@ internal class SandboxBackend(sandbox: SandboxManager?) : Backend {
     override suspend fun fileWrite(path: String, content: String): String? =
         mgr.fileWrite(path, content)?.let { jsonError("file_write", it, server = "Local Sandbox") }
 
-    override suspend fun fileEdit(
-        path: String,
-        oldString: String,
-        newString: String,
-        replaceAll: Boolean,
-    ): ShellFileEditResult = mgr.fileEdit(path, oldString, newString, replaceAll)
+    override suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult =
+        mgr.fileEdit(path, edits)
 
     override suspend fun fileGlob(
         pattern: String,
@@ -324,10 +317,8 @@ internal class SandboxBackend(sandbox: SandboxManager?) : Backend {
         pattern: String,
         basePath: String,
         fileGlob: String,
-    ): Result<Pair<List<ShellClient.GrepMatch>, Boolean>> =
-        mgr.fileGrep(pattern, basePath, fileGlob).map { (matches, truncated) ->
-            matches.map { ShellClient.GrepMatch(it.path, it.line, it.content) } to truncated
-        }
+        options: ShellGrepOptions,
+    ): Result<ShellGrepResult> = mgr.fileGrep(pattern, basePath, fileGlob, options)
 
     override fun close() {}
 }
@@ -346,4 +337,5 @@ private fun failedFileRead(
     limit = if (limit in 1..SHELL_FILE_READ_MAX_BYTES) limit else SHELL_FILE_READ_MAX_BYTES,
     truncated = false,
     error = error,
+    bytesRead = 0,
 )

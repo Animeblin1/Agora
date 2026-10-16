@@ -4,6 +4,8 @@ import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.api.ToolFunction
 import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
+import com.newoether.agora.util.SHELL_FILE_EDIT_MAX_OPERATIONS
+import com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTEXT_LINES
 import com.newoether.agora.viewmodel.GenerationContext
 
 internal object ShellToolDefinitions {
@@ -121,13 +123,15 @@ internal object ShellToolDefinitions {
         val fileTools = listOf(
             ToolDefinition(function = ToolFunction(
                 name = "file_read",
-                description = "Read a bounded file slice from a shell server or local sandbox. Returns valid JSON with content, line and byte counts, offset, limit, and an explicit truncated flag.",
+                description = "Read a file from a shell server or local sandbox. Byte mode (default) returns a raw slice with content, line and byte counts, offset, limit, a truncated flag, and next_offset to continue. Line mode (start_line and/or max_lines) returns lines prefixed with their line numbers plus start_line, end_line, has_more and next_start_line; it scans at most 16MB from offset.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "path" to ToolProperty("string", "Absolute path to the file."),
                         "server" to fileServerProperty,
-                        "offset" to ToolProperty("integer", "Byte offset (optional)."),
-                        "limit" to ToolProperty("integer", "Max bytes to read (optional, default and maximum 1MB).")
+                        "offset" to ToolProperty("integer", "Byte offset (optional). In line mode, line 1 is the line starting at this offset."),
+                        "limit" to ToolProperty("integer", "Byte mode: max bytes to read (optional, default and maximum 1MB)."),
+                        "start_line" to ToolProperty("integer", "Line mode: first line to return, 1-based (optional)."),
+                        "max_lines" to ToolProperty("integer", "Line mode: max lines to return (optional, default $FILE_READ_DEFAULT_LINES, maximum $FILE_READ_MAX_LINES).")
                     ),
                     required = listOf("path") + fileRequired
                 )
@@ -146,21 +150,46 @@ internal object ShellToolDefinitions {
             )),
             ToolDefinition(function = ToolFunction(
                 name = "file_edit",
-                description = "Edit a file on a shell server or local sandbox by replacing old_string with new_string.",
+                description = "Edit a file on a shell server or local sandbox by replacing old_string with new_string. old_string must match exactly once unless replace_all is true. For several changes to one file, use file_multi_edit.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "path" to ToolProperty("string", "Absolute path to the file."),
                         "old_string" to ToolProperty("string", "The exact text to find and replace. LF and CRLF line endings are treated as equivalent."),
-                        "new_string" to ToolProperty("string", "The replacement text. Line endings follow the matched text or target file."),
+                        "new_string" to ToolProperty("string", "The replacement text. Line endings follow the matched text or target file. May be empty to delete the match."),
                         "server" to fileServerProperty,
-                        "replace_all" to ToolProperty("boolean", "Replace all occurrences (optional, default false).")
+                        "replace_all" to ToolProperty("boolean", "Replace all occurrences (optional, default false)."),
                     ),
                     required = listOf("path", "old_string", "new_string") + fileRequired
                 )
             )),
             ToolDefinition(function = ToolFunction(
+                name = "file_multi_edit",
+                description = "Apply several replacements to one file on a shell server or local sandbox in a single atomic operation. Edits apply in order, each seeing the previous result; if any fails, nothing is written.",
+                parameters = ToolParameters(
+                    properties = mapOf(
+                        "path" to ToolProperty("string", "Absolute path to the file."),
+                        "server" to fileServerProperty,
+                        "edits" to ToolProperty(
+                            "array",
+                            "1 to $SHELL_FILE_EDIT_MAX_OPERATIONS ordered replacements. LF and CRLF line endings are treated as equivalent.",
+                            items = ToolProperty(
+                                "object",
+                                "One replacement.",
+                                properties = mapOf(
+                                    "old_string" to ToolProperty("string", "Exact non-empty text to find."),
+                                    "new_string" to ToolProperty("string", "Replacement text; may be empty."),
+                                    "replace_all" to ToolProperty("boolean", "Replace all occurrences (optional, default false)."),
+                                ),
+                                required = listOf("old_string", "new_string"),
+                            ),
+                        )
+                    ),
+                    required = listOf("path", "edits") + fileRequired
+                )
+            )),
+            ToolDefinition(function = ToolFunction(
                 name = "file_glob",
-                description = "List up to 1000 files on a shell server or local sandbox matching a glob pattern. Returns an explicit truncated flag.",
+                description = "List up to 1000 files on a shell server or local sandbox matching a glob pattern. A pattern without '/' matches file names at any depth; '**' matches across directories. Skips .git, .hg and .svn. Returns an explicit truncated flag.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "pattern" to ToolProperty("string", "Glob pattern matched against file names (e.g. '*.go', '*.md')."),
@@ -173,13 +202,15 @@ internal object ShellToolDefinitions {
             )),
             ToolDefinition(function = ToolFunction(
                 name = "file_grep",
-                description = "Search for up to 500 regex matches in files on a shell server or local sandbox. Returns an explicit truncated flag.",
+                description = "Search for up to 500 regex matches in files on a shell server or local sandbox. Files over 500KB are skipped and counted in skipped_large_files; .git, .hg and .svn are not searched. Returns an explicit truncated flag.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "pattern" to ToolProperty("string", "Regular expression pattern to search for."),
                         "server" to fileServerProperty,
                         "path" to ToolProperty("string", "File or directory to search in (optional)."),
-                        "glob" to ToolProperty("string", "Filter files by glob pattern (optional).")
+                        "glob" to ToolProperty("string", "Filter files by glob pattern (optional)."),
+                        "case_insensitive" to ToolProperty("boolean", "Match case-insensitively (optional, default false)."),
+                        "context" to ToolProperty("integer", "Lines of context before and after each match, 0-$SHELL_FILE_GREP_MAX_CONTEXT_LINES (optional, default 0).")
                     ),
                     required = listOf("pattern") + fileRequired
                 )

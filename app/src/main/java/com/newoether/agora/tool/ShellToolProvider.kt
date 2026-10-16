@@ -8,6 +8,8 @@ import com.newoether.agora.util.Constants
 import com.newoether.agora.util.SHELL_COMMAND_MAX_BYTES
 import com.newoether.agora.util.SHELL_WORKDIR_MAX_BYTES
 import com.newoether.agora.util.SHELL_FILE_WRITE_MAX_BYTES
+import com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTEXT_LINES
+import com.newoether.agora.util.ShellGrepOptions
 import com.newoether.agora.viewmodel.GenerationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -151,7 +153,8 @@ class ShellToolProvider(
             "stop_shell_job" -> stopShellJob(arguments, ctx)
             "file_read" -> executeFileRead(arguments, ctx)
             "file_write" -> executeFileWrite(arguments, ctx)
-            "file_edit" -> executeFileEdit(arguments, ctx)
+            "file_edit" -> executeFileEdit(arguments, ctx, "file_edit")
+            "file_multi_edit" -> executeFileEdit(arguments, ctx, "file_multi_edit")
             "file_glob" -> executeFileGlob(arguments, ctx)
             "file_grep" -> executeFileGrep(arguments, ctx)
             "view_image" -> executeViewImage(arguments, ctx).text
@@ -177,7 +180,7 @@ class ShellToolProvider(
     override fun handles(name: String): Boolean = name in setOf(
         "list_shells", "execute_shell_command",
         "list_shell_jobs", "get_shell_job", "wait_for_job", "stop_shell_job",
-        "file_read", "file_write", "file_edit", "file_glob", "file_grep", "view_image"
+        "file_read", "file_write", "file_edit", "file_multi_edit", "file_glob", "file_grep", "view_image"
     )
 
     // ── list_shells ────────────────────────────────────────
@@ -574,9 +577,28 @@ class ShellToolProvider(
         val serverName = arg(args, "server")
         val offset = arg(args, "offset").toLongOrNull() ?: 0L
         val limit = arg(args, "limit").toLongOrNull() ?: 0L
+        val rawStartLine = arg(args, "start_line")
+        val rawMaxLines = arg(args, "max_lines")
+        val lineMode = rawStartLine.isNotBlank() || rawMaxLines.isNotBlank()
+        val startLine = if (rawStartLine.isBlank()) 1 else rawStartLine.toIntOrNull()
+            ?: return jsonError("file_read", "start_line must be an integer")
+        if (startLine < 1) return jsonError("file_read", "start_line must be at least 1")
+        val maxLines = if (rawMaxLines.isBlank()) FILE_READ_DEFAULT_LINES else rawMaxLines.toIntOrNull()
+            ?: return jsonError("file_read", "max_lines must be an integer")
+        if (maxLines < 1) return jsonError("file_read", "max_lines must be at least 1")
 
         val backend = getBackend(serverName, ctx)
             ?: return jsonError("file_read", serverNotFoundMessage(serverName, ctx))
+        val serverLabel = backend.device?.name ?: "Local Sandbox"
+        if (lineMode) {
+            try {
+                return lineModeFileReadJson(serverLabel, path, offset, startLine, maxLines) { at, size ->
+                    backend.fileRead(path, at, size)
+                }
+            } finally {
+                backend.close()
+            }
+        }
         try {
             val result = try {
                 backend.fileRead(path, offset, limit)
@@ -611,7 +633,8 @@ class ShellToolProvider(
         val path = arg(args, "path")
         if (path.isBlank()) return jsonError("file_write", "path is required")
         val content = arg(args, "content")
-        if (content.isBlank()) return jsonError("file_write", "content is required")
+        // Whitespace-only content is legitimate; only a missing field is an error.
+        if (args["content"] !is JsonPrimitive) return jsonError("file_write", "content is required")
         if (content.toByteArray(Charsets.UTF_8).size > SHELL_FILE_WRITE_MAX_BYTES) {
             return jsonError("file_write", "content exceeds 1MB limit")
         }
@@ -640,18 +663,22 @@ class ShellToolProvider(
         }
     }
 
-    private suspend fun executeFileEdit(arguments: String, ctx: GenerationContext): String {
+    /**
+     * Serves file_edit and file_multi_edit; each tool parses only its own schema. Successful
+     * results keep type "file_edit" so both render with the same detail view.
+     */
+    private suspend fun executeFileEdit(arguments: String, ctx: GenerationContext, toolName: String): String {
         val args = parseToolArgs(arguments)
         val path = arg(args, "path")
-        if (path.isBlank()) return jsonError("file_edit", "path is required")
-        val oldStr = arg(args, "old_string")
-        if (oldStr.isBlank()) return jsonError("file_edit", "old_string is required")
-        val newStr = arg(args, "new_string")
-        val replaceAll = arg(args, "replace_all").equals("true", ignoreCase = true)
+        if (path.isBlank()) return jsonError(toolName, "path is required")
+        val parsed = if (toolName == "file_multi_edit") parseFileMultiEditArgs(args) else parseFileEditArgs(args)
+        val edits = parsed.getOrElse { e ->
+            return jsonError(toolName, e.message ?: "invalid edit arguments")
+        }
         val serverName = arg(args, "server")
 
         val backend = getBackend(serverName, ctx)
-            ?: return jsonError("file_edit", serverNotFoundMessage(serverName, ctx))
+            ?: return jsonError(toolName, serverNotFoundMessage(serverName, ctx))
         try {
             if (!confirmTarget(
                     ctx,
@@ -661,22 +688,22 @@ class ShellToolProvider(
                         backend.device == null && targetsSharedStorage(path),
                 )
             ) {
-                return jsonError("file_edit", "denied_by_user: the user declined to edit this file", server = serverName)
+                return jsonError(toolName, "denied_by_user: the user declined to edit this file", server = serverName)
             }
             val result = try {
-                backend.fileEdit(path, oldStr, newStr, replaceAll)
+                backend.fileEdit(path, edits)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 return jsonError(
-                    "file_edit",
+                    toolName,
                     e.message ?: "Edit failed",
                     server = backend.device?.name ?: "Local Sandbox",
                 )
             }
             result.error?.let {
                 return jsonError(
-                    "file_edit",
+                    toolName,
                     it,
                     server = backend.device?.name ?: "Local Sandbox",
                 )
@@ -686,6 +713,7 @@ class ShellToolProvider(
                 put("server", backend.device?.name ?: "Local Sandbox")
                 put("path", path)
                 put("replaced", result.replacements)
+                if (edits.size > 1) put("edits", edits.size)
                 if (result.sha256.isNotBlank()) put("sha256", result.sha256)
             }.toString()
         } finally {
@@ -728,25 +756,23 @@ class ShellToolProvider(
         val serverName = arg(args, "server")
         val basePath = arg(args, "path")
         val fileGlob = arg(args, "glob")
+        val rawContext = arg(args, "context")
+        val context = if (rawContext.isBlank()) 0 else rawContext.toIntOrNull()
+            ?: return jsonError("file_grep", "context must be an integer")
+        if (context !in 0..SHELL_FILE_GREP_MAX_CONTEXT_LINES) {
+            return jsonError("file_grep", "context must be between 0 and $SHELL_FILE_GREP_MAX_CONTEXT_LINES")
+        }
+        val options = ShellGrepOptions(
+            caseInsensitive = boolArg(args, "case_insensitive"),
+            context = context,
+        )
 
         val backend = getBackend(serverName, ctx)
             ?: return jsonError("file_grep", serverNotFoundMessage(serverName, ctx))
         try {
-            val result = backend.fileGrep(pattern, basePath, fileGlob)
+            val result = backend.fileGrep(pattern, basePath, fileGlob, options)
             return result.fold(
-                onSuccess = { (matches, truncated) ->
-                    buildJsonObject {
-                        put("type", "file_grep"); put("pattern", pattern)
-                        putJsonArray("matches") {
-                            matches.forEach { m ->
-                                add(buildJsonObject {
-                                    put("path", m.path); put("line", m.line); put("content", m.content)
-                                })
-                            }
-                        }
-                        put("truncated", truncated)
-                    }.toString()
-                },
+                onSuccess = { grep -> fileGrepJson(pattern, grep, contextRequested = context > 0) },
                 onFailure = { e -> jsonError("file_grep", e.message ?: "Unknown error") }
             )
         } finally {

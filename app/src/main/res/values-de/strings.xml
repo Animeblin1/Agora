@@ -789,6 +789,9 @@
     <string name="tool_edit_skill">Skill bearbeiten</string>
     <string name="tool_delete_skill">Skill löschen</string>
     <string name="tool_read_file_truncated">Teilinhalt angezeigt · bei Byte %1$d fortfahren</string>
+    <string name="tool_read_file_truncated_line">Teilinhalt angezeigt · bei Zeile %1$d fortfahren</string>
+    <string name="tool_edit_count">%1$d Änderungen</string>
+    <string name="tool_edit_replace_all">Alle ersetzen</string>
     <string name="low_context_mode">Modus mit kleinem Kontext</string>
     <string name="low_context_mode_default_desc">Modus mit kleinem Kontext standardmäßig aktivieren</string>
     <string name="learn_more">Mehr erfahren...</string>

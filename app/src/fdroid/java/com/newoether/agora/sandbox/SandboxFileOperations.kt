@@ -3,14 +3,20 @@ package com.newoether.agora.sandbox
 import android.system.Os
 import com.newoether.agora.util.SHELL_FILE_EDIT_MAX_BYTES
 import com.newoether.agora.util.SHELL_FILE_GLOB_MAX_MATCHES
-import com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTENT_CHARS
+import com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTEXT_LINES
 import com.newoether.agora.util.SHELL_FILE_GREP_MAX_FILE_BYTES
 import com.newoether.agora.util.SHELL_FILE_GREP_MAX_MATCHES
 import com.newoether.agora.util.SHELL_FILE_READ_MAX_BYTES
 import com.newoether.agora.util.SHELL_FILE_WRITE_MAX_BYTES
+import com.newoether.agora.util.ShellClient
+import com.newoether.agora.util.ShellFileEdit
 import com.newoether.agora.util.ShellFileEditResult
 import com.newoether.agora.util.ShellFileReadResult
+import com.newoether.agora.util.ShellGrepOptions
+import com.newoether.agora.util.ShellGrepResult
+import com.newoether.agora.util.decodeUtf8FileSlice
 import com.newoether.agora.util.editShellFileContent
+import com.newoether.agora.util.grepShellFileText
 import com.newoether.agora.util.shellFileLineCount
 import com.newoether.agora.util.shellFileSha256
 import kotlinx.coroutines.CancellationException
@@ -50,8 +56,13 @@ internal suspend fun SandboxPathResolver.fileRead(
         }
         totalRead
     }
-    val content = String(buffer, 0, bytesRead, Charsets.UTF_8)
+    val (content, consumed) = decodeUtf8FileSlice(
+        buffer,
+        bytesRead,
+        reachesEndOfFile = start + bytesRead >= totalBytes,
+    )
     ShellFileReadResult(
+        bytesRead = consumed.toLong(),
         content = content,
         lines = shellFileLineCount(content),
         totalLines = if (totalBytes <= SHELL_FILE_READ_MAX_BYTES) {
@@ -129,9 +140,9 @@ internal suspend fun SandboxPathResolver.fileGlob(
     val remaining = if (depth == null || depth <= 0) -1 else depth
     walkVirtualFiles(base.file, files, base.physicalRoot.canonicalPath, base.virtualRoot, remaining)
     currentCoroutineContext().ensureActive()
-    val matches = globMatch(files, pattern)
+    val matches = globMatch(files, pattern, basePath.ifBlank { homeMountPath })
     matches.take(SHELL_FILE_GLOB_MAX_MATCHES) to
-        (matches.size >= SHELL_FILE_GLOB_MAX_MATCHES)
+        (matches.size > SHELL_FILE_GLOB_MAX_MATCHES)
 }
 
 internal suspend fun SandboxPathResolver.fileGrep(
@@ -139,10 +150,17 @@ internal suspend fun SandboxPathResolver.fileGrep(
     basePath: String,
     homeMountPath: String,
     fileGlob: String,
-): Result<Pair<List<SandboxManager.GrepMatch>, Boolean>> = withContext(Dispatchers.IO) {
+    options: ShellGrepOptions,
+): Result<ShellGrepResult> = withContext(Dispatchers.IO) {
     try {
-        val regex = Regex(pattern)
-        val base = resolveSandboxPath(basePath.ifBlank { homeMountPath })
+        val regex = if (options.caseInsensitive) {
+            Regex(pattern, RegexOption.IGNORE_CASE)
+        } else {
+            Regex(pattern)
+        }
+        val context = options.context.coerceIn(0, SHELL_FILE_GREP_MAX_CONTEXT_LINES)
+        val virtualBase = basePath.ifBlank { homeMountPath }
+        val base = resolveSandboxPath(virtualBase)
         val allFiles = mutableListOf<String>()
         walkVirtualFiles(
             base.file,
@@ -151,39 +169,37 @@ internal suspend fun SandboxPathResolver.fileGrep(
             base.virtualRoot,
         )
         currentCoroutineContext().ensureActive()
-        val files = if (fileGlob.isBlank()) allFiles else globMatch(allFiles, fileGlob)
-        val matches = mutableListOf<SandboxManager.GrepMatch>()
-        fileLoop@ for (file in files) {
+        val files = if (fileGlob.isBlank()) allFiles else globMatch(allFiles, fileGlob, virtualBase)
+        val matches = mutableListOf<ShellClient.GrepMatch>()
+        // Collect one extra match so truncated is exact rather than "hit the cap".
+        val collectLimit = SHELL_FILE_GREP_MAX_MATCHES + 1
+        var skippedLargeFiles = 0
+        for (file in files) {
             currentCoroutineContext().ensureActive()
+            if (matches.size >= collectLimit) break
             try {
                 val resolved = if (file.startsWith("/")) resolvePath(file) else resolvePath("/$file")
-                if (!resolved.exists() || resolved.length() > SHELL_FILE_GREP_MAX_FILE_BYTES) continue
+                if (!resolved.isFile) continue
+                if (resolved.length() > SHELL_FILE_GREP_MAX_FILE_BYTES) {
+                    skippedLargeFiles += 1
+                    continue
+                }
                 val text = resolved.readText(Charsets.UTF_8)
                 // Skip binary files: a NUL byte in the content is the standard
                 // heuristic grep itself uses to avoid emitting garbage matches.
                 if (text.contains('\u0000')) continue
-                val lines = text.lineSequence().iterator()
-                var lineNumber = 0
-                while (lines.hasNext()) {
-                    currentCoroutineContext().ensureActive()
-                    lineNumber += 1
-                    val line = lines.next()
-                    if (regex.containsMatchIn(line)) {
-                        matches.add(
-                            SandboxManager.GrepMatch(
-                                path = file,
-                                line = lineNumber,
-                                content = line.take(SHELL_FILE_GREP_MAX_CONTENT_CHARS),
-                            ),
-                        )
-                        if (matches.size >= SHELL_FILE_GREP_MAX_MATCHES) break@fileLoop
-                    }
-                }
+                grepShellFileText(file, text, regex, context, collectLimit, matches)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {}
         }
-        Result.success(matches to (matches.size >= SHELL_FILE_GREP_MAX_MATCHES))
+        Result.success(
+            ShellGrepResult(
+                matches = matches.take(SHELL_FILE_GREP_MAX_MATCHES),
+                truncated = matches.size > SHELL_FILE_GREP_MAX_MATCHES,
+                skippedLargeFiles = skippedLargeFiles,
+            ),
+        )
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (e: Exception) {
@@ -193,9 +209,7 @@ internal suspend fun SandboxPathResolver.fileGrep(
 
 internal suspend fun SandboxPathResolver.fileEdit(
     path: String,
-    oldString: String,
-    newString: String,
-    replaceAll: Boolean,
+    edits: List<ShellFileEdit>,
     mutationMutex: Mutex,
 ): ShellFileEditResult = withContext(Dispatchers.IO) {
     mutationMutex.withLock {
@@ -217,9 +231,7 @@ internal suspend fun SandboxPathResolver.fileEdit(
             }
             val (editedContent, editResult) = editShellFileContent(
                 content = originalBytes.toString(Charsets.UTF_8),
-                oldString = oldString,
-                newString = newString,
-                replaceAll = replaceAll,
+                edits = edits,
             )
             if (editedContent == null) return@withLock editResult
 

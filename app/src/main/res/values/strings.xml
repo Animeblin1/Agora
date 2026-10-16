@@ -122,7 +122,7 @@
     <string name="tool_file_write">Write File</string>
     <string name="tool_file_edit">Edit File</string>
     <string name="tool_file_glob">Find Files</string>
-    <string name="tool_file_grep">Search Files</string>
+    <string name="tool_file_grep">Search Content</string>
     <!-- Tool in-progress states (doing) -->
     <string name="tool_listing_conversations">Listing conversations…</string>
     <string name="tool_reading_conversation">Reading conversation…</string>
@@ -130,7 +130,7 @@
     <string name="tool_writing_file">Writing %1$s…</string>
     <string name="tool_editing_file">Editing %1$s…</string>
     <string name="tool_finding_files">Finding %1$s…</string>
-    <string name="tool_searching_file">Searching %1$s…</string>
+    <string name="tool_searching_file">Searching content for %1$s…</string>
     <string name="tool_executing_shell">Executing: %1$s…</string>
     <string name="tool_reading_memory">Reading %1$s…</string>
     <string name="tool_saving_memory">Saving %1$s…</string>

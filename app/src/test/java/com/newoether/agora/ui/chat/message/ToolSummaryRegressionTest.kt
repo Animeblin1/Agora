@@ -223,7 +223,7 @@ class ToolSummaryRegressionTest {
             "list_skill_files", "read_skill_file", "create_skill_file", "edit_skill_file", "delete_skill_file",
             "web_search", "web_fetch", "search_conversations", "list_conversations", "read_conversation",
             "list_shells", "execute_shell_command", "list_shell_jobs", "get_shell_job", "wait_for_job", "stop_shell_job",
-            "file_read", "file_write", "file_edit", "file_glob", "file_grep", "view_image", "generate_image",
+            "file_read", "file_write", "file_edit", "file_multi_edit", "file_glob", "file_grep", "view_image", "generate_image",
             "create_task", "list_tasks", "delete_task", "start_loop", "stop_loop", "ask_user", "mcp_test", "unknown",
         )
         assertEquals(ToolKind.entries.toSet(), names.map(ToolPresentationResolver::kindForToolName).toSet())

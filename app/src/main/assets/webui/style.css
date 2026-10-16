@@ -1265,6 +1265,9 @@ input, textarea { user-select: text; }
 .tool-section-label { color: var(--md-on-surface-variant); font-size: 12px; line-height: 17px; font-weight: 600; margin-bottom: 5px; }
 .tool-section-label.result { margin-bottom: 6px; }
 .tool-arguments, .tool-mcp-meta { margin-bottom: 18px; }
+.tool-code-argument { margin-top: 8px; }
+.tool-section-label + .tool-code-argument { margin-top: 0; }
+.tool-code.tool-code-argument-name { color: color-mix(in srgb, var(--md-on-surface-variant) 70%, transparent); font-size: 11px; line-height: 15px; margin-bottom: 4px; }
 .tool-code { font: 13px/19px var(--mono-font); white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
 .tool-plain, .tool-scalar { white-space: pre-wrap; overflow-wrap: anywhere; }
 .tool-output { width: 100%; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--md-surface-container-highest) 50%, transparent); }
@@ -1286,12 +1289,33 @@ input, textarea { user-select: text; }
 .tool-json-block, .tool-json-nested { padding-top: 2px; }
 .tool-scalar.literal { color: var(--md-tertiary); }
 .tool-paths { display: grid; gap: 7px; }
-.tool-indexed-line { display: flex; align-items: flex-start; }
-.tool-index { flex: none; width: 28px; color: color-mix(in srgb, var(--md-on-surface-variant) 55%, transparent); font-size: 12px; line-height: 17px; }
-.tool-grep { display: grid; gap: 12px; }
-.tool-grep-path { margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.tool-matches { display: grid; gap: 6px; }
-.tool-line-number { flex: none; padding: 2px 6px; border-radius: 5px; background: var(--md-surface-container-highest); color: var(--md-on-surface-variant); font-size: 12px; line-height: 17px; }
+.tool-path { min-width: 0; max-width: 100%; }
+.tool-path-name { color: var(--md-primary); }
+/* RTL box + LTR bdi: the ellipsis lands at the start so the nearest directories stay visible. */
+.tool-path-dir { color: color-mix(in srgb, var(--md-on-surface-variant) 70%, transparent); font-size: 11px; line-height: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.tool-path-dir bdi { direction: ltr; unicode-bidi: isolate; }
+.tool-file-meta .tool-path { flex: 0 1 auto; }
+.tool-grep { display: grid; gap: 14px; }
+.tool-grep-path { margin-bottom: 6px; }
+.tool-code-rows { display: grid; }
+.tool-code-row { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.tool-code-row > .tool-code { flex: 1; }
+.tool-gutter { flex: none; min-width: 2ch; text-align: right; font: 13px/19px var(--mono-font); color: color-mix(in srgb, var(--md-on-surface-variant) 50%, transparent); user-select: none; -webkit-user-select: none; }
+.tool-code-row.context > .tool-code { color: color-mix(in srgb, var(--md-on-surface-variant) 75%, transparent); }
+.tool-code-row.context > .tool-gutter { color: color-mix(in srgb, var(--md-on-surface-variant) 30%, transparent); }
+.tool-code-gap { color: color-mix(in srgb, var(--md-on-surface-variant) 50%, transparent); user-select: none; -webkit-user-select: none; line-height: 19px; }
+.tool-hit { background: color-mix(in srgb, var(--md-primary) 22%, transparent); color: inherit; border-radius: 2px; }
+.tool-diff-hunks { display: grid; gap: 10px; }
+.tool-diff-meta { margin-bottom: 4px; }
+.tool-diff { padding: 6px 0; }
+.tool-diff-line { display: flex; align-items: flex-start; padding: 0 8px; min-width: 0; }
+.tool-diff-line > .tool-code { flex: 1; }
+.tool-diff-sign { flex: none; width: 14px; font: 13px/19px var(--mono-font); user-select: none; -webkit-user-select: none; }
+.tool-diff-line.removed { background: color-mix(in srgb, var(--md-error) 12%, transparent); }
+.tool-diff-line.removed > .tool-diff-sign { color: var(--md-error); }
+.tool-diff-line.added { background: color-mix(in srgb, #2da44e 12%, transparent); }
+.tool-diff-line.added > .tool-diff-sign { color: #2da44e; }
+.tool-diff-line.context { color: var(--md-on-surface-variant); }
 .tool-search-result { display: block; padding: 12px 8px; border-radius: 12px; color: var(--md-on-surface); text-decoration: none; overflow-wrap: anywhere; }
 .tool-search-result + .tool-search-result { border-top: 1px solid color-mix(in srgb, var(--md-outline-variant) 35%, transparent); }
 .tool-search-title { font-size: 16px; line-height: 24px; font-weight: 600; }

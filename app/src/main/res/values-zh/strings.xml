@@ -245,15 +245,15 @@
     <string name="tool_file_write">写入文件</string>
     <string name="tool_file_edit">编辑文件</string>
     <string name="tool_file_glob">查找文件</string>
-    <string name="tool_file_grep">搜索文件</string>
+    <string name="tool_file_grep">搜索内容</string>
     <!-- Tool in-progress states (doing) -->
     <string name="tool_listing_conversations">列出对话中…</string>
     <string name="tool_reading_conversation">阅读对话中…</string>
     <string name="tool_reading_file">读取 %1$s…</string>
     <string name="tool_writing_file">写入 %1$s…</string>
     <string name="tool_editing_file">编辑 %1$s…</string>
-    <string name="tool_finding_files">查找 %1$s…</string>
-    <string name="tool_searching_file">搜索 %1$s…</string>
+    <string name="tool_finding_files">查找文件 %1$s…</string>
+    <string name="tool_searching_file">搜索内容 %1$s…</string>
     <string name="tool_executing_shell">执行中: %1$s…</string>
     <string name="tool_reading_memory">读取 %1$s…</string>
     <string name="tool_saving_memory">保存 %1$s…</string>
@@ -782,6 +782,9 @@
     <string name="tool_edit_skill">编辑技能</string>
     <string name="tool_delete_skill">删除技能</string>
     <string name="tool_read_file_truncated">已显示部分内容 · 从字节 %1$d 继续</string>
+    <string name="tool_read_file_truncated_line">已显示部分内容 · 从第 %1$d 行继续</string>
+    <string name="tool_edit_count">%1$d 处修改</string>
+    <string name="tool_edit_replace_all">全部替换</string>
     <string name="low_context_mode">低上下文模式</string>
     <string name="low_context_mode_default_desc">默认启用低上下文模式</string>
     <string name="learn_more">了解更多...</string>

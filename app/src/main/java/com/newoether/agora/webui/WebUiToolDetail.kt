@@ -10,6 +10,8 @@ import com.newoether.agora.ui.chat.message.StreamingJsonParser
 import com.newoether.agora.ui.chat.message.StreamingJsonScalar
 import com.newoether.agora.ui.chat.message.StreamingJsonStatus
 import com.newoether.agora.ui.chat.message.ToolDetailBody
+import com.newoether.agora.ui.chat.message.ToolDetailCodeRow
+import com.newoether.agora.ui.chat.message.ToolDetailPath
 import com.newoether.agora.ui.chat.message.ToolKind
 import com.newoether.agora.ui.chat.message.isImageGenerationSegment
 import com.newoether.agora.ui.chat.message.persistenceAwareJsonSource
@@ -26,6 +28,9 @@ internal fun Resources.webToolDetail(segment: MessageSegment): WebToolDetail {
         argumentsLabel = detail.argumentsLabel,
         resultLabel = detail.resultLabel,
         arguments = detail.arguments?.let(::webToolDocument),
+        codeArgument = detail.codeArgument?.let { code ->
+            WebToolCodeArgument(code.name, code.text, code.rows?.map(::webToolCodeRow))
+        },
         mcpDevice = detail.mcpDevice.takeIf { detail.kind == ToolKind.MCP },
         body = when (val body = detail.body) {
             is ToolDetailBody.Active -> WebToolBody.Active(body.text, body.output)
@@ -34,12 +39,24 @@ internal fun Resources.webToolDetail(segment: MessageSegment): WebToolDetail {
             is ToolDetailBody.Muted -> WebToolBody.Muted(body.text)
             is ToolDetailBody.JsonContent -> WebToolBody.Documents(body.values.map(::webToolDocument))
             is ToolDetailBody.Shell -> WebToolBody.Shell(body.status, body.device, body.error, body.output)
-            is ToolDetailBody.Paths -> WebToolBody.Paths(body.values)
+            is ToolDetailBody.Paths -> WebToolBody.Paths(body.values.map(::webToolPath))
             is ToolDetailBody.Grep -> WebToolBody.Grep(body.groups.map { group ->
-                WebToolMatchGroup(group.path, group.matches.map { WebToolMatch(it.line, it.content) })
+                WebToolMatchGroup(webToolPath(group.path), group.rows.map(::webToolCodeRow))
             })
             is ToolDetailBody.FileContent -> WebToolBody.FileContent(
-                body.path, body.lineCount, body.content, body.emptyText, body.truncationText,
+                body.path?.let(::webToolPath), body.lineCount, body.content, body.emptyText, body.truncationText,
+                body.lines?.map(::webToolCodeRow),
+            )
+            is ToolDetailBody.Edit -> WebToolBody.Edit(
+                path = body.path?.let(::webToolPath),
+                editCount = body.editCount,
+                replaceAllLabel = body.replaceAllLabel,
+                hunks = body.hunks.map { hunk ->
+                    WebToolDiffHunk(hunk.index, hunk.replaceAll, hunk.lines.map {
+                        WebToolDiffLine(it.kind.name.lowercase(), it.text)
+                    })
+                },
+                status = body.status,
             )
             is ToolDetailBody.Search -> WebToolBody.Search(body.results.map {
                 WebToolSearchResult(it.title, it.url, it.safeUrl, it.snippet)
@@ -51,6 +68,19 @@ internal fun Resources.webToolDetail(segment: MessageSegment): WebToolDetail {
         squareCrop = segment.isImageGenerationSegment(),
         imageLabel = getString(R.string.tool_view_image),
         imageFailedLabel = getString(R.string.attachment_copy_failed_image),
+    )
+}
+
+private fun webToolPath(path: ToolDetailPath) = WebToolPath(path.name, path.directory)
+
+private fun webToolCodeRow(row: ToolDetailCodeRow): WebToolCodeRow = when (row) {
+    ToolDetailCodeRow.Gap -> WebToolCodeRow(gap = true)
+    is ToolDetailCodeRow.Line -> WebToolCodeRow(
+        number = row.number,
+        text = row.text,
+        context = !row.emphasized,
+        // Half-open [start, end) pairs in UTF-16 units, matching JavaScript string indices.
+        highlights = row.highlights.map { listOf(it.first, it.last + 1) },
     )
 }
 
@@ -78,6 +108,7 @@ internal data class WebToolDetail(
     val argumentsLabel: String,
     val resultLabel: String,
     val arguments: WebToolDocument?,
+    val codeArgument: WebToolCodeArgument?,
     val mcpDevice: String?,
     val body: WebToolBody,
     val images: List<WebToolImage>,
@@ -101,22 +132,41 @@ internal sealed interface WebToolBody {
     @Serializable @SerialName("shell")
     data class Shell(val status: String, val device: String, val error: String?, val output: String) : WebToolBody
     @Serializable @SerialName("paths")
-    data class Paths(val values: List<String>) : WebToolBody
+    data class Paths(val values: List<WebToolPath>) : WebToolBody
     @Serializable @SerialName("grep")
     data class Grep(val groups: List<WebToolMatchGroup>) : WebToolBody
     @Serializable @SerialName("file")
     data class FileContent(
-        val path: String?, val lineCount: String?, val content: String,
-        val emptyText: String, val truncationText: String?,
+        val path: WebToolPath?, val lineCount: String?, val content: String,
+        val emptyText: String, val truncationText: String?, val lines: List<WebToolCodeRow>? = null,
+    ) : WebToolBody
+    @Serializable @SerialName("edit")
+    data class Edit(
+        val path: WebToolPath?, val editCount: String?, val replaceAllLabel: String,
+        val hunks: List<WebToolDiffHunk>, val status: String,
     ) : WebToolBody
     @Serializable @SerialName("search")
     data class Search(val results: List<WebToolSearchResult>) : WebToolBody
 }
 
 @Serializable
-internal data class WebToolMatchGroup(val path: String, val matches: List<WebToolMatch>)
+internal data class WebToolCodeArgument(val name: String, val text: String, val rows: List<WebToolCodeRow>?)
 @Serializable
-internal data class WebToolMatch(val line: Int?, val content: String)
+internal data class WebToolPath(val name: String, val directory: String?)
+@Serializable
+internal data class WebToolMatchGroup(val path: WebToolPath, val rows: List<WebToolCodeRow>)
+@Serializable
+internal data class WebToolCodeRow(
+    val number: Int? = null,
+    val text: String = "",
+    val context: Boolean = false,
+    val highlights: List<List<Int>> = emptyList(),
+    val gap: Boolean = false,
+)
+@Serializable
+internal data class WebToolDiffHunk(val index: Int?, val replaceAll: Boolean, val lines: List<WebToolDiffLine>)
+@Serializable
+internal data class WebToolDiffLine(val kind: String, val text: String)
 @Serializable
 internal data class WebToolSearchResult(val title: String, val url: String?, val safeUrl: String?, val snippet: String?)
 @Serializable

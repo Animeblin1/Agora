@@ -75,6 +75,7 @@ internal class GenerationToolExecutor private constructor(
             "file_read",
             "file_write",
             "file_edit",
+            "file_multi_edit",
             "file_glob",
             "file_grep",
             "view_image",

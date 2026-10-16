@@ -6,8 +6,11 @@ import android.os.Environment
 import com.newoether.agora.R
 import com.newoether.agora.data.repository.SettingsRepository
 import com.newoether.agora.util.SHELL_COMMAND_OUTPUT_MAX_BYTES
+import com.newoether.agora.util.ShellFileEdit
 import com.newoether.agora.util.ShellFileEditResult
 import com.newoether.agora.util.ShellFileReadResult
+import com.newoether.agora.util.ShellGrepOptions
+import com.newoether.agora.util.ShellGrepResult
 import com.newoether.agora.util.readBoundedShellOutput
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -490,16 +493,15 @@ class ProotSandboxManager(
         pattern: String,
         basePath: String,
         fileGlob: String,
-    ): Result<Pair<List<SandboxManager.GrepMatch>, Boolean>> =
-        pathResolver.fileGrep(pattern, basePath, homeMountPath, fileGlob)
+        options: ShellGrepOptions,
+    ): Result<ShellGrepResult> =
+        pathResolver.fileGrep(pattern, basePath, homeMountPath, fileGlob, options)
 
     override suspend fun fileEdit(
         path: String,
-        oldString: String,
-        newString: String,
-        replaceAll: Boolean,
+        edits: List<ShellFileEdit>,
     ): ShellFileEditResult =
-        pathResolver.fileEdit(path, oldString, newString, replaceAll, mutationMutex)
+        pathResolver.fileEdit(path, edits, mutationMutex)
 
     // ── Package Management ──────────────────────────────
     // Downloads target + all transitive deps + stale base-package upgrades via

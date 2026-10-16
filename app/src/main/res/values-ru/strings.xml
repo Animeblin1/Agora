@@ -789,6 +789,9 @@
     <string name="tool_edit_skill">Изменить навык</string>
     <string name="tool_delete_skill">Удалить навык</string>
     <string name="tool_read_file_truncated">Показана часть содержимого · продолжить с байта %1$d</string>
+    <string name="tool_read_file_truncated_line">Показана часть содержимого · продолжить со строки %1$d</string>
+    <string name="tool_edit_count">Изменений: %1$d</string>
+    <string name="tool_edit_replace_all">Заменить все</string>
     <string name="low_context_mode">Режим малого контекста</string>
     <string name="low_context_mode_default_desc">Включать режим малого контекста по умолчанию</string>
     <string name="learn_more">Подробнее...</string>

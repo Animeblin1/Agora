@@ -789,6 +789,9 @@
     <string name="tool_edit_skill">스킬 편집</string>
     <string name="tool_delete_skill">스킬 삭제</string>
     <string name="tool_read_file_truncated">일부 콘텐츠 표시됨 · %1$d바이트부터 계속</string>
+    <string name="tool_read_file_truncated_line">일부 콘텐츠 표시됨 · %1$d번째 줄부터 계속</string>
+    <string name="tool_edit_count">변경 %1$d개</string>
+    <string name="tool_edit_replace_all">모두 바꾸기</string>
     <string name="low_context_mode">낮은 컨텍스트 모드</string>
     <string name="low_context_mode_default_desc">낮은 컨텍스트 모드를 기본으로 사용</string>
     <string name="learn_more">자세히 알아보기...</string>
