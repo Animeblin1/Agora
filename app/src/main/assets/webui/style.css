@@ -564,26 +564,42 @@ input, textarea { user-select: text; }
 }
 .top-bar-outgoing { pointer-events: none; }
 .top-bar-outgoing * { pointer-events: none !important; }
+/* ChatTopBar search: bodyLarge 16/23 +0.5 field, onSurfaceVariant 60% hint, labelMedium counter. */
 .conversation-search-bar input {
   flex: 1;
   min-width: 0;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--md-on-surface);
   font: inherit;
   font-size: 16px;
+  line-height: 23px;
+  letter-spacing: .5px;
   outline: none;
+  appearance: none;
 }
+.conversation-search-bar input::placeholder {
+  color: color-mix(in srgb, var(--md-on-surface-variant) 60%, transparent);
+  opacity: 1;
+}
+/* BasicTextField draws no native search decoration or clear control. */
+.conversation-search-bar input::-webkit-search-decoration,
+.conversation-search-bar input::-webkit-search-cancel-button { appearance: none; display: none; }
 .conversation-search-count {
   flex: none;
   padding: 0 6px;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 500;
+  letter-spacing: .5px;
   color: var(--md-on-surface-variant);
 }
-.conversation-search-bar .bar-button {
-  flex: none;
+/* Back is a 44 dp IconButton; previous/next are 38 dp. Every icon is the default 24 dp. */
+.conversation-search-bar .bar-button svg { width: 24px; height: 24px; }
+.conversation-search-bar .bar-button:not(:first-child) {
   width: 38px;
-  height: 44px;
+  height: 38px;
 }
 .search-previous svg { transform: rotate(180deg); }
 ::highlight(agora-search) { background-color: #ffd54f; color: #241a00; }

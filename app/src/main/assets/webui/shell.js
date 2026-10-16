@@ -422,7 +422,7 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
     <header class="top-bar" ref=${bar}>
       ${search ? html`<div class="capsule conversation-search-bar" aria-busy=${search.searching}>
         <button class="bar-button" type="button" aria-label=${t.close} onClick=${() => sync.dismissConversationSearch()}>${icon(ICON_ARROW_BACK)}</button>
-        <input ref=${searchField} type="search" value=${search.query} placeholder=${t.conversationSearch}
+        <input ref=${searchField} type="search" value=${search.query} placeholder=${t.conversationSearchHint}
           aria-label=${t.conversationSearch} disabled=${!connected} onInput=${event => sync.conversationSearch(event.currentTarget.value)}
           onKeyDown=${event => { if (event.key === "Escape") { event.preventDefault(); sync.dismissConversationSearch(); } }} />
         <span class="conversation-search-count" role="status">${search.failed ? t.searchFailed : `${search.index < 0 ? 0 : search.index + 1}/${search.matches.length}`}</span>
