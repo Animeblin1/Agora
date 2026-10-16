@@ -221,6 +221,8 @@ internal data class WebMessage(
     /** The token figures of the message info dialog, projected by the phone's own owner. */
     val usage: WebTokenUsage? = null,
     val attachments: List<JsonObject> = emptyList(),
+    /** Offline source/detail text cost for browser history paging, never Provider usage. */
+    val loadTokens: Int = 0,
 )
 
 /** The origin of a message the app sent by itself: a task run, a loop cycle or ask_user answers. */

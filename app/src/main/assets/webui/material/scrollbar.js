@@ -4,7 +4,7 @@
  */
 
 /** Draws one overlay and returns the detach function owned by the presentation. */
-export function attachScrollbar(host, suppliedBar) {
+export function attachScrollbar(host, suppliedBar, onScrollInput) {
   const bar = suppliedBar ?? document.createElement("div");
   if (!suppliedBar) {
     bar.className = "scrollbar-overlay";
@@ -41,13 +41,18 @@ export function attachScrollbar(host, suppliedBar) {
     event.preventDefault();
     event.stopPropagation();
     host.dispatchEvent(new Event("pointerdown"));
+    onScrollInput?.(0);
     bar.setPointerCapture(event.pointerId);
     const box = thumb.getBoundingClientRect();
     const onThumb = event.clientY >= box.top - 8 && event.clientY <= box.bottom + 8;
     if (!onThumb) {
       const travel = host.clientHeight - thumb.offsetHeight;
-      if (travel > 0) host.scrollTop = ((event.clientY - bar.getBoundingClientRect().top - box.height / 2) / travel) *
-        (host.scrollHeight - host.clientHeight);
+      if (travel > 0) {
+        const target = ((event.clientY - bar.getBoundingClientRect().top - box.height / 2) / travel) *
+          (host.scrollHeight - host.clientHeight);
+        onScrollInput?.(Math.sign(target - host.scrollTop));
+        host.scrollTop = target;
+      }
     }
     drag = { id: event.pointerId, y: event.clientY, top: host.scrollTop };
     bar.classList.add("dragging");
@@ -57,7 +62,9 @@ export function attachScrollbar(host, suppliedBar) {
     const scrollable = host.scrollHeight - host.clientHeight;
     const travel = host.clientHeight - thumb.offsetHeight;
     if (scrollable <= 0 || travel <= 0) return;
-    host.scrollTop = drag.top + ((event.clientY - drag.y) / travel) * scrollable;
+    const target = drag.top + ((event.clientY - drag.y) / travel) * scrollable;
+    onScrollInput?.(Math.sign(target - host.scrollTop));
+    host.scrollTop = target;
   };
   const pointerUp = (event) => {
     if (drag?.id !== event.pointerId) return;

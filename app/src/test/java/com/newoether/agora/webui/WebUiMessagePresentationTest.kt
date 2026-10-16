@@ -11,6 +11,7 @@ import com.newoether.agora.model.ThinkingSegmentDisplayModes
 import com.newoether.agora.model.ToolCallDisplayModes
 import com.newoether.agora.util.appLanguageResources
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runCurrent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -260,6 +261,21 @@ class WebUiMessagePresentationTest {
         }
     }
     @Test
+    fun loadBudgetCountsSourceAndExtraDetailsWithoutMirroredAnswersOrUsage() {
+        val text = "source body"
+        val message = model(MessageStatus.SUCCESS,
+            MessageSegment("answer", text), MessageSegment("thought", "reason"),
+            MessageSegment("transcription", "description"),
+            MessageSegment("tool", toolArgs = "arguments", toolResult = "result"), text = text)
+        val expected = listOf(text, "reason", "description", "arguments", "result")
+            .sumOf(com.newoether.agora.api.util.ContextTokenEstimator::estimateText)
+        assertEquals(expected, message.webLoadTokens())
+        assertEquals(expected, message.copy(tokenCount = Int.MAX_VALUE).webLoadTokens())
+        assertEquals(expected, message.toWeb(null).loadTokens)
+        assertEquals(1, model(MessageStatus.SUCCESS).webLoadTokens())
+    }
+
+    @Test
     fun wireContainsOneRenderedBodyAndPreservesOriginalCopySource() {
         val source = "x \\(a^2\\) y".repeat(1000)
         val message = model(MessageStatus.SENDING, MessageSegment("answer", source), text = source)
@@ -292,7 +308,7 @@ class WebUiMessagePresentationTest {
         io.mockk.every { registry.activeConversationIds } returns kotlinx.coroutines.flow.MutableStateFlow(emptySet())
         io.mockk.every { registry.getOrCreate("c") } returns state
         val hydration = io.mockk.mockk<com.newoether.agora.viewmodel.ConversationMessagePayloadHydration>()
-        io.mockk.every { hydration.observeMessage("m", any()) } returns kotlinx.coroutines.flow.flowOf(terminal)
+        io.mockk.every { hydration.observeMessages("c", listOf("m"), any()) } returns kotlinx.coroutines.flow.flowOf(listOf(terminal))
         val session = io.mockk.mockk<WebUiChatSession>(relaxed = true)
         io.mockk.every { session.openTarget } returns kotlinx.coroutines.flow.MutableStateFlow(WebUiChatSession.OpenTarget("c", 0, false))
         io.mockk.every { session.composerState } returns kotlinx.coroutines.flow.emptyFlow()
@@ -316,7 +332,7 @@ class WebUiMessagePresentationTest {
         incoming.send("""{"type":"watch","messageIds":["m"]}""")
         runCurrent()
         assertTrue(events.any { it is WebSyncEvent.Streaming })
-        io.mockk.verify(exactly = 0) { hydration.observeMessage("m", any()) }
+        io.mockk.verify(exactly = 0) { hydration.observeMessages("c", listOf("m"), any()) }
         events.clear()
         repeat(20) { index ->
             snapshot.value = snapshot.value.copy(streamingMessage = snapshot.value.streamingMessage!!.copy(text = "delta-$index"))
@@ -328,8 +344,100 @@ class WebUiMessagePresentationTest {
         snapshot.value = snapshot.value.copy(streamingMessage = terminal, isLoading = false, isGenerating = false)
         runCurrent()
         assertEquals(terminal.text, (events.single { it is WebSyncEvent.Payload } as WebSyncEvent.Payload).message.text.markdown)
-        io.mockk.verify(exactly = 1) { hydration.observeMessage("m", any()) }
+        io.mockk.verify(exactly = 1) { hydration.observeMessages("c", listOf("m"), any()) }
     }
+    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun tokenPageHydratesMoreThan48RowsAndSuppressesUnchangedRows() = kotlinx.coroutines.test.runTest {
+        val rows = (0 until 120).map { index ->
+            ChatMessage(id = "m$index", parentId = if (index == 0) null else "m${index - 1}", text = "body-$index",
+                participant = if (index == 0) Participant.USER else Participant.MODEL,
+                status = MessageStatus.SUCCESS, timestamp = index.toLong(), runId = "run", runSequence = index.toLong())
+        }
+        val bodies = kotlinx.coroutines.flow.MutableStateFlow(rows)
+        val repository = io.mockk.mockk<com.newoether.agora.data.repository.ConversationRepository>(relaxed = true)
+        io.mockk.every { repository.observeConversation("c") } returns kotlinx.coroutines.flow.flowOf(com.newoether.agora.model.ChatConversation("c", "Test"))
+        io.mockk.every { repository.observeMessageTopology("c") } returns kotlinx.coroutines.flow.flowOf(rows.map {
+            com.newoether.agora.data.local.MessageContextTopology(
+                id = it.id, conversationId = "c", parentId = it.parentId, participant = it.participant,
+                status = it.status, timestamp = it.timestamp, modelName = null, runId = "run",
+                runSequence = requireNotNull(it.runSequence), consumedAtPass = null)
+        })
+        io.mockk.every { repository.observeDrawerConversations(any()) } returns kotlinx.coroutines.flow.flowOf(emptyList())
+        val runtime = io.mockk.mockk<com.newoether.agora.viewmodel.ConversationGenerationState>()
+        io.mockk.every { runtime.generationSnapshot } returns kotlinx.coroutines.flow.MutableStateFlow(com.newoether.agora.viewmodel.ConversationGenerationSnapshot())
+        val registry = io.mockk.mockk<com.newoether.agora.viewmodel.ConversationStateRegistry>()
+        io.mockk.every { registry.activeConversationIds } returns kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+        io.mockk.every { registry.getOrCreate("c") } returns runtime
+        val hydration = io.mockk.mockk<com.newoether.agora.viewmodel.ConversationMessagePayloadHydration>()
+        val batches = mutableListOf<List<String>>()
+        io.mockk.every { hydration.observeMessages("c", any(), any()) } answers {
+            val ids = secondArg<List<String>>()
+            batches += ids
+            bodies.map { all -> all.filter { it.id in ids } }
+        }
+        val session = io.mockk.mockk<WebUiChatSession>(relaxed = true)
+        io.mockk.every { session.openTarget } returns kotlinx.coroutines.flow.MutableStateFlow(WebUiChatSession.OpenTarget("c", 0, false))
+        io.mockk.every { session.composerState } returns kotlinx.coroutines.flow.emptyFlow()
+        io.mockk.every { session.branchTransitions } returns com.newoether.agora.viewmodel.BranchReplacementTransitionCoordinator()
+        io.mockk.every { session.snackbars } returns kotlinx.coroutines.flow.MutableSharedFlow<String>()
+        io.mockk.every { session.scrollRequests } returns kotlinx.coroutines.flow.MutableSharedFlow<WebSyncEvent.ScrollToBottom>()
+        val providers = kotlinx.coroutines.flow.MutableStateFlow(emptyList<com.newoether.agora.data.CustomProviderConfig>())
+        val accounting = WebUiContextAccounting(repository, io.mockk.mockk(), { io.mockk.mockk() }, { it },
+            kotlinx.coroutines.flow.MutableStateFlow(90), kotlinx.coroutines.flow.MutableStateFlow(true))
+        val owner = WebUiSync(repository, registry, com.newoether.agora.automation.ConversationExecutionCoordinator(),
+            hydration, providers, kotlinx.coroutines.flow.flowOf(display()), { session },
+            io.mockk.mockk(), io.mockk.mockk(), io.mockk.mockk(), com.newoether.agora.viewmodel.AskUserController(),
+            com.newoether.agora.viewmodel.ShellConfirmationController(kotlinx.coroutines.flow.MutableStateFlow(true), {}),
+            accounting, { emptyList() }, kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        val incoming = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        val events = mutableListOf<WebSyncEvent>()
+        val job = backgroundScope.launch {
+            owner.serve("test", incoming) { events += WebUiSync.json.decodeFromString(WebSyncEvent.serializer(), it) }
+        }
+        runCurrent()
+        var previousCount = 0
+        for (count in listOf(48, 96, 120)) {
+            events.clear()
+            incoming.send("""{"type":"watch","messageIds":[${rows.takeLast(count).joinToString(",") { "\"${it.id}\"" }},"off-path"]}""")
+            runCurrent()
+            assertEquals(count - previousCount, events.filterIsInstance<WebSyncEvent.Payload>().size)
+            previousCount = count
+        }
+        assertEquals(listOf(48, 48, 24), batches.map { it.size })
+        assertEquals(120, batches.flatten().toSet().size)
+        events.clear()
+        val retained = rows.drop(1)
+        incoming.send("""{"type":"watch","messageIds":[${retained.joinToString(",") { "\"${it.id}\"" }}]}""")
+        runCurrent()
+        assertTrue(events.none { it is WebSyncEvent.Payload })
+        val incremental = batches.size
+        bodies.value = rows.map { if (it.id == "m60") it.copy(text = "changed") else it }
+        runCurrent()
+        assertEquals(incremental, batches.size)
+        assertEquals(listOf("m60"), events.filterIsInstance<WebSyncEvent.Payload>().map { it.message.id })
+        incoming.send("""{"type":"watch","messageIds":[]}""")
+        runCurrent()
+        events.clear()
+        bodies.value = rows
+        runCurrent()
+        assertTrue(events.none { it is WebSyncEvent.Payload })
+        io.mockk.every { hydration.observeMessages("c", any(), any()) } answers {
+            kotlinx.coroutines.flow.flow {
+                kotlinx.coroutines.delay(100)
+                emit(rows.take(3))
+            }
+        }
+        incoming.send("""{"type":"watch","messageIds":["m0","m1","m2"]}""")
+        runCurrent()
+        incoming.send("""{"type":"watch","messageIds":[]}""")
+        runCurrent()
+        testScheduler.advanceTimeBy(101)
+        runCurrent()
+        assertTrue(events.none { it is WebSyncEvent.Payload })
+        job.cancel()
+    }
+
     @Test
     fun `display event follows the app language and serializes`() {
         val en = display().toEvent()

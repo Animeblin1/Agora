@@ -2,10 +2,17 @@ package com.newoether.agora.data.repository
 
 import com.newoether.agora.data.local.ChatEntity
 import com.newoether.agora.data.local.MessageStreamCheckpoint
+import com.newoether.agora.data.local.MessageEntity
+import kotlinx.coroutines.flow.Flow
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.ChatConversation
 import com.newoether.agora.model.MessagePersistenceGuard
 import com.newoether.agora.model.MessageSegment
+
+internal fun ConversationRepository.observeMessagesByIds(
+    conversationId: String,
+    ids: List<String>,
+): Flow<List<MessageEntity>> = chatDao.observeMessagesByIds(conversationId, ids)
 
 internal fun ChatEntity.toConversation() = ChatConversation(
     id = id, title = title, systemPromptId = systemPromptId, modelId = modelId,

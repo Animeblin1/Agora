@@ -3,6 +3,7 @@ package com.newoether.agora.webui
 import android.content.res.Resources
 import com.newoether.agora.R
 import com.newoether.agora.data.local.DrawerConversationRow
+import com.newoether.agora.api.util.ContextTokenEstimator
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.model.Participant
@@ -401,7 +402,23 @@ internal fun ChatMessage.toWebPathEntry(branch: com.newoether.agora.model.RunMes
     branchAnchorMessageId = branch?.branchAnchorMessageId,
 )
 
+/** Source text plus non-mirrored detail bodies; page loading is independent of Provider retention. */
+internal fun ChatMessage.webLoadTokens(): Int {
+    var total = ContextTokenEstimator.estimateText(text).toLong()
+    segments.orEmpty().forEach { segment ->
+        when (segment.type) {
+            "thought", "transcription" -> total += ContextTokenEstimator.estimateText(segment.content)
+            "tool" -> {
+                total += ContextTokenEstimator.estimateText(segment.toolArgs.orEmpty())
+                total += ContextTokenEstimator.estimateText(segment.toolResult.orEmpty())
+            }
+        }
+    }
+    return total.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+}
+
 internal fun ChatMessage.toWeb(presentation: WebPresentation?, modelDisplay: String? = null) = WebMessage(
+    loadTokens = webLoadTokens(),
     id = id,
     parentId = parentId,
     participant = participant.name,

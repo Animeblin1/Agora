@@ -670,6 +670,9 @@ interface ChatDao :
     @Query("SELECT * FROM messages WHERE id IN (:ids)")
     suspend fun getMessagesByIds(ids: List<String>): List<MessageEntity>
 
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND id IN (:ids)")
+    fun observeMessagesByIds(conversationId: String, ids: List<String>): Flow<List<MessageEntity>>
+
     @Query("UPDATE conversations SET draftText = :text, draftAttachments = :attachments, dataChangedAt = :at WHERE id = :id")
     suspend fun updateDraft(id: String, text: String, attachments: String?, at: Long)
 

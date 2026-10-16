@@ -27,7 +27,7 @@ marked.use({
     codespan(token) {
       return `<code ${sourceAttributes(token)}>${escapeHtml(token.text)}</code>`;
     },
-    html: token => `<span ${sourceAttributes(token)}>${escapeHtml(token.text)}</span>`,
+    html: token => `<span ${sourceAttributes(token)} data-source-literal="true">${escapeHtml(token.text)}</span>`,
     link({ href, title, tokens }) {
       const label = this.parser.parseInline(tokens);
       if (!SAFE_LINK.test(href)) return label;
@@ -76,7 +76,7 @@ function renderHtml(markdown, math, sourceMap = [], citations = []) {
       delta = sourceMap[boundary][1] - sourceMap[boundary][0];
       boundary++;
     }
-    const slot = markdown.slice(index).match(/^\uE000(\d+)\uE001/);
+    const slot = markdown[index] === "\uE000" && markdown.slice(index).match(/^\uE000(\d+)\uE001/);
     const display = slot && math?.[slot[1]]?.display;
     if (display) { source += "\n\n"; positions.push(index + delta, index + delta); }
     source += markdown[index];
@@ -201,7 +201,7 @@ export function fadeStreamingText(element, streaming, reduceMotion, timeline, so
   let index = sourceStart;
   while (walker.nextNode()) {
     const node = walker.currentNode;
-    let offset = 0;
+    let offset = 0, color;
     for (const glyph of node.textContent) {
       const key = `${variant}:${index++}`;
       let birth = timeline.get(key);
@@ -209,7 +209,7 @@ export function fadeStreamingText(element, streaming, reduceMotion, timeline, so
       const suffix = index - sourceStart - 1 - prefix;
       const spatial = bands > 0 ? 1 - (Math.floor(suffix * bands / fadedCount) + 1) / bands * (1 - initialAlpha) : initialAlpha;
       if (birth != null && suffix >= 0 && published - birth < 500) {
-        const color = getComputedStyle(node.parentElement).color;
+        color ??= getComputedStyle(node.parentElement).color;
         const groupKey = `${birth}:${color}:${spatial}`;
         let group = groups.get(groupKey);
         if (!group) { group = { birth, color, spatial, ranges: [] }; groups.set(groupKey, group); }
@@ -226,7 +226,9 @@ export function fadeStreamingText(element, streaming, reduceMotion, timeline, so
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   const owned = [...groups.values()].map(group => {
     const name = `agora-stream-${++fadeIdentity}`;
-    CSS.highlights.set(name, new Highlight(...group.ranges));
+    const highlight = new Highlight();
+    for (const range of group.ranges) highlight.add(range);
+    CSS.highlights.set(name, highlight);
     const rule = sheet.cssRules[sheet.insertRule(`::highlight(${name}) { color: transparent; }`)];
     return { ...group, name, rule };
   });
@@ -273,19 +275,22 @@ export function highlightSearch(element, search, matches, sourceStart = 0) {
     const positions = token ? token.dataset.sourcePositions.split(",").map(Number) :
       Array.from({ length: raw.length }, (_, index) => plainStart + index);
     const value = entry.node.textContent;
+    const inlineCode = token?.tagName === "CODE" && !token.hasAttribute("data-source-content-start");
+    const escapedText = token && token.tagName !== "CODE" && !token.hasAttribute("data-source-literal");
     let decoded = "", decodedPositions = [], cursor = Number(token?.dataset.sourceContentStart ?? 0);
     for (let index = cursor; index < raw.length; index++) {
-      const entity = token?.tagName !== "CODE" && raw.slice(index).match(/^&(?:#\d+|#x[\da-f]+|[a-z]+);/i);
+      const entity = escapedText && raw.slice(index).match(/^&(?:#\d+|#x[\da-f]+|[a-z]+);/i);
       if (entity) {
         const span = document.createElement("span");
         span.innerHTML = entity[0];
         decoded += span.textContent;
         decodedPositions.push(...Array(span.textContent.length).fill(positions[index]));
         index += entity[0].length - 1;
-      } else if (token?.tagName !== "CODE" && raw[index] === "\\" && /[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]/.test(raw[index + 1] ?? "")) {
+      } else if (escapedText && raw[index] === "\\" && /[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]/.test(raw[index + 1] ?? "")) {
         continue;
       } else {
-        decoded += raw[index];
+        // Only parsed inline code replaces line breaks; plain user text and literal HTML stay raw.
+        decoded += inlineCode && raw[index] === "\n" ? " " : raw[index];
         decodedPositions.push(positions[index]);
       }
     }

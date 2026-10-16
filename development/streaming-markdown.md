@@ -268,7 +268,10 @@ and Tool rows use the restored exact 10 dp horizontal content padding. The title
 exact 4 dp title-to-arrow gap plus the unchanged 26 dp trailing disclosure reservation. The same single 18 dp
 `KeyboardArrowDown` is a Surface-local overlay, outside the unbounded/clipped content Row, so its
 layout box tracks the visible animated shell's end edge with an exact 8 dp end inset at every width.
-No second disclosure exists. That single vector rotates to -90 degrees for detail-sheet navigation,
+No second disclosure exists. The disclosure belongs to the card's local drawing order: it never
+paints above the message viewport's blur/fade, top-bar gradient or expanded Composer. Browser card
+surfaces keep a persistent local stacking context even when entrance motion ends or the Composer
+removes the viewport mask. That single vector rotates to -90 degrees for detail-sheet navigation,
 0 degrees while inline-collapsed, and 180 degrees while inline-expanded; spatial motion animates the
 rotation and Reduced Motion snaps it. The header icon uses the shared motion-aware 18 dp slot; only
 the loading ring is 16 dp while brain, tool, image, and disclosure icons remain 18 dp. The loading

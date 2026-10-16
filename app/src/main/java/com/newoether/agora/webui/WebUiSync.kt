@@ -33,6 +33,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
@@ -455,7 +456,7 @@ internal class WebUiSync(
                             watched.value = emptySet()
                             session.open(command.conversationId, command.seq)
                         }
-                        COMMAND_WATCH -> watched.value = command.messageIds.take(MAX_WATCHED).toSet()
+                        COMMAND_WATCH -> watched.value = command.messageIds.toSet()
                         COMMAND_DRAFT -> session.edit(command.text.orEmpty(), command.revision, command.seq)
                         COMMAND_SEND -> session.send(command.text.orEmpty(), command.seq, command.actionId)
                         COMMAND_CANCEL_WAITING -> session.cancelWaiting(command.seq, command.actionId)
@@ -665,7 +666,7 @@ internal class WebUiSync(
         }
     }
 
-    /** One payload subscription per watched row; only rows on the current path are served. */
+    /** One Room observer per bounded page batch, with unchanged rows suppressed before sending. */
     private suspend fun servePayloads(
         conversationId: String, seq: Long,
         watched: StateFlow<Set<String>>,
@@ -674,29 +675,34 @@ internal class WebUiSync(
         display: Flow<WebDisplayContext>,
         outbound: SendChannel<WebSyncEvent>,
     ) = coroutineScope {
-        val jobs = mutableMapOf<String, Job>()
-        combine(watched, pathIds, liveMessageId) { ids, path, live -> (ids intersect path) - setOfNotNull(live) }
-            .distinctUntilChanged()
-            .collect { ids ->
-                (jobs.keys - ids).forEach { jobs.remove(it)?.cancel() }
-                (ids - jobs.keys).forEach { messageId ->
-                    jobs[messageId] = launch {
-                        hydration.observeMessage(messageId) { it.forDisplay(customProviders.value) }
-                            .distinctUntilChanged()
-                            .combine(display) { message, context -> message to context }
-                            .collect { (message, context) ->
-                                if (message != null) {
-                                    outbound.send(
-                                        WebSyncEvent.Payload(
-                                            conversationId,
-                                            project(message, isStreaming = false, context), seq,
-                                        ),
-                                    )
+        val jobs = mutableMapOf<List<String>, Job>()
+        val previous = java.util.concurrent.ConcurrentHashMap<String, Pair<ChatMessage, WebDisplayContext>>()
+        combine(watched, pathIds, liveMessageId) { ids, path, live ->
+            (ids intersect path) - setOfNotNull(live)
+        }.distinctUntilChanged().collect { selected ->
+            // Growing a watch must not regroup existing batches or replay their initial bodies.
+            jobs.keys.filter { batch -> batch.any { it !in selected } }.forEach { batch ->
+                jobs.remove(batch)?.cancelAndJoin()
+            }
+            previous.keys.retainAll(selected)
+            val subscribed = jobs.keys.flatten().toSet()
+            (selected - subscribed).sorted().chunked(MAX_WATCHED).forEach { messageIds ->
+                jobs[messageIds] = launch {
+                    hydration.observeMessages(conversationId, messageIds) { it.forDisplay(customProviders.value) }
+                        .combine(display) { messages, context -> messages to context }
+                        .collect { (messages, context) ->
+                            for (message in messages) {
+                                if (previous[message.id] != (message to context)) {
+                                    outbound.send(WebSyncEvent.Payload(
+                                        conversationId, project(message, isStreaming = false, context), seq,
+                                    ))
+                                    previous[message.id] = message to context
                                 }
                             }
-                    }
+                        }
                 }
             }
+        }
     }
 
     private suspend fun project(
@@ -726,7 +732,7 @@ internal class WebUiSync(
         const val COMMAND_SEND_QUEUED = "send_queued"
         const val DRAWER_PAGE_SIZE = 80
 
-        /** Upper bound on rows one browser may subscribe to at a time. */
+        /** Maximum rows in one selected-page Room subscription batch, not a page-size limit. */
         const val MAX_WATCHED = 48
 
         internal val json = Json {

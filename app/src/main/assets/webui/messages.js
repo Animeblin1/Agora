@@ -954,11 +954,28 @@ function RowEntrance({ enter, exiting, children }) {
     inert=${exiting} aria-hidden=${exiting ? "true" : null}>${children}</div>`;
 }
 
-/** Message rounds per history page, and how close to the top edge the next page is requested. */
-const PAGE_ROUNDS = 10;
+function PageProgress({ active, edge }) {
+  const host = useRef(null);
+  useLayoutEffect(() => {
+    const node = host.current;
+    if (active) node.style.visibility = "visible";
+    const animation = node.animate([{ opacity: getComputedStyle(node).opacity }, { opacity: active ? 1 : 0 }],
+      { duration: 180, easing: "linear", fill: "forwards" });
+    animation.onfinish = () => {
+      node.style.opacity = active ? "1" : "0";
+      if (!active) node.style.visibility = "hidden";
+      animation.cancel();
+    };
+    return () => { node.style.opacity = getComputedStyle(node).opacity; animation.cancel(); };
+  }, [active]);
+  return html`<div ref=${host} class=${`message-page-progress ${edge}`} data-loading=${active ? "true" : "false"}
+    aria-hidden=${active ? null : "true"}><span><${CircularProgress} size=${32} stroke=${3}
+      label=${active ? t.loading : null} /></span></div>`;
+}
+/** Independent minimum history load; whole rounds are never split. */
+const PAGE_TOKEN_WINDOW = 256 * 1024;
+const MAX_PAGE_WINDOWS = 3;
 const OLDER_PAGE_EDGE_PX = 4;
-// WebUiSync.MAX_WATCHED is 48; three ids stay free for the search hit, the open sheet and a branch target.
-const WINDOW_MESSAGES = 45;
 export function MessageList({ state, label, onPageAction }) {
   const scroller = useRef(null);
   const bar = useRef(null);
@@ -1001,16 +1018,15 @@ export function MessageList({ state, label, onPageAction }) {
   const watchedSheet = useRef(sheetWatchedId);
   watchedSheet.current = sheetWatchedId;
   const branch = state.branchReplacement;
-  // Paged history: the list shows the newest PAGE_ROUNDS message rounds and grows by a page each time
-  // the reader reaches the top, where a CircularProgress stands in the content like the drawer's.
-  // A round starts at a user message, so a user message and the replies under it never split across
-  // a page edge. Anything the frame must reach - the search hit, a scroll request, the open sheet,
-  // a branch being replaced - widens the window to its round first.
-  //
-  // There is no per-row hydration: every message of the requested page is watched, so the phone
-  // sends all of its bodies, and the page is only drawn once they have arrived (the CircularProgress
-  // stays at the edge meanwhile). The phone serves at most MAX_WATCHED (48) rows, so a page holds
-  // at most WINDOW_MESSAGES of them; growing past that unloads whole rounds from the far side.
+  // Costs survive body eviction, but belong only to this selected conversation. Unknown rounds
+  // hydrate in bounded adjacent batches; missing costs are never treated as free.
+  const loadCosts = useRef({ openId: state.openId, values: new Map() });
+  if (loadCosts.current.openId !== state.openId) loadCosts.current = { openId: state.openId, values: new Map() };
+  const rememberCost = message => {
+    if (Number.isFinite(message?.loadTokens)) loadCosts.current.values.set(message.id, Math.max(1, message.loadTokens));
+  };
+  state.bodies.forEach(rememberCost);
+  rememberCost(state.streaming);
   const roundStarts = state.path.reduce((starts, entry, index) => {
     if (index === 0 || entry.participant === "USER") starts.push(index);
     return starts;
@@ -1024,12 +1040,44 @@ export function MessageList({ state, label, onPageAction }) {
     while (round + 1 < roundCount && roundStarts[round + 1] <= index) round += 1;
     return round;
   };
-  /** Drops whole rounds from the side away from `keep` until the page fits the watch budget. */
-  const fit = (start, end, keep) => {
-    while (end - start > 1 && roundEnd(end - 1) - roundStarts[start] > WINDOW_MESSAGES) {
-      if (keep === "start") end -= 1; else start += 1;
+  const roundCost = (round) => {
+    let total = 0;
+    for (let index = roundStarts[round]; index < roundEnd(round); index += 1) {
+      const cost = loadCosts.current.values.get(state.path[index].id);
+      if (cost == null) return null;
+      total += cost;
     }
-    return { start, end };
+    return total;
+  };
+  /** Fill past the minimum load, or exhaust the remaining complete rounds. */
+  const fit = (start, end, keep) => {
+    let first = keep === "start" ? start : end;
+    let last = first;
+    let tokens = 0;
+    const probes = [];
+    for (let round = keep === "start" ? start : end - 1;
+      round >= start && round < end; round += keep === "start" ? 1 : -1) {
+      const cost = roundCost(round);
+      if (cost == null) {
+        let probe = round;
+        let rows = 0;
+        // Resolve adjacent unknown costs in bounded batches, never price missing text as zero.
+        while (probe >= start && probe < end && rows < 48) {
+          const entries = state.path.slice(roundStarts[probe], roundEnd(probe));
+          if (rows && rows + entries.length > 48) break;
+          probes.push(...entries.map(entry => entry.id));
+          rows += entries.length;
+          probe += keep === "start" ? 1 : -1;
+        }
+        if (last > first) break;
+        if (keep === "start") last = round + 1; else first = round;
+        break;
+      }
+      if (keep === "start") last = round + 1; else first = round;
+      tokens += cost;
+      if (tokens > PAGE_TOKEN_WINDOW) break;
+    }
+    return { start: first, end: last, probes };
   };
   const pageEntries = (page) => (page.end > page.start
     ? state.path.slice(roundStarts[page.start], roundEnd(page.end - 1)) : []);
@@ -1038,32 +1086,64 @@ export function MessageList({ state, label, onPageAction }) {
     openId: state.openId,
     startId: state.path[roundStarts[page.start]]?.id ?? null,
     endId: page.end >= roundCount ? null : state.path[roundStarts[page.end]].id,
+    lastId: state.path[roundStarts[page.end - 1]]?.id ?? null,
     keep,
   });
-  const resolvePage = (request) => {
+  const resolvePage = (request, fill = true) => {
     if (request?.openId !== state.openId) return null;
     const start = roundOfId(request.startId);
     const end = request.endId == null ? roundCount : roundOfId(request.endId);
-    return start >= 0 && end > start ? fit(start, end, request.endId == null ? "end" : request.keep) : null;
+    if (start < 0 || end <= start) return null;
+    if (!fill || request.keep === "closed") return { start, end, probes: [] };
+    return request.keep === "start" ? fit(start, roundCount, "start") : fit(0, end, "end");
   };
   const [pageRequest, setPageRequest] = useState(null);
-  let requested = resolvePage(pageRequest) ?? fit(Math.max(0, roundCount - PAGE_ROUNDS), roundCount, "end");
-  // Anything the frame must reach - the search hit, a scroll request, the open sheet, a branch being
-  // replaced - moves the page to its round first.
-  for (const id of [searchTarget.current, state.scrollRequest?.messageId, sheet?.messageId, branch?.request.oldMessageId]) {
+  const retainedPages = useRef({ openId: state.openId, windows: [] });
+  if (retainedPages.current.openId !== state.openId) retainedPages.current = { openId: state.openId, windows: [] };
+  let windows = retainedPages.current.windows.map(page => resolvePage(page, false)).filter(Boolean);
+  const retained = windows.length ? { start: windows[0].start, end: windows.at(-1).end } : null;
+  const loading = pageRequest?.openId === state.openId && pageRequest.direction;
+  let requested = loading
+    ? retained ? pageRequest.direction < 0 ? fit(0, retained.start, "end") : fit(retained.end, roundCount, "start") : fit(0, roundCount, "end")
+    : resolvePage(pageRequest) ?? (retained ? { ...retained, probes: [] } : fit(0, roundCount, "end"));
+  let targeted = false;
+  // Distant explicit targets replace the range; adjacent reader paging keeps its existing windows.
+  // A send scrolls to the newest message, so it returns to the tail page with its preceding context.
+  for (const [id, tail] of [[searchTarget.current, false], [state.scrollRequest?.messageId, true],
+    [sheet?.messageId, false], [branch?.request.oldMessageId, false]]) {
     const round = roundOfId(id);
-    if (round >= 0 && (round < requested.start || round >= requested.end)) {
-      requested = fit(round, Math.min(roundCount, round + PAGE_ROUNDS), "start");
+    if (round >= 0 && (round < requested.start || round >= requested.end) &&
+        (!retained || round < retained.start || round >= retained.end)) {
+      requested = tail ? fit(0, roundCount, "end") : fit(round, roundCount, "start");
+      targeted = true;
     }
   }
   const requestedEntries = pageEntries(requested);
-  const requestedReady = requestedEntries.every((entry) => state.streaming?.id === entry.id || state.bodies.has(entry.id));
+  const requestedReady = requested.probes.length === 0 &&
+    requestedEntries.every((entry) => state.streaming?.id === entry.id || state.bodies.has(entry.id));
   const displayedPage = useRef(null);
-  const previousPage = displayedPage.current ? resolvePage(displayedPage.current) : null;
-  const displayed = requestedReady || !previousPage ? requested : previousPage;
-  displayedPage.current = pageRequestFor(displayed, "start");
-  const pageLoading = displayed.start !== requested.start || displayed.end !== requested.end;
-  const tailReady = requestedReady && requested.end === roundCount;
+  const previousPage = retained ?? (displayedPage.current ? resolvePage(displayedPage.current, false) : null);
+  let displayed = previousPage ?? requested;
+  if (requestedReady) {
+    if (loading && retained && !targeted) {
+      windows = pageRequest.direction < 0 ? [requested, ...windows] : [...windows, requested];
+      if (windows.length > MAX_PAGE_WINDOWS) {
+        if (pageRequest.direction < 0) windows.pop(); else windows.shift();
+      }
+    } else if (!retained || targeted || pageRequest?.keep !== "closed" && !loading) {
+      windows = [requested];
+    }
+    displayed = { start: windows[0]?.start ?? requested.start, end: windows.at(-1)?.end ?? requested.end };
+    retainedPages.current.windows = windows.map(page => pageRequestFor(page, "closed"));
+  }
+  useLayoutEffect(() => {
+    if (requestedReady && (loading || targeted || pageRequest?.keep !== "closed" || pageRequest.openId !== state.openId)) {
+      setPageRequest(pageRequestFor(displayed, "closed"));
+    }
+  });
+  displayedPage.current = pageRequestFor(displayed, "closed");
+  const pageLoading = !requestedReady;
+  const tailReady = requestedReady && displayed.end === roundCount;
   refreshBottom.current = () => {
     const root = scroller.current;
     if (!root) return;
@@ -1087,26 +1167,84 @@ export function MessageList({ state, label, onPageAction }) {
   // A page change keeps the reader's view: the first row still on screen that the new page also
   // draws is measured before the change and put back at the same offset after it.
   const pageAnchor = useRef(null);
+  const pageInput = useRef({ direction: 0, touchY: null, openId: state.openId });
+  const pageAtEdge = useRef(null);
+  if (pageInput.current.openId !== state.openId) {
+    pageInput.current = { direction: 0, touchY: null, openId: state.openId };
+  }
   const anchoredPageKey = useRef(null);
+  const pagePaint = useRef(null);
+  const pageExits = useRef(null);
+  const pagePaintIds = useRef({ openId: state.openId, ids: new Set() });
   if (anchoredPageKey.current !== pageKey) {
+    // A layout correction is not another gesture. Only fresh input may cross the next edge.
+    pageInput.current.direction = 0;
     const root = scroller.current;
     pageAnchor.current = null;
+    pagePaint.current = null;
     if (root && anchoredPageKey.current?.startsWith(`${state.openId}:`)) {
       const kept = new Set(pagePath.map((entry) => entry.id));
       const top = root.getBoundingClientRect().top;
-      const row = [...root.querySelectorAll(".message-row")]
-        .find((node) => kept.has(node.dataset.id) && node.getBoundingClientRect().bottom > top);
+      const rows = [...root.querySelectorAll(".message-column .message-row")];
+      const row = rows.find(node => kept.has(node.dataset.id) && node.getBoundingClientRect().bottom > top);
       if (row) pageAnchor.current = { id: row.dataset.id, offset: row.getBoundingClientRect().top - top };
+      pagePaint.current = { openId: state.openId, incoming: new Set(pagePath.filter(entry =>
+        !pagePaintIds.current.ids.has(entry.id)).map(entry => entry.id)), outgoing: rows.filter(node => {
+          const bounds = node.getBoundingClientRect();
+          return !kept.has(node.dataset.id) && bounds.bottom > top && bounds.top < top + root.clientHeight;
+        }).map(node => ({ node: node.cloneNode(true), bounds: node.getBoundingClientRect() })) };
     }
     anchoredPageKey.current = pageKey;
   }
+  pagePaintIds.current = { openId: state.openId, ids: new Set(pagePath.map(entry => entry.id)) };
   useLayoutEffect(() => {
     const root = scroller.current;
     const anchor = pageAnchor.current;
     pageAnchor.current = null;
-    if (!root || !anchor || pinned.current) return;
+    if (!root) return;
+    const column = root.querySelector(".message-column");
+    column?.style.removeProperty("padding-bottom");
+    if (!anchor || pinned.current) return;
     const row = [...root.querySelectorAll(".message-row")].find((node) => node.dataset.id === anchor.id);
-    if (row) root.scrollTop += row.getBoundingClientRect().top - root.getBoundingClientRect().top - anchor.offset;
+    if (row) {
+      const target = root.scrollTop + row.getBoundingClientRect().top - root.getBoundingClientRect().top - anchor.offset;
+      const missing = target - (root.scrollHeight - root.clientHeight);
+      // A short replacement needs trailing room, otherwise the browser clamps away the anchor.
+      if (column && missing > 0) {
+        column.style.paddingBottom = `${parseFloat(getComputedStyle(column).paddingBottom) + missing}px`;
+      }
+      root.scrollTop = target;
+    }
+  }, [pageKey]);
+  useLayoutEffect(() => {
+    const paint = pagePaint.current;
+    pagePaint.current = null;
+    const root = scroller.current, host = pageExits.current;
+    if (!root || !host || !paint || paint.openId !== state.openId) return;
+    for (const row of root.querySelectorAll(".message-column .message-row")) {
+      if (paint.incoming.has(row.dataset.id)) row.parentElement.animate([{ opacity: 0 }, { opacity: 1 }],
+        { duration: 180, easing: "linear" });
+    }
+    host.replaceChildren();
+    if (!paint.outgoing.length) { host.style.top = ""; host.style.height = ""; return; }
+    const viewport = root.getBoundingClientRect();
+    host.style.top = `${root.scrollTop}px`;
+    host.style.height = `${root.clientHeight}px`;
+    for (const { node, bounds } of paint.outgoing) {
+      node.className = "message-page-snapshot";
+      node.removeAttribute("data-id");
+      node.setAttribute("inert", "");
+      node.setAttribute("aria-hidden", "true");
+      Object.assign(node.style, { top: `${bounds.top - viewport.top}px`, left: `${bounds.left - viewport.left}px`,
+        width: `${bounds.width}px`, height: `${bounds.height}px` });
+      host.append(node);
+      const fade = node.animate([{ opacity: 1 }, { opacity: 0 }],
+        { duration: 180, easing: "linear", fill: "forwards" });
+      fade.onfinish = () => {
+        node.remove(); fade.cancel();
+        if (!host.childElementCount) { host.style.top = ""; host.style.height = ""; }
+      };
+    }
   }, [pageKey]);
   // Explicit history requests are not displaced by an out-of-page streaming reply.
   const ids = pagePath.map((entry) => entry.id).join(",");
@@ -1260,16 +1398,19 @@ export function MessageList({ state, label, onPageAction }) {
 
   // Chrome runs no CSS transition on its own scrollbar, so the animated bar is drawn beside it; the
   // native bar stays in place and keeps every hit target.
-  useEffect(() => attachScrollbar(scroller.current, bar.current), []);
+  useEffect(() => attachScrollbar(scroller.current, bar.current, direction => {
+    pageInput.current.direction = direction;
+    pageAtEdge.current?.();
+  }), []);
 
-  // The whole requested page is watched (targets first, then newest to oldest, since the phone keeps
-  // the first MAX_WATCHED ids); the page still on screen keeps its bodies until the next one lands.
-  const requestedIds = requestedEntries.map((entry) => entry.id).join(",");
+  // The page and its next unknown round share the existing payload watch. Keep the displayed
+  // page subscribed until replacement is ready, and retain both through idle-cache eviction.
+  const requestedIds = [...new Set([...requestedEntries.map(entry => entry.id), ...requested.probes])].join(",");
   useEffect(() => {
     const requestedList = requestedIds ? requestedIds.split(",") : [];
-    sync.keep([...pagePath.map((entry) => entry.id), ...requestedList]);
-    sync.watch([...new Set([searchTarget.current, sheetWatchedId, branchTarget, ...requestedList.reverse()]
-      .filter(Boolean))]);
+    const retained = [...pagePath.map(entry => entry.id), ...requestedList];
+    sync.keep(retained);
+    sync.watch([...new Set([searchTarget.current, sheetWatchedId, branchTarget, ...retained].filter(Boolean))]);
   }, [requestedIds, ids, sheetWatchedId, searchTarget.current, branchTarget]);
 
   useLayoutEffect(() => {
@@ -1306,7 +1447,7 @@ export function MessageList({ state, label, onPageAction }) {
     bottomRequested.current = true;
     setBottomVisible(false);
     if (tailReady) bottomSeek.current?.();
-    else setPageRequest(pageRequestFor(fit(Math.max(0, roundCount - PAGE_ROUNDS), roundCount, "end"), "end"));
+    else setPageRequest(pageRequestFor(fit(0, roundCount, "end"), "end"));
   }
 
   // The app opens a conversation at its newest message. Row bodies arrive after the path, so
@@ -1329,7 +1470,8 @@ export function MessageList({ state, label, onPageAction }) {
     const fading = switching?.phase === "covering" || switching?.phase === "revealing";
     const request = state.scrollRequest;
     let seekRequested = false;
-    if (request && state.openStatus === "ready" && state.path.some((entry) => entry.id === request.messageId)) {
+    if (request && requestedReady && state.openStatus === "ready" &&
+        pagePath.some((entry) => entry.id === request.messageId)) {
       pinned.current = true;
       sync.consumeScroll(request);
       seekRequested = true;
@@ -1493,6 +1635,11 @@ export function MessageList({ state, label, onPageAction }) {
 
     const settle = () => {
       frame = 0;
+      // The opening page may still grow upward; settling earlier would leave the reader at its old offset.
+      if (!requestedReady) {
+        previousLayout = null;
+        return;
+      }
       const viewport = root.getBoundingClientRect();
       const rows = [...column.querySelectorAll(".message-row")].filter((row) => {
         const bounds = row.getBoundingClientRect();
@@ -1503,10 +1650,12 @@ export function MessageList({ state, label, onPageAction }) {
         return;
       }
       const layout = `${root.scrollHeight}:${root.clientHeight}:${root.scrollTop}`;
-      if (layout === previousLayout && Math.abs(root.scrollHeight - root.clientHeight - root.scrollTop) <= 1) {
+      const atBottom = Math.max(0, root.scrollHeight - root.clientHeight - root.scrollTop) <= 1;
+      if (layout === previousLayout && atBottom) {
         setSettledOpenId(state.openId);
       } else {
         previousLayout = layout;
+        if (pinned.current) wake();
         frame = requestAnimationFrame(settle);
       }
     };
@@ -1627,7 +1776,8 @@ export function MessageList({ state, label, onPageAction }) {
       if (covered && !coveredOpen) return;
       if (pending && !frame) frame = requestAnimationFrame(settle);
     };
-    const release = () => {
+    const release = (event) => {
+      if (["pointerdown", "touchstart"].includes(event.type)) pageInput.current.direction = 0;
       if (branch && !branch.request.scrollFinished && !branchScroll.current?.done) {
         branchScroll.current = { id: branch.request.id, target: branchTarget, done: true };
         sync.branchAck('branch_scroll', branch, false);
@@ -1642,6 +1792,7 @@ export function MessageList({ state, label, onPageAction }) {
       cancelAnimationFrame(seekFrame);
       seekFrame = 0;
       refreshBottom.current?.();
+      pageAtEdge.current?.();
     };
     const follow = new ResizeObserver(followBottom);
     follow.observe(column);
@@ -1770,29 +1921,62 @@ export function MessageList({ state, label, onPageAction }) {
     return () => { if (fade) { fade.onfinish = null; fade.cancel(); clear(); } };
   }, [frameKind]);
 
+  pageAtEdge.current = () => {
+    const root = scroller.current;
+    if (!root) return;
+    const direction = pageInput.current.direction;
+    if (covered || pinned.current || bottomMotion.current || branch || search?.query.trim()) return;
+    if (pageLoading || !requestedReady) {
+      // Reversing during hydration cancels the pending edge, not the reader's retained windows.
+      if (loading && direction && direction !== pageRequest.direction) {
+        setPageRequest(pageRequestFor(displayed, "closed"));
+      }
+      return;
+    }
+    if (hasOlderRounds && direction < 0 && root.scrollTop <= OLDER_PAGE_EDGE_PX) {
+      pageInput.current.direction = 0;
+      setPageRequest({ openId: state.openId, direction: -1 });
+    } else if (hasNewerRounds && direction > 0 && root.scrollHeight - root.clientHeight - root.scrollTop <= OLDER_PAGE_EDGE_PX) {
+      pageInput.current.direction = 0;
+      setPageRequest({ openId: state.openId, direction: 1 });
+    }
+  };
   return html`
     <section class="messages" ref=${scroller} aria-label=${label} aria-busy=${covered} inert=${covered}
+      onWheel=${event => { pageInput.current.direction = Math.sign(event.deltaY); pageAtEdge.current?.(); }}
+      ontouchstart=${event => { pageInput.current.touchY = event.touches[0]?.clientY ?? null; }}
+      ontouchmove=${event => {
+        const y = event.touches[0]?.clientY;
+        if (y != null && pageInput.current.touchY != null) {
+          pageInput.current.direction = Math.sign(pageInput.current.touchY - y);
+          pageInput.current.touchY = y;
+          pageAtEdge.current?.();
+        }
+      }}
+      onKeyDown=${event => {
+        const tag = event.target.tagName;
+        if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) || event.target.isContentEditable) return;
+        if (["ArrowUp", "PageUp", "Home"].includes(event.key)) pageInput.current.direction = -1;
+        else if (["ArrowDown", "PageDown", "End", " "].includes(event.key)) {
+          pageInput.current.direction = event.key === " " && event.shiftKey ? -1 : 1;
+        }
+        pageAtEdge.current?.();
+      }}
       onScroll=${(event) => {
         const root = event.currentTarget;
         const latch = bottomVisibility.current;
+        const delta = root.scrollTop - latch.top;
         if (!covered && !pageLoading && !bottomMotion.current && !branch && !search?.query.trim()) {
-          const delta = root.scrollTop - latch.top;
           if (delta) latch.travel = Math.sign(delta) === Math.sign(latch.travel) ? latch.travel + delta : delta;
           if (Math.abs(latch.travel) >= 32) { latch.heading = latch.travel > 0; latch.travel = 0; }
         }
         latch.top = root.scrollTop;
         refreshBottom.current?.();
-        if (covered || pageLoading) return;
-        if (hasOlderRounds && root.scrollTop <= OLDER_PAGE_EDGE_PX) {
-          setPageRequest(pageRequestFor(fit(Math.max(0, displayed.start - PAGE_ROUNDS), displayed.end, "start"), "start"));
-        } else if (hasNewerRounds && root.scrollHeight - root.clientHeight - root.scrollTop <= OLDER_PAGE_EDGE_PX) {
-          setPageRequest(pageRequestFor(fit(displayed.start, Math.min(roundCount, displayed.end + PAGE_ROUNDS), "end"), "end"));
-        }
+        pageAtEdge.current?.();
       }}>
       ${showWelcome ? html`<${ChatWelcome} reduceMotion=${!!state.display?.reduceMotion} />`
         : html`<div class="message-column">
-        ${hasOlderRounds && html`<div class="message-page-progress" key="older-page">
-          <${CircularProgress} size=${32} stroke=${3} label=${t.loading} /></div>`}
+        <${PageProgress} key="older-page" edge="older" active=${!covered && !!loading && loading < 0 && pageLoading} />
         ${renderedPath.map((entry, index) => html`
           <${RowEntrance} key=${visualKeys.current.get(entry.id) || entry.id} enter=${shouldEnter(entry)}
             exiting=${exitIds.has(entry.id)}>
@@ -1809,9 +1993,9 @@ export function MessageList({ state, label, onPageAction }) {
             body=${exitIds.has(entry.id) ? branchVisual.current.bodies.get(entry.id)
               : state.streaming?.id === entry.id ? state.streaming : state.bodies.get(entry.id)} /></${RowEntrance}>`)}
         ${!hasNewerRounds && html`<div class="message-tail-minimum" key="tail-minimum" ref=${tailSpacer} aria-hidden="true"></div>`}
-        ${hasNewerRounds && html`<div class="message-page-progress" key="newer-page">
-          <${CircularProgress} size=${32} stroke=${3} label=${t.loading} /></div>`}
+        <${PageProgress} key="newer-page" edge="newer" active=${!covered && !!loading && loading > 0 && pageLoading} />
       </div>`}
+      <div key="history-exit" class="message-page-exits" ref=${pageExits} aria-hidden="true" inert></div>
       <div key="page-exit" class="chat-frame-exits" ref=${exitHost} aria-hidden="true"></div>
     </section>
     <div class="scrollbar-overlay" ref=${bar} aria-hidden="true"><span></span></div>

@@ -2,6 +2,7 @@ package com.newoether.agora.viewmodel
 
 import android.content.Context
 import com.newoether.agora.data.repository.ConversationRepository
+import com.newoether.agora.data.repository.observeMessagesByIds
 import com.newoether.agora.model.ChatMessage
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,15 @@ internal class ConversationMessagePayloadHydration(
             projector.project { transform(row.toUiChatMessage(appContext)) }
         }
     }
+
+    fun observeMessages(
+        conversationId: String,
+        messageIds: List<String>,
+        transform: (ChatMessage) -> ChatMessage = { it },
+    ): Flow<List<ChatMessage>> = conversations.observeMessagesByIds(conversationId, messageIds)
+        .distinctUntilChanged().map { entities ->
+            projector.projectAll(entities) { entity -> transform(entity.toUiChatMessage(appContext)) }
+        }
 
     suspend fun loadMessages(
         conversationId: String,

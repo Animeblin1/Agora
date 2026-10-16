@@ -69,12 +69,20 @@ function ConversationRow({ conversation, selected, onSelect, onMenu }) {
 
 /** ChatDrawerContent: title, search, New Chat, then the conversation list. */
 function DrawerContent({ conversations, openId, onSelect, connected, loading, hasMore, reduceMotion,
-  searchQuery, searchResults, searchLoading, searchFailed, drawerVisible = true, onRequestRename, onRequestDelete, switching }) {
+  searchQuery, searchResults, searchLoading, searchFailed, drawerVisible = true, searchBack, onRequestRename, onRequestDelete, switching }) {
   const searching = !!searchQuery.trim();
   const list = useRef(null), bar = useRef(null), focusIndex = useRef(null);
   const placements = useRef(new Map());
   const [searchExpanded, setSearchExpanded] = useState(false);
   const searchField = useRef(null);
+  function collapseSearch() {
+    sync.search(""); searchField.current?.blur(); setSearchExpanded(false);
+  }
+  useLayoutEffect(() => {
+    if (!searchBack) return;
+    searchBack.current = drawerVisible && searchExpanded ? collapseSearch : null;
+    return () => { searchBack.current = null; };
+  }, [drawerVisible, searchExpanded, searchBack]);
   useLayoutEffect(() => {
     if (!drawerVisible) {
       if (searchExpanded || searchQuery) sync.search("");
@@ -198,7 +206,7 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
         <button class="drawer-search-toggle" type="button" aria-label=${searchExpanded ? t.close : t.searchHint}
           aria-expanded=${searchExpanded} onClick=${event => {
             if (searchExpanded) {
-              sync.search(""); searchField.current?.blur(); setSearchExpanded(false);
+              collapseSearch();
               event.currentTarget.focus({ preventScroll: true });
             } else setSearchExpanded(true);
           }}>${icon(searchExpanded ? ICON_ARROW_BACK : ICON_SEARCH)}</button>
@@ -307,7 +315,7 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
     searchTransition.current.outgoing?.remove();
   }, []);
   useLayoutEffect(() => { if (search) searchField.current?.focus(); }, [!!search]);
-  const titleIdentity = title ? JSON.stringify([conversationId, title]) : "brand";
+  const titleIdentity = conversationId == null ? "new-chat" : title ? JSON.stringify([conversationId, title]) : "brand";
   const titled = titleFrames => {
     if (!titleFrames.some(frame => frame.identity === titleIdentity)) {
       return [...titleFrames, { identity: titleIdentity, title, subtitle, initialAlpha: 0 }];
@@ -331,7 +339,7 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
     const measure = () => {
       const label = [...canvas.querySelectorAll("h1")].find((node) => node.dataset.titleIdentity === titleIdentity);
       if (!label) return;
-      const target = Math.min(canvas.clientWidth, 74 + Math.min(label.scrollWidth, 180));
+      const target = Math.min(canvas.clientWidth, titleIdentity === "new-chat" ? 52 : 74 + Math.min(label.scrollWidth, 180));
       const initial = clip.identity === null || clip.canvas !== canvas;
       const changed = clip.identity !== titleIdentity;
       if (!initial && !changed && clip.target === target && (!reduceMotion || !clip.animation)) return;
@@ -433,8 +441,8 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
             <div class="title-labels">
               ${presentations.map((frame) => html`<h1 key=${frame.identity}
                 class=${frame.title ? (frame.subtitle ? "conversation-bar-title has-subtitle" : "conversation-bar-title") : "brand-title"}
-                data-title-identity=${frame.identity} aria-hidden=${frame.identity === titleIdentity ? null : "true"}
-                style=${{ opacity: frame.initialAlpha }}><span class="title-text">${frame.title || t.title}</span>${frame.subtitle &&
+                data-title-identity=${frame.identity} aria-hidden=${frame.identity === titleIdentity && frame.identity !== "new-chat" ? null : "true"}
+                style=${{ opacity: frame.initialAlpha }}><span class="title-text">${frame.identity === "new-chat" ? "" : frame.title || t.title}</span>${frame.subtitle &&
                   html`<span class="conversation-subtitle">${frame.subtitle}</span>`}</h1>`)}
             </div>
           </div>
@@ -666,6 +674,7 @@ export function Shell({ onSignedOut }) {
   const drawerDismissedComposer = useRef(false);
   const drawerFrame = useRef(0);
   const drawer = useRef(null);
+  const drawerSearchBack = useRef(null);
   const menuButton = useRef(null);
   const wasOpen = useRef(false);
   const wasModalOpen = useRef(false);
@@ -831,14 +840,21 @@ export function Shell({ onSignedOut }) {
     wasOpen.current = drawerOpen;
     const enteringModal = modalOpen && !wasModalOpen.current;
     wasModalOpen.current = modalOpen;
-    if (!modalOpen) return undefined;
+    if (!drawerOpen) return undefined;
     // The panel itself takes focus on entry; focusing a control here would focus the search
     // field first, which on a phone opens the soft keyboard without the user asking for it.
     if (enteringModal) drawer.current?.focus();
     const onKey = (event) => {
       if (event.defaultPrevented || shell.current.querySelector(".detail-sheet-layer, .dropdown, dialog[open]")) return;
-      if (event.key === "Escape") { event.preventDefault(); settleDrawer(false); }
-      if (event.key === "Tab") {
+      if (!modalOpen && !drawer.current.contains(event.target)) return;
+      if (event.key === "Escape") {
+        if (drawerSearchBack.current) {
+          event.preventDefault();
+          drawerSearchBack.current();
+          drawer.current.querySelector(".drawer-search-toggle")?.focus({ preventScroll: true });
+        } else if (modalOpen) { event.preventDefault(); settleDrawer(false); }
+      }
+      if (event.key === "Tab" && modalOpen) {
         const controls = [...drawer.current.querySelectorAll("input:not([disabled]), button:not([disabled])")];
         const first = controls[0] ?? drawer.current;
         const last = controls.at(-1) ?? drawer.current;
@@ -868,7 +884,7 @@ export function Shell({ onSignedOut }) {
         role=${sideBySide ? null : "dialog"} aria-modal=${modalOpen ? "true" : null}
         inert=${!drawerOpen}>
         <${DrawerContent} conversations=${state.conversations} openId=${state.openId}
-          connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion} drawerVisible=${drawerOpen}
+          connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion} drawerVisible=${drawerOpen} searchBack=${drawerSearchBack}
           switching=${!!state.switching || state.openStatus === "loading"}
           searchQuery=${state.searchQuery} searchResults=${state.searchResults} searchLoading=${state.searchLoading} searchFailed=${state.searchFailed}
           onRequestRename=${(request) => setRowDialog({ ...request, type: "rename" })}

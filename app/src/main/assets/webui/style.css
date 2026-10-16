@@ -385,7 +385,7 @@ input, textarea { user-select: text; }
   overflow: hidden;
   border-radius: 28px;
   background: transparent;
-  transition: width 400ms cubic-bezier(.4, 0, .2, 1);
+  transition: width 400ms cubic-bezier(0, 0, .2, 1);
 }
 .drawer-search[data-expanded="true"] { width: 100%; padding-inline-end: 14px; background: var(--tonal-8); }
 .shell[data-reduce-motion="true"] .drawer-search { transition: none; }
@@ -452,8 +452,13 @@ input, textarea { user-select: text; }
 .drawer-list-position { position: absolute; width: 100%; }
 .drawer-section { margin: 0; padding: 8px 16px 4px; font-size: 14px; line-height: 24px; font-weight: 500; color: var(--md-on-surface-variant); }
 .drawer-list-progress { display: grid; place-items: center; min-height: 56px; flex: none; }
-/* The chat's older-page indicator: the same 56 px row and 32 dp ring as the drawer's. */
-.message-page-progress { display: grid; place-items: center; min-height: 56px; }
+/* Edge loading is paint-only; appearing and disappearing never moves the reader's rows. */
+.message-page-progress { position: relative; height: 0; opacity: 0; visibility: hidden; pointer-events: none; }
+.message-page-progress > span { position: absolute; inset-inline: 0; top: 0; height: 56px; display: grid; place-items: center; }
+.message-page-progress.older > span { top: -56px; }
+.message-page-progress[data-loading="false"] :is(svg, g, circle) { animation-play-state: paused; }
+.message-page-exits { position: absolute; inset-inline: 0; overflow: hidden; pointer-events: none; }
+.message-page-snapshot { position: absolute; box-sizing: border-box; padding: 8px 0; pointer-events: none; }
 /* DrawerSearchBar trailing Box(size 28): spinner and clear IconButton overlap at one centre. */
 .drawer-search-trailing { position: relative; flex: none; width: 28px; height: 28px; }
 .drawer-search-progress, .drawer-search-clear { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; transition: opacity 180ms linear; }
@@ -638,6 +643,7 @@ input, textarea { user-select: text; }
   margin: 0 20px 0 5px;
 }
 .title-content > .bar-button { pointer-events: auto; }
+.title-content > .bar-button svg { transform: translateX(-1px); }
 .actions-capsule { flex: none; width: 98px; padding: 0 5px; }
 .menu-anchor { position: relative; }
 /* IconButton: 44 dp; Menu and More icons 26 dp, New Chat 30 dp. */
@@ -961,6 +967,7 @@ input, textarea { user-select: text; }
 .info-group.after-answer, .info-card.after-answer { padding-top: 16px; }
 .info-group-surface {
   position: relative;
+  isolation: isolate;
   width: fit-content;
   max-width: 100%;
   overflow: hidden;
@@ -1465,7 +1472,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .interaction-pages { position: relative; overflow: hidden; margin-top: 10px; }
 .interaction-body { width: 100%; box-sizing: border-box; }
 .interaction-outgoing { position: absolute; top: 0; left: 0; pointer-events: none; }
-.interaction-question { font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 10px; }
+.interaction-question { font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 10px; user-select: text; }
 .interaction-body:has(.interaction-question) { max-height: 200px; overflow-y: auto; }
 .interaction-options { display: flex; flex-direction: column; }
 .interaction-answer { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 180ms cubic-bezier(.4,0,.2,1), opacity 180ms cubic-bezier(.4,0,.2,1); }
@@ -1879,7 +1886,8 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 }
 .tool-split .tool-label:disabled { cursor: default; }
 .tool-switch { --switch-scale: .7; --switch-size: 16; --switch-offset: 8; position: relative; flex: none; width: calc(52px * var(--switch-scale)); height: calc(32px * var(--switch-scale)); border: calc(2px * var(--switch-scale)) solid var(--md-outline); border-radius: 16px; padding: 0; background: var(--md-surface-container-highest); cursor: pointer; }
-.tool-switch::after { content: ""; position: absolute; top: calc((16 - var(--switch-size) / 2 - 2) * var(--switch-scale) * 1px); left: calc((var(--switch-offset) - 2) * var(--switch-scale) * 1px); width: calc(var(--switch-size) * var(--switch-scale) * 1px); height: calc(var(--switch-size) * var(--switch-scale) * 1px); border-radius: 50%; background: var(--md-outline); }
+/* Centre against the actual track box: scaled borders can round to a different pixel width. */
+.tool-switch::after { content: ""; position: absolute; top: 50%; left: calc(50% + (var(--switch-offset) + var(--switch-size) / 2 - 26) * var(--switch-scale) * 1px); transform: translate(-50%, -50%); width: calc(var(--switch-size) * var(--switch-scale) * 1px); height: calc(var(--switch-size) * var(--switch-scale) * 1px); border-radius: 50%; background: var(--md-outline); }
 .tool-switch[data-checked="true"] { --switch-size: 24; --switch-offset: 24; border-color: var(--md-primary); background: var(--md-primary); }
 .tool-switch[data-checked="true"]::after { background: var(--md-on-primary); }
 .dropdown-item:not([data-pending="true"]):is(:disabled, [data-disabled="true"]) svg { fill: color-mix(in srgb, var(--md-on-surface-variant) 38%, transparent); }

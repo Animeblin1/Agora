@@ -270,14 +270,17 @@ attachment.
 Compose and WebUI show the Agora title and a trailing search icon while drawer search is collapsed.
 Explicit activation expands the existing capsule to the entire first row; the Agora title fades out
 over 180 ms and fades back on return. The search field is not a permanent second row. Its leading return button
-collapses it, clears the query and restores the ordinary conversation list. The trailing clear
+collapses it, clears the query and restores the ordinary conversation list. Back while search is
+expanded performs that same collapse first, including for an empty query; a subsequent Back uses
+normal drawer dismissal. Browser Escape follows the same order. Menus and dialogs retain priority,
+and the existing side-by-side drawer dismissal policy stays unchanged. The trailing clear
 button only clears the query and leaves the capsule expanded. Only once the drawer is fully closed,
 it clears the query, releases field focus and exits expanded search. An interrupted close that stays
 visible preserves search; losing field focus alone does not reset it.
 The first row and search capsule are 56 dp high. The collapsed search control and persistent leading
 Search/Return button are 56 dp square, with a 24 dp icon. The logical end stays fixed while the
-capsule expands to 100% of the row over 400 ms FastOutSlowIn in either direction, retargeting from the
-current width if interrupted. Reduced Motion snaps width. Collapsed title typography stays 25/32 bold
+capsule expands to 100% of the row over 400 ms LinearOutSlowIn in either direction, starting quickly
+and slowing toward its destination, retargeting from the current width if interrupted. Reduced Motion snaps width. Collapsed title typography stays 25/32 bold
 with one-line ellipsis and an 8 dp gap to the control. Explicit opening focuses the field; Return
 releases input focus. Losing focus alone does not collapse search. The trailing 28 dp progress/clear
 slot is inset 14 dp from the capsule's top, bottom and logical end; its 18 dp ring and glyph share
@@ -629,7 +632,13 @@ default uses the standard whole-row `SettingsItem` toggle with the localized Low
 ## 24. Chat top-bar title capsule motion
 
 The normal Chat top bar keeps its title capsule start-anchored after the trailing actions capsule has
-reserved its fixed width. Brand/conversation-title identity changes Crossfade the title presentation
+reserved its fixed width. New Chat shows only the menu button inside a `52 dp` circle, without an
+Agora wordmark. Entering New Chat shrinks the existing clip to that circle; leaving it expands the
+same clip to the resolved conversation title. The menu glyph compensates for the unchanged `5 dp`
+start inset of its `44 dp` hit area by shifting `1 dp` left (`1px` in WebUI), aligning its center
+with the visible `52 dp` circle. Its button hit area, circular background and title layout stay unchanged.
+Existing conversations with an unloaded/blank title
+retain the brand fallback. New-chat/brand/conversation-title identity changes Crossfade the title presentation
 over `200 ms` with `FastOutSlowInEasing`. The title content is always measured and laid out against
 its latest stable final constraints inside a canvas capped at 260 dp; no animated value participates
 in the capsule, Crossfade, or Text layout width. An independently measured natural target controls
@@ -637,7 +646,7 @@ only one left-anchored rounded drawing clip over `400 ms` with `FastOutSlowInEas
 background, shadow, and content reveal together while only the visible right edge moves.
 
 The title-motion identity includes the selected conversation and its visible title; the brand state
-has one stable identity. Token-subtitle appearance, disappearance, and value changes update the final
+has one stable identity and New Chat has a separate menu-only identity. Token-subtitle appearance, disappearance, and value changes update the final
 layout directly without starting, cancelling, or restarting identity motion. During an active identity
 clip, the same owner continuously absorbs the latest measured token target by rebasing from the current
 visible boundary over the remaining portion of the original `400 ms` deadline. It does not queue a new
@@ -922,7 +931,8 @@ ellipsis; the capsule boundary reveals that box rather than truncating unbounded
 The browser TopBar keeps its title content on stable final constraints, capped at 260px after the
 98px actions and 16px gap. Its existing owner measures the natural title and draws one start-anchored
 rounded boundary over 400ms; the same boundary drives the surface, shadow and content reveal.
-Brand/conversation ID/title identity changes crossfade title-only snapshots over 200ms. Both use
+New-chat/brand/conversation ID/title identity changes crossfade title-only snapshots over 200ms.
+New Chat has no wordmark and targets a `52px` menu-only circle using that same boundary owner. Both use
 FastOutSlowIn; initial composition is stable, interruptions retain current values and geometry-only
 changes rebase toward the latest target within the original deadline. App Reduced Motion snaps only
 the spatial boundary. Outgoing labels are noninteractive and hidden from accessibility. The context
@@ -998,8 +1008,8 @@ Existing Task-origin message labels remain. Other controls the browser cannot us
 the app but disabled. Tonal surfaces use Compose's `surfaceColorAtElevation` mix (primary over surface at
 `(4.5 ln(e + 1) + 2) %`). The top bar is the `ChatTopBar` new-chat state: a `52 dp` row inset
 `12 dp` at the sides and `8 dp` above and below over the fading background, a title capsule
-(`4 dp` tonal, `4 dp` shadow, at most `260 dp`) with the `44 dp` Menu button (`26 dp` icon) and the
-brandTitle wordmark, and a `98 dp` actions capsule with New Chat (`30 dp` icon) and More (`26 dp`).
+(`4 dp` tonal, `4 dp` shadow, at most `260 dp`) with the `44 dp` Menu button (`26 dp` icon),
+which is a menu-only `52 dp` circle in New Chat, and a `98 dp` actions capsule with New Chat (`30 dp` icon) and More (`26 dp`).
 More opens an `AgoraDropdownMenu`-shaped menu (Search and System Prompt disabled, plus a web-only
 Sign Out). The drawer is `ChatDrawerContent`: `min(width, 360 dp)`, `1 dp` tonal, `24 dp` end
 corners, `16 x 20 dp` padding, the Agora title (`25/32` bold) and trailing expandable search
@@ -1018,8 +1028,9 @@ narrow-to-wide restores expansion from the pin, narrow toggles change temporary 
 and wide toggles update both the pin and expansion. Refresh preserves the pin. Opening a modal drawer
 focuses the panel, never the search field; explicit search activation alone focuses that field.
 The open modal drawer is
-`role="dialog"` with `aria-modal`, the chat behind it is inert, Escape or the scrim closes it, and
-focus returns to the Menu button.
+`role="dialog"` with `aria-modal`, the chat behind it is inert, Escape collapses expanded search
+before closing the drawer on a subsequent press, and the scrim closes it directly. Focus returns
+to the Menu button after drawer dismissal.
 The drawer's single progress owns its offset, side-by-side chat inset and modal scrim opacity and
 settles over 300 ms with LinearOutSlowInEasing, or snaps under the App's Reduced Motion setting.
 Its list keeps browser DOM proportional to the viewport (six rows of overscan on each side),
@@ -1152,6 +1163,44 @@ generation runs or 192ms otherwise before ownership releases. Content growth dur
 pulling with the 0.055s tail correction, and growth outside one leaves the reader still. Opening a
 conversation stays an instant placement under the cover, App Reduce Motion snaps, and any wheel, touch,
 key or pointer input ends the motion and hands the list to the reader.
+WebUI history pages use an independent minimum load of `262144` tokens (256K), not a maximum,
+not the conversation's generation context setting, and not historical Provider usage. Every initial,
+older, newer and explicit-bottom load keeps admitting complete rounds until its newly loaded text
+cost is strictly greater than 262144, or no content remains in that direction. An exact-256K sum
+must admit the next complete round when one exists; a short final remainder loads in full.
+The minimum unit is a complete USER-started round, including all assistant/tool/result rows until
+the next USER row; a leading non-USER prefix is one round. A single oversized round is always
+loaded whole. Page costs use the shared offline text estimator over original source text and
+additional Thought/Transcription/tool detail content, without duplicating mirrored answer text.
+Compact/provider rollout does not hide historical browser rows. Unknown costs are resolved by
+bounded adjacent payload batches on demand; they are never treated as free or priced from reported usage.
+The next unknown-cost probe admits at most 48 rows, except that an indivisible round may exceed that
+batch. Existing subscription batches survive watch growth; retained unchanged rows are not resent
+when a changed selection requires rebuilding a batch. The 48-row bound applies to each hydration
+batch, not page membership. MessageList retains at most three adjacent, complete token windows in
+one continuous rendered/subscribed range. Loading the second or third window does not unmount the
+windows already present. Only admitting a fourth evicts the window farthest from the loading edge.
+The existing watched-page owner keeps these retained rows current and leaves them visible while
+bounded payload probes resolve the incoming window. A window's completed round boundaries are
+stable: streaming cost changes do not reprice and discard the reader's retained history. The live
+newest window follows appended USER/assistant/tool rows without moving a new send to a separate
+history page; completed historical edges stay fixed. Accepted-send navigation from distant history
+returns to the newest minimum page, so the sent USER round directly follows its preceding tail
+context, and never consumes the request before its target is rendered. Opening settlement waits
+for that newest minimum page to be ready, so upward growth cannot leave the reader near the top.
+Only an actual unresolved page request shows an edge loading indicator, never the mere existence
+of older/newer history. Incoming page content and the indicator fade in/out; idle or cancelled work
+cannot leave a spinning indicator. Opacity exit snapshots are inert and do not count as active loads.
+Load completion and initial bottom settlement must converge at a fixed viewport without any resize
+or extra user input, including content shorter than the viewport and delayed/out-of-order bodies.
+Explicit search, detail, branch, bottom and send navigation still use their canonical targets; a distant
+jump may replace the range rather than hydrating the intervening history. Evicted bodies use the
+existing bounded idle cache. The existing scroll owner preserves a surviving visible row and its
+pixel offset across prepending, appending and far-edge eviction, without remounting retained rows.
+Only directional reader input
+can request an adjacent page; wheel, touch, keyboard and floating-scrollbar input all feed that same
+intent in MessageList. Anchor compensation, layout clamping and other programmatic scrolls
+cannot feed back into paging. No extra scroll, context-retention or generation owner is added.
 Explicit upward history paging remains available during generation. The existing requested-page
 and payload-watch owners hydrate that page without letting an active streaming row outside it
 replace the reader's page with the newest one. Streaming updates and terminal settlement preserve
@@ -1404,7 +1453,10 @@ The owner-selected floor supersedes the earlier 320px config_prefDialogWidth mea
 browser width target. No fixed 88px subtraction or platform Alert-theme percentage supplies it.
 Native 28px corners, 24px content padding and existing field/action spacing remain unchanged.
 Shared browser menu/control surfaces, including modal top-layer dropdowns, keep labels and status
-nonselectable. Message/detail bodies and real input/textarea content remain selectable; control
+nonselectable. The Ask User card's question description is selectable text, including while an answer
+command is pending; selecting it never changes an option or submits a response. Option rows and
+card actions remain nonselectable controls, while the answer field retains native input selection.
+Message/detail bodies and real input/textarea content remain selectable; control
 nonselection must not disable their native selection, copy, focus or scrolling.
 The sign-in Brand and New Chat welcome use the native WebUI Settings `Icons.Default.Web` browser-window glyph.
 All image entries reuse the existing AttachmentViewer, including Tool images and PDF pages.

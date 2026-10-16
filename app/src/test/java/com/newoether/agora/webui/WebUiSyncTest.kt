@@ -96,7 +96,7 @@ class WebUiSyncTest {
         every { getOrCreate("a") } returns state
     }
     private val hydration = mockk<ConversationMessagePayloadHydration> {
-        every { observeMessage(any(), any()) } answers { flowOf(bodies[firstArg<String>()]) }
+        every { observeMessages(any(), any(), any()) } answers { flowOf(secondArg<List<String>>().mapNotNull(bodies::get)) }
     }
     private val display = MutableStateFlow(
         WebDisplayContext(
@@ -477,7 +477,7 @@ class WebUiSyncTest {
         val math = text["math"]!!.jsonArray.single().jsonObject
         assertEquals("a^2", math.string("tex"))
         assertEquals("false", math.string("display"))
-        verify(exactly = 0) { hydration.observeMessage("m2", any()) }
+        verify(exactly = 0) { hydration.observeMessages("a", match { "m2" in it }, any()) }
     }
 
     @Test
@@ -548,8 +548,8 @@ class WebUiSyncTest {
             assertEquals("m1", events.single { it.type == "payload" }["message"]!!.jsonObject.string("id"))
         }
         coVerify(exactly = 1) { conversations.recoverConversationRuntime("a", any()) }
-        verify(exactly = 1) { hydration.observeMessage("m1", any()) }
-        verify(exactly = 0) { hydration.observeMessage("m2", any()) }
+        verify(exactly = 1) { hydration.observeMessages("a", listOf("m1"), any()) }
+        verify(exactly = 0) { hydration.observeMessages("a", match { "m2" in it }, any()) }
     }
 
     @Test
