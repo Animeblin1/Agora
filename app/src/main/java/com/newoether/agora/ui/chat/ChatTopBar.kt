@@ -265,21 +265,18 @@ internal fun ChatTopBar(
                         }
                     }
                 } else {
-                // Resolve the active conversation's title; null in new-chat mode OR
-                // before the conversation/title has loaded. Both the brand TEXT and the
-                // brand font SIZE are gated on this single value, so the title never
-                // changes size before the text swaps (no transient "Agora at 17sp").
+                // New Chat keeps only the menu. Unloaded existing titles retain their brand fallback.
                 val resolvedTitle = if (isNewChatMode) null else {
                     currentConversationTitle?.takeIf { it.isNotBlank() }
                         ?: conversations.find { it.id == currentConversationId }?.title?.takeIf { it.isNotBlank() }
                 }
                 val showBrandTitle = resolvedTitle == null
                 val appName = stringResource(R.string.app_name)
-                val titlePresentation = if (showBrandTitle) {
-                    Triple(true, null, null)
-                } else {
-                    Triple(false, currentConversationId, resolvedTitle)
-                }
+                val titlePresentation = Triple(
+                    isNewChatMode,
+                    if (showBrandTitle) null else currentConversationId,
+                    resolvedTitle,
+                )
                 val textMeasurer = rememberTextMeasurer()
                 val density = LocalDensity.current
                 val tokenSubtitle = if (!showBrandTitle && subtitle != null) subtitle
@@ -312,7 +309,7 @@ internal fun ChatTopBar(
                     val leadingWidth = if (subtitleLeading != null && tokenSubtitle != null) 14.dp else 0.dp
                     minOf(maxOf(primaryWidth, subtitleWidth + leadingWidth), 180.dp)
                 }
-                val targetTitleCapsuleWidth = minOf(
+                val targetTitleCapsuleWidth = if (isNewChatMode) 52.dp else minOf(
                     5.dp + 44.dp + 5.dp + targetTitleContentWidth + 20.dp,
                     TITLE_CAPSULE_MAX_WIDTH_DP.dp,
                 )
@@ -375,7 +372,9 @@ internal fun ChatTopBar(
                                     contentDescription = stringResource(
                                         if (onNavigateBack != null) R.string.back else R.string.menu
                                     ),
-                                    modifier = Modifier.size(26.dp),
+                                    modifier = Modifier.size(26.dp).graphicsLayer {
+                                        translationX = if (onNavigateBack == null) (-1).dp.toPx() else 0f
+                                    },
                                 )
                             }
                             Spacer(modifier = Modifier.width(5.dp))
@@ -388,6 +387,8 @@ internal fun ChatTopBar(
                                 label = "chatTopBarTitle",
                             ) { presentation ->
                                 if (presentation.first) {
+                                    // The menu remains while the outgoing title fades into the circular clip.
+                                } else if (presentation.third == null) {
                                     Text(
                                         text = appName,
                                         style = ChatType.brandTitle,

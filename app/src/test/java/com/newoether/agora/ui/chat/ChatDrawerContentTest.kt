@@ -1,6 +1,7 @@
 package com.newoether.agora.ui.chat
 
 import android.app.Application
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -160,6 +161,64 @@ class ChatDrawerContentTest {
         compose.onNode(hasSetTextAction()).assertDoesNotExist()
         compose.onNodeWithContentDescription(resources.getString(R.string.search_hint)).performClick()
         compose.onNode(hasSetTextAction()).assertIsFocused().assertTextEquals("")
+    }
+
+    @Test
+    fun backCollapsesExpandedSearchBeforeClosingDrawerEvenWithEmptyOrUnfocusedQuery() {
+        val resources = ApplicationProvider.getApplicationContext<Application>().resources
+        var query by mutableStateOf("")
+        var visible by mutableStateOf(true)
+        var closes = 0
+        lateinit var focusManager: androidx.compose.ui.focus.FocusManager
+        compose.setContent {
+            focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+            BackHandler(enabled = visible) { closes++; visible = false }
+            MaterialTheme {
+                Box(Modifier.width(328.dp)) {
+                    DrawerSearchBar(query, { query = it }, drawerVisible = visible)
+                }
+            }
+        }
+        fun back() = compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        val toggle = compose.onNodeWithContentDescription(resources.getString(R.string.search_hint))
+        toggle.performClick()
+        back()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        compose.runOnIdle { assertTrue(visible); assertEquals(0, closes); assertEquals("", query) }
+        toggle.performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("retained")
+        compose.runOnIdle { focusManager.clearFocus() }
+        compose.onNode(hasSetTextAction()).assertIsNotFocused()
+        back()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        compose.runOnIdle { assertTrue(visible); assertEquals(0, closes); assertEquals("", query) }
+        back()
+        compose.runOnIdle { assertFalse(visible); assertEquals(1, closes) }
+    }
+
+    @Test
+    fun searchExpansionStartsFastAndDeceleratesWithinTheExisting400Ms() {
+        val resources = ApplicationProvider.getApplicationContext<Application>().resources
+        compose.setContent {
+            MaterialTheme { Box(Modifier.width(328.dp)) { DrawerSearchBar("", {}) } }
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription(resources.getString(R.string.search_hint)).performClick()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        val widths = mutableListOf<Float>()
+        compose.mainClock.advanceTimeByFrame()
+        repeat(4) {
+            compose.mainClock.advanceTimeBy(96)
+            widths += compose.onNodeWithTag("DrawerHeaderSearch").fetchSemanticsNode().boundsInRoot.width
+        }
+        val full = compose.onRoot().fetchSemanticsNode().boundsInRoot.width
+        assertTrue("First quarter covers over half the expansion: $widths", widths[0] > full * .6f)
+        assertTrue("Early motion exceeds later motion: $widths", widths[1] - widths[0] > widths[3] - widths[2])
+        compose.mainClock.advanceTimeBy(64)
+        assertEquals(full, compose.onNodeWithTag("DrawerHeaderSearch").fetchSemanticsNode().boundsInRoot.width, 1f)
+        compose.mainClock.autoAdvance = true
     }
 
     @Test

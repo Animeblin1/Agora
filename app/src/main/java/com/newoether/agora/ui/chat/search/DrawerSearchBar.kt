@@ -1,7 +1,8 @@
 package com.newoether.agora.ui.chat.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -64,6 +65,12 @@ internal fun DrawerSearchBar(
     val focusManager = LocalFocusManager.current
     val allowMotion = LocalAgoraMotionPolicy.current.allowSpatialTransitions
     val searchHint = stringResource(R.string.search_hint)
+    val collapseSearch = {
+        onQueryChange("")
+        focusManager.clearFocus()
+        expanded = false
+    }
+    BackHandler(enabled = drawerVisible && expanded, onBack = collapseSearch)
     LaunchedEffect(drawerVisible) {
         if (!drawerVisible) {
             if (expanded || query.isNotEmpty()) onQueryChange("")
@@ -77,7 +84,7 @@ internal fun DrawerSearchBar(
     BoxWithConstraints(Modifier.fillMaxWidth().height(56.dp)) {
         val searchWidth by animateDpAsState(
             targetValue = if (expanded) maxWidth else 56.dp,
-            animationSpec = tween(if (allowMotion) 400 else 0, easing = FastOutSlowInEasing),
+            animationSpec = tween(if (allowMotion) 400 else 0, easing = LinearOutSlowInEasing),
             label = "DrawerHeaderSearchWidth",
         )
         AnimatedVisibility(visible = !expanded,
@@ -94,11 +101,7 @@ internal fun DrawerSearchBar(
             Row(Modifier.fillMaxSize().padding(end = if (expanded) 14.dp else 0.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = {
-                    if (expanded) {
-                        onQueryChange("")
-                        focusManager.clearFocus()
-                    }
-                    expanded = !expanded
+                    if (expanded) collapseSearch() else expanded = true
                 }, modifier = Modifier.size(56.dp)) {
                     Icon(if (expanded) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Search,
                         if (expanded) stringResource(R.string.back) else searchHint,
