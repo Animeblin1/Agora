@@ -563,12 +563,13 @@ class GenerationManager(
                         expectedPass = commitIdentity.pass,
                     )
                 }
-                output.toolOverlay.releaseCommittedResponseState(
+                output.toolOverlay.markCommittedRound(
                     tcds.mapTo(linkedSetOf()) { call ->
                         checkNotNull(call.toolCallId) {
                             "Committed tool call is missing its provider call id"
                         }
                     },
+                    toolRoundId = round.entities.first().id,
                 )
                 publishStreamUpdate(forceCheckpoint = true)
                 uiUpdateGate.recordPublished(System.currentTimeMillis())

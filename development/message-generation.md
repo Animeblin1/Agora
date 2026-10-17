@@ -834,7 +834,17 @@ retained-message calculation.
     largest-field-first reductions in memory, and encodes the bounded aggregate once. It must not
     repeatedly serialize an unbounded checkpoint aggregate. The exact encoded UTF-8 bound remains
     authoritative, and protected Provider continuation state fails explicitly rather than becoming
-    SQL NULL.
+    SQL NULL. Once a tool round commits, the root timeline stores only its `toolRoundId` and
+    `toolCallId` reference in that exact position, not another copy of the tool body. The live overlay
+    may keep the display body, but every checkpoint and terminal/Stop write uses the same reference
+    projection. References are marked only after the identified round transaction succeeds; an
+    uncommitted call retains its complete checkpoint/rollback behavior. Selected-message hydration
+    reads only the referenced immutable protocol rows, verifies conversation/Run/call ownership, and
+    restores bodies in reference order without importing opaque continuation into display state.
+    Provider history keeps using ordinary protocol rows exactly once. Missing/ambiguous bodies and
+    oversized reference metadata fail explicitly, never silently discard history. Legacy inline
+    roots remain readable. Fork remaps references with message identity; native archives preserve
+    both references and protocol rows without materializing a full root aggregate.
 12. **Fail closed.** Missing/cyclic parents, shared legacy Runs that cannot be substituted safely,
     selection drift, stale identity, and partial transaction results reject the operation rather
     than guessing or broadening mutation scope.

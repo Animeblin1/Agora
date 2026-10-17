@@ -53,6 +53,12 @@ internal fun ChatMessage.toStreamCheckpoint(): MessageStreamCheckpoint {
         generationDurationMs = tokenUsage?.generationDurationMs,
         status = status,
         thoughtTimeMs = thoughtTimeMs,
-        toolCallJson = MessagePersistenceGuard.encodeSegmentsBounded(persistedSegments),
+        toolCallJson = MessagePersistenceGuard.encodeSegmentsBounded(persistedSegments?.map { segment ->
+            if (segment.toolRoundId == null) segment else MessageSegment(
+                type = "tool",
+                toolCallId = checkNotNull(segment.toolCallId),
+                toolRoundId = segment.toolRoundId,
+            )
+        }),
     )
 }

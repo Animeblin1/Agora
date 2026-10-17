@@ -92,6 +92,10 @@ payload (`conversations.json` for versions 1-4; `conv/index.json`, per-conversat
 snapshot database and its executors are released on success, failure, and coroutine cancellation.
 The spool is deleted on success, failure, and coroutine cancellation. Import terminalizes an
 archived active Run as recovered STOPPED while retaining its last committed message checkpoint.
+Tool timeline references (`toolRoundId` plus `toolCallId` inside segment JSON) travel with the
+unchanged protocol-row identities and bodies. Export/import must not expand them into a root row
+or discard their referenced tool/result rows; selected-message hydration restores display order
+through the ordinary generation projection. Legacy inline timelines remain supported.
 
 ## 2a. Version 5 conversation-granular archives and incremental backups
 
