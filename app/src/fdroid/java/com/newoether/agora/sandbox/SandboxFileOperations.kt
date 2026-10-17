@@ -18,6 +18,7 @@ import com.newoether.agora.util.decodeUtf8FileSlice
 import com.newoether.agora.util.editShellFileContent
 import com.newoether.agora.util.grepShellFileText
 import com.newoether.agora.util.shellFileLineCount
+import com.newoether.agora.util.shellExpectedSha256Error
 import com.newoether.agora.util.shellFileSha256
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -61,21 +62,37 @@ internal suspend fun SandboxPathResolver.fileRead(
         bytesRead,
         reachesEndOfFile = start + bytesRead >= totalBytes,
     )
+    val completeBytes = if (totalBytes <= SHELL_FILE_READ_MAX_BYTES) file.readBytes() else null
     ShellFileReadResult(
         bytesRead = consumed.toLong(),
         content = content,
         lines = shellFileLineCount(content),
-        totalLines = if (totalBytes <= SHELL_FILE_READ_MAX_BYTES) {
-            shellFileLineCount(file.readText(Charsets.UTF_8))
-        } else {
-            0
-        },
+        totalLines = completeBytes?.let { shellFileLineCount(String(it, Charsets.UTF_8)) } ?: 0,
+        // Whole-file hash for expected_sha256, bounded like Conch's 16 MB editable size.
+        sha256 = completeBytes?.let(::shellFileSha256)
+            ?: if (totalBytes <= SANDBOX_HASHABLE_FILE_BYTES) streamingFileSha256(file) else "",
         totalBytes = totalBytes,
         returnedBytes = content.toByteArray(Charsets.UTF_8).size.toLong(),
         offset = start,
         limit = effectiveLimit,
         truncated = start + bytesRead < totalBytes,
     )
+}
+
+/** Files up to this size get a whole-file sha256 on read; matches Conch's maxEditableFileSize. */
+private const val SANDBOX_HASHABLE_FILE_BYTES = 16L shl 20
+
+private fun streamingFileSha256(file: File): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
 private fun writeSandboxFileAtomically(
@@ -110,6 +127,7 @@ internal suspend fun SandboxPathResolver.fileWrite(
     path: String,
     content: String,
     mutationMutex: Mutex,
+    expectedSha256: String = "",
 ): String? = withContext(Dispatchers.IO) {
     mutationMutex.withLock {
         try {
@@ -118,6 +136,11 @@ internal suspend fun SandboxPathResolver.fileWrite(
                 return@withLock "content exceeds 1MB limit"
             }
             val file = resolvePath(path)
+            if (expectedSha256.isNotBlank()) {
+                if (file.exists() && !file.isFile) return@withLock "path is not a regular file"
+                val current = if (file.exists()) file.readBytes() else null
+                shellExpectedSha256Error(expectedSha256, current)?.let { return@withLock it }
+            }
             writeSandboxFileAtomically(file, contentBytes)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -211,6 +234,7 @@ internal suspend fun SandboxPathResolver.fileEdit(
     path: String,
     edits: List<ShellFileEdit>,
     mutationMutex: Mutex,
+    expectedSha256: String = "",
 ): ShellFileEditResult = withContext(Dispatchers.IO) {
     mutationMutex.withLock {
         try {
@@ -228,6 +252,9 @@ internal suspend fun SandboxPathResolver.fileEdit(
             val originalBytes = file.readBytes()
             if (originalBytes.size > SHELL_FILE_EDIT_MAX_BYTES) {
                 return@withLock ShellFileEditResult(0, error = "file exceeds 16MB edit limit")
+            }
+            shellExpectedSha256Error(expectedSha256, originalBytes)?.let {
+                return@withLock ShellFileEditResult(0, error = it)
             }
             val (editedContent, editResult) = editShellFileContent(
                 content = originalBytes.toString(Charsets.UTF_8),

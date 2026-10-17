@@ -79,8 +79,11 @@ interface SandboxManager {
     /** Read a bounded file slice and return transport-neutral metadata. */
     suspend fun fileRead(path: String, offset: Long = 0, limit: Long = 0): ShellFileReadResult
 
-    /** Write a file into the sandbox filesystem. Returns null on success. */
-    suspend fun fileWrite(path: String, content: String): String?
+    /**
+     * Write a file into the sandbox filesystem. Returns null on success. A non-blank
+     * [expectedSha256] must match the current file or nothing is written.
+     */
+    suspend fun fileWrite(path: String, content: String, expectedSha256: String = ""): String?
 
     /**
      * List files matching a glob pattern within the sandbox.
@@ -105,6 +108,7 @@ interface SandboxManager {
     suspend fun fileEdit(
         path: String,
         edits: List<ShellFileEdit>,
+        expectedSha256: String = "",
     ): ShellFileEditResult
 
     /** Install a package via Alpine apk. */

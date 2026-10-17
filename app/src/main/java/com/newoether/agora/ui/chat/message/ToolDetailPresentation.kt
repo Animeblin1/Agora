@@ -260,9 +260,13 @@ private fun Resources.completedToolDetailBody(presentation: ToolPresentation): T
     }
 }
 
-private fun Resources.rawToolDetailBody(presentation: ToolPresentation): ToolDetailBody =
-    if (presentation.rawResult.isNullOrEmpty()) ToolDetailBody.Muted(toolSummary(presentation))
-    else ToolDetailBody.JsonContent(listOf(presentation.rawResult))
+// Shell/file tools give the model plain text but keep the JSON envelope as the structured
+// result; the detail sheet renders that JSON so fields stay highlighted and wrap cleanly.
+private fun Resources.rawToolDetailBody(presentation: ToolPresentation): ToolDetailBody {
+    val raw = presentation.rawStructuredResult?.takeIf(String::isNotBlank) ?: presentation.rawResult
+    return if (raw.isNullOrEmpty()) ToolDetailBody.Muted(toolSummary(presentation))
+    else ToolDetailBody.JsonContent(listOf(raw))
+}
 
 internal fun shellOutputText(presentation: ToolPresentation): String? {
     val result = presentation.result as? JsonObject

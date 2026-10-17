@@ -40,6 +40,7 @@ internal fun boundedFileReadJson(
         put("returned_bytes", contentBytes)
         put("offset", result.offset)
         put("limit", result.limit)
+        if (result.sha256.isNotEmpty()) put("sha256", result.sha256)
         put("truncated", truncated)
         if (truncated) {
             // A JSON-trimmed slice ends on a character boundary, so its UTF-8 length is the safe
@@ -93,6 +94,8 @@ internal data class FileReadLines(
     val notReached: Boolean = false,
     /** Byte offset where scanning stopped when [notReached] because of the scan budget. */
     val scanStoppedAt: Long = -1L,
+    /** Whole-file sha256 from the first backend slice; empty when the backend omits it. */
+    val sha256: String = "",
 )
 
 /**
@@ -118,6 +121,7 @@ internal suspend fun collectFileReadLines(
     var contentBytes = 0
     var totalLines = 0
     var totalBytes = 0L
+    var sha256 = ""
     var first = true
 
     fun inRange() = lineNumber >= startLine
@@ -145,6 +149,7 @@ internal suspend fun collectFileReadLines(
         if (first) {
             totalLines = slice.totalLines
             totalBytes = slice.totalBytes
+            sha256 = slice.sha256
             first = false
         }
         val consumed = if (slice.bytesRead >= 0) {
@@ -173,7 +178,7 @@ internal suspend fun collectFileReadLines(
             finishLine(cursor)
             if (full()) {
                 val atEnd = !slice.truncated && newline == text.length - 1
-                return FileReadLines(collected, hasMore = !atEnd, totalLines, totalBytes)
+                return FileReadLines(collected, hasMore = !atEnd, totalLines, totalBytes, sha256 = sha256)
             }
             segmentStart = newline + 1
         }
@@ -187,6 +192,7 @@ internal suspend fun collectFileReadLines(
                 totalLines = totalLines,
                 totalBytes = totalBytes,
                 notReached = collected.isEmpty() && startLine > 1,
+                sha256 = sha256,
             )
         }
         if (consumed <= 0) {
@@ -196,7 +202,7 @@ internal suspend fun collectFileReadLines(
     }
     if (collected.isNotEmpty()) {
         // Budget exhausted mid-range: report what we have and point at the unread remainder.
-        return FileReadLines(collected, hasMore = true, totalLines, totalBytes)
+        return FileReadLines(collected, hasMore = true, totalLines, totalBytes, sha256 = sha256)
     }
     return FileReadLines(
         collected,
@@ -205,6 +211,7 @@ internal suspend fun collectFileReadLines(
         totalBytes = totalBytes,
         notReached = true,
         scanStoppedAt = position,
+        sha256 = sha256,
     )
 }
 
@@ -258,6 +265,7 @@ internal fun boundedFileLinesJson(
         put("lines", count)
         put("total_lines", result.totalLines)
         put("total_bytes", result.totalBytes)
+        if (result.sha256.isNotEmpty()) put("sha256", result.sha256)
         put("offset", offset)
         val hasMore = result.hasMore || count < result.lines.size
         put("has_more", hasMore)

@@ -220,10 +220,12 @@ class ShellToolProviderTest {
                     arguments,
                     ctx,
                 ).toList()
-                val streamed = (events.single() as ToolExecutionEvent.Completed).result.text
+                val streamed = (events.single() as ToolExecutionEvent.Completed).result
 
                 assertTrue(oneShot.contains(expected))
-                assertEquals(oneShot, streamed)
+                // The model gets plain text; the JSON envelope rides along as structured content.
+                assertEquals(oneShot, streamed.structuredContent)
+                assertTrue(streamed.text.startsWith("error: $expected"))
             }
 
             val oversizedCommand = "界".repeat(SHELL_COMMAND_MAX_BYTES / 3 + 1)

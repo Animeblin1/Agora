@@ -34,9 +34,14 @@ internal sealed interface Backend {
         emit(ToolExecutionEvent.Completed(executeCommand(cmd, workdir, timeoutMs)))
     }
     suspend fun fileRead(path: String, offset: Long, limit: Long): ShellFileReadResult
-    suspend fun fileWrite(path: String, content: String): String?
+    /** A non-blank [expectedSha256] must match the current file or nothing is written. */
+    suspend fun fileWrite(path: String, content: String, expectedSha256: String = ""): String?
     /** Applies ordered edits atomically: all succeed or nothing is written. */
-    suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult
+    suspend fun fileEdit(
+        path: String,
+        edits: List<ShellFileEdit>,
+        expectedSha256: String = "",
+    ): ShellFileEditResult
     suspend fun fileGlob(
         pattern: String,
         basePath: String,
@@ -154,11 +159,14 @@ internal class ConchBackend(override val device: ShellDeviceConfig) : Backend {
     override suspend fun fileRead(path: String, offset: Long, limit: Long): ShellFileReadResult =
         client.fileRead(path, offset, limit)
 
-    override suspend fun fileWrite(path: String, content: String): String? =
-        client.fileWrite(path, content)?.let { jsonError("file_write", it, server = deviceName) }
+    override suspend fun fileWrite(path: String, content: String, expectedSha256: String): String? =
+        client.fileWrite(path, content, expectedSha256)?.let { jsonError("file_write", it, server = deviceName) }
 
-    override suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult =
-        client.fileEdit(path, edits)
+    override suspend fun fileEdit(
+        path: String,
+        edits: List<ShellFileEdit>,
+        expectedSha256: String,
+    ): ShellFileEditResult = client.fileEdit(path, edits, expectedSha256)
 
     override suspend fun fileGlob(
         pattern: String,
@@ -237,11 +245,14 @@ internal class SshBackend(override val device: ShellDeviceConfig) : Backend {
             failedFileRead(offset, limit, "SFTP read failed: ${e.message}")
         }
 
-    override suspend fun fileWrite(path: String, content: String): String? =
-        client.fileWrite(path, content)?.let { jsonError("file_write", it, server = deviceName) }
+    override suspend fun fileWrite(path: String, content: String, expectedSha256: String): String? =
+        client.fileWrite(path, content, expectedSha256)?.let { jsonError("file_write", it, server = deviceName) }
 
-    override suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult =
-        client.fileEdit(path, edits)
+    override suspend fun fileEdit(
+        path: String,
+        edits: List<ShellFileEdit>,
+        expectedSha256: String,
+    ): ShellFileEditResult = client.fileEdit(path, edits, expectedSha256)
 
     override suspend fun fileGlob(
         pattern: String,
@@ -295,11 +306,14 @@ internal class SandboxBackend(sandbox: SandboxManager?) : Backend {
             failedFileRead(offset, limit, e.message ?: "Read failed")
         }
 
-    override suspend fun fileWrite(path: String, content: String): String? =
-        mgr.fileWrite(path, content)?.let { jsonError("file_write", it, server = "Local Sandbox") }
+    override suspend fun fileWrite(path: String, content: String, expectedSha256: String): String? =
+        mgr.fileWrite(path, content, expectedSha256)?.let { jsonError("file_write", it, server = "Local Sandbox") }
 
-    override suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult =
-        mgr.fileEdit(path, edits)
+    override suspend fun fileEdit(
+        path: String,
+        edits: List<ShellFileEdit>,
+        expectedSha256: String,
+    ): ShellFileEditResult = mgr.fileEdit(path, edits, expectedSha256)
 
     override suspend fun fileGlob(
         pattern: String,

@@ -57,7 +57,7 @@ class PlaySandboxManager : SandboxManager {
         limit: Long
     ): ShellFileReadResult = throw UnsupportedOperationException("Sandbox not available")
 
-    override suspend fun fileWrite(path: String, content: String): String? =
+    override suspend fun fileWrite(path: String, content: String, expectedSha256: String): String? =
         "Sandbox not available in this build"
 
     override suspend fun fileGlob(
@@ -77,6 +77,7 @@ class PlaySandboxManager : SandboxManager {
     override suspend fun fileEdit(
         path: String,
         edits: List<ShellFileEdit>,
+        expectedSha256: String,
     ): ShellFileEditResult = ShellFileEditResult(
         replacements = 0,
         error = "Sandbox not available in this build"

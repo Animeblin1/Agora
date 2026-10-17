@@ -1,6 +1,7 @@
 package com.newoether.agora.tool
 import com.newoether.agora.util.SHELL_FILE_EDIT_MAX_OPERATIONS
 import com.newoether.agora.util.ShellFileEdit
+import com.newoether.agora.util.ShellFileEditResult
 import com.newoether.agora.util.ShellGrepResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -30,6 +31,28 @@ internal fun arg(args: Map<String, JsonElement>, key: String): String {
 }
 internal fun boolArg(args: Map<String, JsonElement>, key: String): Boolean =
     (args[key] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() == true
+
+/** Successful file_edit / file_multi_edit JSON; both share type "file_edit" for one detail view. */
+internal fun fileEditSuccessJson(server: String, path: String, result: ShellFileEditResult, editCount: Int): String =
+    buildJsonObject {
+        put("type", "file_edit")
+        put("server", server)
+        put("path", path)
+        put("replaced", result.replacements)
+        if (editCount > 1) put("edits", editCount)
+        if (result.sha256.isNotBlank()) put("sha256", result.sha256)
+        if (result.snippets.isNotEmpty()) {
+            putJsonArray("snippets") {
+                result.snippets.forEach { snippet ->
+                    add(buildJsonObject {
+                        put("start_line", snippet.startLine)
+                        putJsonArray("lines") { snippet.lines.forEach { add(JsonPrimitive(it)) } }
+                    })
+                }
+            }
+        }
+        if (result.snippetsTruncated) put("snippets_truncated", true)
+    }.toString()
 
 /** file_grep tool JSON; context arrays are omitted when empty. */
 internal fun fileGrepJson(pattern: String, grep: ShellGrepResult, contextRequested: Boolean): String =

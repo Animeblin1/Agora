@@ -10,6 +10,7 @@ import com.newoether.agora.util.SHELL_WORKDIR_MAX_BYTES
 import com.newoether.agora.util.SHELL_FILE_WRITE_MAX_BYTES
 import com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTEXT_LINES
 import com.newoether.agora.util.ShellGrepOptions
+import com.newoether.agora.util.shellFileSha256
 import com.newoether.agora.viewmodel.GenerationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -18,6 +19,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -162,7 +164,22 @@ class ShellToolProvider(
         }
     }
 
+    override suspend fun executeOneShotResult(
+        name: String,
+        arguments: String,
+        ctx: GenerationContext,
+    ): ToolExecutionResult = shellModelFacingResult(name, arguments, ToolExecutionResult(execute(name, arguments, ctx)))
+
     override fun executeEvents(
+        name: String,
+        arguments: String,
+        ctx: GenerationContext,
+    ): Flow<ToolExecutionEvent> = executeRawEvents(name, arguments, ctx).map { event ->
+        if (event !is ToolExecutionEvent.Completed) event
+        else ToolExecutionEvent.Completed(shellModelFacingResult(name, arguments, event.result))
+    }
+
+    private fun executeRawEvents(
         name: String,
         arguments: String,
         ctx: GenerationContext,
@@ -653,10 +670,11 @@ class ShellToolProvider(
             ) {
                 return jsonError("file_write", "denied_by_user: the user declined to write this file", server = serverName)
             }
-            val error = backend.fileWrite(path, content)
+            val error = backend.fileWrite(path, content, arg(args, "expected_sha256").trim())
             if (error != null) return error
             return buildJsonObject {
                 put("type", "file_write"); put("path", path); put("ok", true)
+                put("sha256", shellFileSha256(content.toByteArray(Charsets.UTF_8)))
             }.toString()
         } finally {
             backend.close()
@@ -691,7 +709,7 @@ class ShellToolProvider(
                 return jsonError(toolName, "denied_by_user: the user declined to edit this file", server = serverName)
             }
             val result = try {
-                backend.fileEdit(path, edits)
+                backend.fileEdit(path, edits, arg(args, "expected_sha256").trim())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -708,14 +726,7 @@ class ShellToolProvider(
                     server = backend.device?.name ?: "Local Sandbox",
                 )
             }
-            return buildJsonObject {
-                put("type", "file_edit")
-                put("server", backend.device?.name ?: "Local Sandbox")
-                put("path", path)
-                put("replaced", result.replacements)
-                if (edits.size > 1) put("edits", edits.size)
-                if (result.sha256.isNotBlank()) put("sha256", result.sha256)
-            }.toString()
+            return fileEditSuccessJson(backend.device?.name ?: "Local Sandbox", path, result, edits.size)
         } finally {
             backend.close()
         }

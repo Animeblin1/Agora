@@ -225,15 +225,18 @@ class SshClient(
                 contentBytes.size,
                 reachesEndOfFile = start + contentBytes.size >= totalBytes,
             )
-            val completeContent = if (totalBytes <= SHELL_FILE_READ_MAX_BYTES) {
+            // Small files are read whole once more (unless this slice already was the whole file)
+            // for the total line count and the sha256 that expected_sha256 compares against.
+            val completeBytes = if (totalBytes <= SHELL_FILE_READ_MAX_BYTES) {
                 if (start == 0L && contentBytes.size.toLong() == totalBytes) {
-                    content
+                    contentBytes
                 } else {
-                    String(readSlice(0, totalBytes.toInt()), Charsets.UTF_8)
+                    readSlice(0, totalBytes.toInt())
                 }
             } else {
                 null
             }
+            val completeContent = completeBytes?.let { String(it, Charsets.UTF_8) }
             ShellFileReadResult(
                 content = content,
                 lines = shellFileLineCount(content),
@@ -244,6 +247,7 @@ class SshClient(
                 limit = effectiveLimit,
                 truncated = start + contentBytes.size < totalBytes,
                 bytesRead = consumed.toLong(),
+                sha256 = completeBytes?.let(::shellFileSha256).orEmpty(),
             )
         } catch (e: Exception) {
             throw IllegalStateException("SFTP read failed: ${e.message}")
@@ -255,8 +259,21 @@ class SshClient(
     /**
      * Returns null on success, error message string on failure.
      */
-    suspend fun fileWrite(path: String, content: String): String? = withSftp { sftp ->
+    suspend fun fileWrite(
+        path: String,
+        content: String,
+        expectedSha256: String = "",
+    ): String? = withSftp { sftp ->
         try {
+            if (expectedSha256.isNotBlank()) {
+                val current = try {
+                    if (sftp.stat(path).isDir) return@withSftp "target is not a regular file"
+                    sftp.get(path).use { it.readBytes() }
+                } catch (e: com.jcraft.jsch.SftpException) {
+                    if (e.id == ChannelSftp.SSH_FX_NO_SUCH_FILE) null else throw e
+                }
+                shellExpectedSha256Error(expectedSha256, current)?.let { return@withSftp it }
+            }
             val parent = path.substringBeforeLast('/', "")
             if (parent.isNotBlank()) {
                 ensureParentDirs(sftp, parent)
@@ -278,6 +295,7 @@ class SshClient(
     suspend fun fileEdit(
         path: String,
         edits: List<ShellFileEdit>,
+        expectedSha256: String = "",
     ): ShellFileEditResult = withSftp { sftp ->
         try {
             fun readEditableFile(): ByteArray {
@@ -301,6 +319,9 @@ class SshClient(
             val originalBytes = readEditableFile()
             if (originalBytes.size > SHELL_FILE_EDIT_MAX_BYTES) {
                 return@withSftp ShellFileEditResult(0, error = "file exceeds 16MB edit limit")
+            }
+            shellExpectedSha256Error(expectedSha256, originalBytes)?.let {
+                return@withSftp ShellFileEditResult(0, error = it)
             }
             val (editedContent, editResult) = editShellFileContent(
                 content = originalBytes.toString(Charsets.UTF_8),

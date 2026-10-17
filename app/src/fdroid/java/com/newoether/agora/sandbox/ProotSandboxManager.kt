@@ -480,8 +480,8 @@ class ProotSandboxManager(
         limit: Long,
     ): ShellFileReadResult = pathResolver.fileRead(path, offset, limit)
 
-    override suspend fun fileWrite(path: String, content: String): String? =
-        pathResolver.fileWrite(path, content, mutationMutex)
+    override suspend fun fileWrite(path: String, content: String, expectedSha256: String): String? =
+        pathResolver.fileWrite(path, content, mutationMutex, expectedSha256)
 
     override suspend fun fileGlob(
         pattern: String,
@@ -500,8 +500,9 @@ class ProotSandboxManager(
     override suspend fun fileEdit(
         path: String,
         edits: List<ShellFileEdit>,
+        expectedSha256: String,
     ): ShellFileEditResult =
-        pathResolver.fileEdit(path, edits, mutationMutex)
+        pathResolver.fileEdit(path, edits, mutationMutex, expectedSha256)
 
     // ── Package Management ──────────────────────────────
     // Downloads target + all transitive deps + stale base-package upgrades via

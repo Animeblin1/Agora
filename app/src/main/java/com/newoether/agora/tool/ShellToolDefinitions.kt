@@ -8,6 +8,12 @@ import com.newoether.agora.util.SHELL_FILE_EDIT_MAX_OPERATIONS
 import com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTEXT_LINES
 import com.newoether.agora.viewmodel.GenerationContext
 
+private const val EXPECTED_SHA256_DESCRIPTION =
+    "SHA-256 (hex) the file must currently have, e.g. the sha256 from your last write or edit of it (optional). On mismatch nothing is written."
+
+private const val TAIL_LINES_DESCRIPTION =
+    "Return only the last N lines of output to you (optional). The user still sees the full output."
+
 internal object ShellToolDefinitions {
     fun build(ctx: GenerationContext): List<ToolDefinition> {
         if (!ctx.shellEnabled) return emptyList()
@@ -51,6 +57,7 @@ internal object ShellToolDefinitions {
                         "timeout_ms" to ToolProperty("integer", "Required. Foreground wait budget in milliseconds (hard ceiling 295000ms inside the tool call). On Conch, a command still running at that point continues as the same durable job and returns its job_id; it is never killed or restarted. With background=true this instead bounds the durable job's runtime (up to Conch policy)."),
                         "workdir" to ToolProperty("string", "Working directory (optional, 32KB UTF-8 maximum)."),
                         "background" to ToolProperty("boolean", "Start a durable background job on Conch and return its job_id immediately (optional, default false)."),
+                        "tail_lines" to ToolProperty("integer", TAIL_LINES_DESCRIPTION),
                     ),
                     required = shellRequiredParams
                 )
@@ -95,6 +102,7 @@ internal object ShellToolDefinitions {
                             "job_id" to ToolProperty("string", "The Conch job id."),
                             "timeout_ms" to ToolProperty("integer", "Required. Maximum time to block in milliseconds before returning (whether or not the job finished). The hard ceiling for a single call is ${ShellDurableJobExecutor.maxWaitMs(ctx)}ms; larger values are clamped to it and the result says so. To wait longer, call wait_for_job again."),
                             "server" to ToolProperty("string", jobServerDescription),
+                            "tail_lines" to ToolProperty("integer", TAIL_LINES_DESCRIPTION),
                         ),
                         required = listOf("job_id", "timeout_ms") + jobRequired,
                     ),
@@ -138,19 +146,20 @@ internal object ShellToolDefinitions {
             )),
             ToolDefinition(function = ToolFunction(
                 name = "file_write",
-                description = "Write up to 1MB of UTF-8 content to a file on a shell server or local sandbox.",
+                description = "Write up to 1MB of UTF-8 content to a file on a shell server or local sandbox. Returns the new sha256.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "path" to ToolProperty("string", "Absolute path to the file."),
                         "content" to ToolProperty("string", "Content to write (1MB UTF-8 maximum)."),
-                        "server" to fileServerProperty
+                        "server" to fileServerProperty,
+                        "expected_sha256" to ToolProperty("string", EXPECTED_SHA256_DESCRIPTION),
                     ),
                     required = listOf("path", "content") + fileRequired
                 )
             )),
             ToolDefinition(function = ToolFunction(
                 name = "file_edit",
-                description = "Edit a file on a shell server or local sandbox by replacing old_string with new_string. old_string must match exactly once unless replace_all is true. For several changes to one file, use file_multi_edit.",
+                description = "Edit a file on a shell server or local sandbox by replacing old_string with new_string. old_string must match exactly once unless replace_all is true. For several changes to one file, use file_multi_edit. Returns the new sha256 and numbered snippets of the edited regions.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "path" to ToolProperty("string", "Absolute path to the file."),
@@ -158,6 +167,7 @@ internal object ShellToolDefinitions {
                         "new_string" to ToolProperty("string", "The replacement text. Line endings follow the matched text or target file. May be empty to delete the match."),
                         "server" to fileServerProperty,
                         "replace_all" to ToolProperty("boolean", "Replace all occurrences (optional, default false)."),
+                        "expected_sha256" to ToolProperty("string", EXPECTED_SHA256_DESCRIPTION),
                     ),
                     required = listOf("path", "old_string", "new_string") + fileRequired
                 )
@@ -182,7 +192,8 @@ internal object ShellToolDefinitions {
                                 ),
                                 required = listOf("old_string", "new_string"),
                             ),
-                        )
+                        ),
+                        "expected_sha256" to ToolProperty("string", EXPECTED_SHA256_DESCRIPTION),
                     ),
                     required = listOf("path", "edits") + fileRequired
                 )

@@ -36,12 +36,17 @@ data class ShellFileReadResult(
      * fall back to the UTF-8 length of [content], which is exact for valid UTF-8.
      */
     val bytesRead: Long = -1L,
+    /** SHA-256 of the whole file for expected_sha256; empty when the backend did not compute it. */
+    val sha256: String = "",
 )
 
 data class ShellFileEditResult(
     val replacements: Int,
     val sha256: String = "",
     val error: String? = null,
+    /** Excerpts of the edited file; empty on older Conch servers that predate snippets. */
+    val snippets: List<ShellFileEditSnippet> = emptyList(),
+    val snippetsTruncated: Boolean = false,
 )
 
 /** One line per '\n' plus a final unterminated line; a trailing newline adds no empty line. */
@@ -141,10 +146,15 @@ internal fun fileEditMatchRanges(content: String, oldString: String): List<IntRa
     return matches
 }
 
+/**
+ * Replaces [matches] with [newString]. When [inserted] is given, it receives the half-open
+ * [start, end) range of each replacement in the returned content, in match order.
+ */
 internal fun replaceFileEditMatches(
     content: String,
     matches: List<IntRange>,
     newString: String,
+    inserted: MutableList<IntArray>? = null,
 ): String {
     if (matches.isEmpty()) return content
 
@@ -159,7 +169,9 @@ internal fun replaceFileEditMatches(
                 ?: fileLineEnding
                 ?: preferredFileEditLineEnding(newString)
                 ?: "\n"
+            val insertedStart = length
             append(newString.withFileEditLineEnding(lineEnding))
+            inserted?.add(intArrayOf(insertedStart, length))
             sourceIndex = match.last + 1
         }
         append(content, sourceIndex, content.length)
@@ -186,6 +198,7 @@ internal fun editShellFileContent(
     val batched = edits.size > 1
     var current = content
     var total = 0
+    val tracker = FileEditRangeTracker()
     for ((index, edit) in edits.withIndex()) {
         val prefix = if (batched) "edits[$index]: " else ""
         val suffix = if (batched) "; no changes written" else ""
@@ -205,10 +218,17 @@ internal fun editShellFileContent(
             )
         }
         val selectedMatches = if (edit.replaceAll) matches else matches.take(1)
-        current = replaceFileEditMatches(current, selectedMatches, edit.newString)
+        val inserted = mutableListOf<IntArray>()
+        current = replaceFileEditMatches(current, selectedMatches, edit.newString, inserted)
+        tracker.apply(selectedMatches, inserted)
         total += selectedMatches.size
     }
-    return current to ShellFileEditResult(total)
+    val (snippets, snippetsTruncated) = tracker.snippets(current)
+    return current to ShellFileEditResult(
+        replacements = total,
+        snippets = snippets,
+        snippetsTruncated = snippetsTruncated,
+    )
 }
 
 internal fun shellFileSha256(content: ByteArray): String =
@@ -548,6 +568,7 @@ class ShellClient(
                 ?: (normalizedOffset + content.toByteArray(Charsets.UTF_8).size < totalBytes),
             // Absent on servers that predate the field.
             bytesRead = json["bytesRead"]?.jsonPrimitive?.content?.toLongOrNull() ?: -1L,
+            sha256 = json["sha256"]?.jsonPrimitive?.content.orEmpty(),
         )
     }
 
@@ -566,11 +587,12 @@ class ShellClient(
         )
     }
 
-    suspend fun fileWrite(path: String, content: String): String? {
-        val payload = buildJsonBodyFile(mapOf(
-            "path" to path,
-            "content" to content
-        ))
+    suspend fun fileWrite(path: String, content: String, expectedSha256: String = ""): String? {
+        val payload = buildJsonObject {
+            put("path", path)
+            put("content", content)
+            if (expectedSha256.isNotBlank()) put("expected_sha256", expectedSha256.trim())
+        }.toString()
         val jsonStr = filePost("/file/write", payload)
         val json = Json.parseToJsonElement(jsonStr).jsonObject
         return json["error"]?.jsonPrimitive?.content
@@ -588,9 +610,14 @@ class ShellClient(
      * array; servers without batch support ignore it and reject the request as "old_string is
      * required", which is mapped to an explicit hint.
      */
-    suspend fun fileEdit(path: String, edits: List<ShellFileEdit>): ShellFileEditResult {
+    suspend fun fileEdit(
+        path: String,
+        edits: List<ShellFileEdit>,
+        expectedSha256: String = "",
+    ): ShellFileEditResult {
         val payload = buildJsonObject {
             put("path", path)
+            if (expectedSha256.isNotBlank()) put("expected_sha256", expectedSha256.trim())
             val single = edits.singleOrNull()
             if (single != null) {
                 put("old_string", single.oldString)
@@ -621,9 +648,20 @@ class ShellClient(
             }
             return ShellFileEditResult(0, error = error)
         }
+        val snippets = (json["snippets"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { item ->
+            val snippet = item as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            val startLine = (snippet["start_line"] as? kotlinx.serialization.json.JsonPrimitive)
+                ?.content?.toIntOrNull() ?: return@mapNotNull null
+            val lines = (snippet["lines"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull {
+                (it as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { line -> line.isString }?.content
+            }
+            ShellFileEditSnippet(startLine, lines)
+        }
         return ShellFileEditResult(
             replacements = json["replacements"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
             sha256 = json["sha256"]?.jsonPrimitive?.content.orEmpty(),
+            snippets = snippets,
+            snippetsTruncated = json["snippets_truncated"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true,
         )
     }
 
