@@ -18,6 +18,8 @@ import com.newoether.agora.data.replaceCustomProviderIdsForDisplay
 
 import com.newoether.agora.data.repository.ConversationRepository
 import com.newoether.agora.data.repository.observeConversationTodo
+import com.newoether.agora.data.repository.observeSubagents
+import com.newoether.agora.data.repository.observeParentConversationId
 import com.newoether.agora.data.repository.ConversationSettingsTransferCoordinator
 import com.newoether.agora.data.repository.SettingsRepository
 import com.newoether.agora.model.ChatConversation
@@ -255,6 +257,17 @@ class ChatViewModel(
     val conversations: StateFlow<List<ChatConversation>?> = convRepo.getAllConversations()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val currentConversationId: StateFlow<String?> get() = selectionController.currentConversationId
+    val currentSubagents = currentConversationId.flatMapLatest { id ->
+        if (id == null) flowOf(id to emptyList<com.newoether.agora.model.SubagentSummary>())
+        else convRepo.observeParentConversationId(id).flatMapLatest { parent ->
+            convRepo.observeSubagents(parent ?: id).map { id to it }
+        }.onStart { emit(id to emptyList()) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), null to emptyList())
+
+    private val subagentDeliveryOnOpen = viewModelScope.launch {
+        currentConversationId.collect { id -> id?.let(chatRuntime.onConversationOpened) }
+    }
+
     val currentConversationTodo = currentConversationId.flatMapLatest { id ->
         if (id == null) flowOf(id to emptyList<com.newoether.agora.model.ConversationTodoItem>())
         else convRepo.observeConversationTodo(id).map { id to it }

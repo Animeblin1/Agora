@@ -1603,6 +1603,18 @@ observe Todo or scan conversation owners. Todo height lifts the existing Interac
 button and enters the existing combined bottom-inset measurement, without adding another scroll
 owner. Shared shell focus, selection, motion and Reduced Motion behavior stay canonical.
 
+## 39. Subagent Navigation
+Ordinary conversations may own one level of isolated child conversations. Native and WebUI place a
+horizontally centered, scrollable row below Todo and above Composer, using 48dp/px capsules, 8dp/px
+gaps and the established titleSmall typography. Each capsule shows its name and ordinary runtime
+status; tapping opens the child through canonical selection. The child remains a normal list item
+and shows its siblings with its own capsule selected. Its top-left control and native Back return to
+the parent instead of opening the drawer. New Chat and empty/disconnected selections show no row.
+Only selected-parent narrow Room projections are observed. Browser events require matching owner
+and selection sequence. Row height feeds the existing interaction/Todo/FAB lift and combined bottom
+measurement, with no new scroll owner. Tests cover narrow/wide horizontal overflow, click/return,
+stale events, clear/disconnect and native measurement release. Phone UI acceptance remains manual.
+
 ## 15. Verification
 
 Focused verification must cover the onboarding action's fixed 32 dp inset and 48 dp height, absence

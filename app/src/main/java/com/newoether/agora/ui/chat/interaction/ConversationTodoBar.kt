@@ -60,6 +60,7 @@ import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
 import com.newoether.agora.ui.theme.ChatType
 import com.newoether.agora.viewmodel.ChatViewModel
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 private val TodoFirstLineCenter = HorizontalAlignmentLine { first, second -> minOf(first, second) }
 
@@ -74,17 +75,27 @@ internal fun BoxScope.ChatConversationToolsOverlay(
 ) {
     val todo by viewModel.currentConversationTodo.collectAsState()
     val items = todo.second.takeIf { todo.first == conversationId }.orEmpty()
+    val subagents by viewModel.currentSubagents.collectAsState()
+    val agents = subagents.second.takeIf { subagents.first == conversationId }.orEmpty()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var subagentHeight by remember { mutableStateOf(0f) }
     var todoHeight by remember { mutableStateOf(0f) }
     var interactionHeight by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
-    SideEffect { onHeightChanged(todoHeight + interactionHeight) }
+    SideEffect { onHeightChanged(todoHeight + interactionHeight + subagentHeight) }
     ChatUserInteractionBar(
         viewModel, conversationId, autoWrapCodeBlocks,
-        bottomBarHeight + with(density) { todoHeight.toDp() },
+        bottomBarHeight + with(density) { (todoHeight + subagentHeight).toDp() },
         onHeightChanged = { interactionHeight = it },
     )
     ConversationTodoBar(
         conversationId, items, onHeightChanged = { todoHeight = it },
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarHeight + with(density) { subagentHeight.toDp() }),
+    )
+    ConversationSubagentsBar(
+        conversationId, agents,
+        onSelect = { id -> scope.launch { viewModel.selectConversation(id) } },
+        onHeightChanged = { subagentHeight = it },
         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarHeight),
     )
 }
