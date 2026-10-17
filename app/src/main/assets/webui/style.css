@@ -1549,7 +1549,8 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .todo-capsule strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: 0; }
 .todo-capsule > span { flex: none; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--md-on-surface-variant); }
 .subagent-host { position: absolute; bottom: calc(100% - 12px); left: 0; right: 0; padding: 0 16px 8px; pointer-events: none; }
-.subagent-row { display: flex; gap: 8px; width: max-content; max-width: 100%; margin: 0 auto; overflow-x: auto; scrollbar-width: none; pointer-events: auto; }
+.subagent-row { display: flex; gap: 8px; width: max-content; max-width: 100%; margin: 0 auto; overflow-x: auto; scrollbar-width: none; pointer-events: auto; transform-origin: 50% 100%; }
+.subagent-host[inert] .subagent-row { pointer-events: none; }
 .subagent-row::-webkit-scrollbar { display: none; }
 .subagent-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: 240px; flex: none; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); font: inherit; cursor: pointer; }
 .subagent-capsule[aria-current="page"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }

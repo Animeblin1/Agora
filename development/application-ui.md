@@ -1607,13 +1607,24 @@ owner. Shared shell focus, selection, motion and Reduced Motion behavior stay ca
 Ordinary conversations may own one level of isolated child conversations. Native and WebUI place a
 horizontally centered, scrollable row below Todo and above Composer, using 48dp/px capsules, 8dp/px
 gaps and the established titleSmall typography. Each capsule shows its name and ordinary runtime
-status; tapping opens the child through canonical selection. The child remains a normal list item
-and shows its siblings with its own capsule selected. Its top-left control and native Back return to
-the parent instead of opening the drawer. New Chat and empty/disconnected selections show no row.
+status; tapping opens the child through canonical selection. Children are excluded from the native
+and browser conversation lists and drawer search results, but remain ordinary stored conversations
+reachable through their parent's capsules. A child shows its siblings with its own capsule selected.
+Its top-left control and native Back return to the parent. Drawer dragging remains available and
+wide pinned drawers retain their state. The drawer highlights the parent while a child is open;
+selecting that highlighted parent is a navigation no-op, preserving the current child and its state.
+The normal narrow-drawer close behavior still applies. Other roots and New Chat keep their ordinary
+selection behavior. New Chat and empty/disconnected selections show no capsule row.
+The row follows Todo's 180ms fade and bottom-center 0.96..1 scale, retaining only the outgoing
+owner's inert capsules before entering the latest selection. Rapid selection replaces intermediate
+owners; same-owner name/status updates do not replay entrance. Reduced Motion fixes scale at one
+and snaps the height lift while retaining fades. Height returns exactly to zero after clear/disposal.
 Only selected-parent narrow Room projections are observed. Browser events require matching owner
 and selection sequence. Row height feeds the existing interaction/Todo/FAB lift and combined bottom
-measurement, with no new scroll owner. Tests cover narrow/wide horizontal overflow, click/return,
-stale events, clear/disconnect and native measurement release. Phone UI acceptance remains manual.
+measurement, with no new scroll owner. Tests cover list/search exclusion without deleting children,
+narrow/wide horizontal overflow, interrupted motion, click/return, parent highlight/reselection,
+drawer drag/pinning, stale events, clear/disconnect and native measurement release. Phone UI
+acceptance remains manual.
 
 ## 15. Verification
 

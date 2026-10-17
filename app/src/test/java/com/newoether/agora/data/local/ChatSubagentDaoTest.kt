@@ -72,6 +72,27 @@ class ChatSubagentDaoTest {
         assertEquals(before, dao.getConversation("child"))
     }
 
+    @Test fun navigationListsHideChildrenBeforePaginationButPreserveTheirStoredState() = runTest {
+        dao.upsertConversation(ChatEntity("parent", "Parent", lastUpdated = 1L))
+        dao.upsertConversation(ChatEntity("other", "Other", lastUpdated = 2L))
+        val child = ChatEntity("child", "Worker", parentConversationId = "parent",
+            lastUpdated = 100L, isPinned = true, draftText = "Preserved child draft")
+        dao.upsertConversation(child)
+        dao.upsertTask(TaskEntity("task", "Task", "Prompt", "", cronExpr = "0 * * * *", nextRunAt = 0L))
+        dao.upsertConversation(ChatEntity("execution", "Execution", taskId = "task", lastUpdated = 200L))
+
+        assertEquals(listOf("other", "parent"), dao.getAllConversations().first().map { it.id })
+        assertEquals(listOf("other"), dao.observeDrawerConversations(1).first().map { it.id })
+        assertEquals(listOf("other", "parent"), dao.observeDrawerConversations(10).first().map { it.id })
+        assertEquals(setOf("parent", "other"),
+            dao.getDrawerConversations(listOf("parent", "child", "other", "execution")).map { it.id }.toSet())
+        assertTrue(dao.getDrawerConversations(listOf("child")).isEmpty())
+        assertEquals(child, dao.getConversation("child"))
+        assertEquals(child, dao.observeConversation("child").first())
+        assertEquals(listOf("child"), dao.observeSubagents("parent").first().map { it.id })
+        assertEquals(setOf("parent", "other", "child", "execution"), dao.getAllConversationsList().map { it.id }.toSet())
+    }
+
     @Test fun exactReceiptsAreOneShotAndCannotConsumeReplacementOrOtherParent() = runTest {
         seed("parent")
         seed("child", "parent")

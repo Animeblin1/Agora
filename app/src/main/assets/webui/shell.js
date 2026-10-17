@@ -765,7 +765,7 @@ export function Shell({ onSignedOut }) {
   }
   function beginDrawerDrag(event) {
     dragClick.current = null;
-    if (state.parentConversationId || sideBySide || !event.isPrimary || event.button !== 0 ||
+    if (sideBySide || !event.isPrimary || event.button !== 0 ||
         event.target.closest(".detail-sheet-layer, .dropdown, dialog, input, textarea, a, [contenteditable]") ||
         !window.getSelection()?.isCollapsed ||
         (event.pointerType === "mouse" && event.target.closest(".markdown, .user-text"))) return;
@@ -816,7 +816,6 @@ export function Shell({ onSignedOut }) {
     endDrawerDrag(null, true);
     const was = previousWide.current;
     previousWide.current = sideBySide;
-    if (state.parentConversationId) { settleDrawer(false); return; }
     if (was === null) {
       const open = sideBySide && readDrawerPinned();
       drawerTarget.current = open ? 1 : 0;
@@ -826,9 +825,11 @@ export function Shell({ onSignedOut }) {
     }
     if (was === sideBySide) { settleDrawer(drawerTarget.current > 0); return; }
     settleDrawer(sideBySide && readDrawerPinned());
-  }, [sideBySide, reduceMotion, state.parentConversationId]);
+  }, [sideBySide, reduceMotion]);
   // ChatTopBar falls back to the brand while the title is blank.
-  const openTitle = state.conversations.find((c) => c.id === state.openId)?.title?.trim() || null;
+  const drawerConversationId = state.parentConversationId || state.openId;
+  const openTitle = (state.subagents.find(c => c.id === state.openId) ||
+    state.conversations.find(c => c.id === state.openId))?.title?.trim() || null;
   // ChatTopBar stacks the token subtitle under a conversation title and hides it with the brand
   // title, or while there is nothing in the window yet (`contextAvailable = totalTokens > 0`). The
   // figure is the composer ring's own: this connection's projection, kept while the next one prices.
@@ -884,13 +885,13 @@ export function Shell({ onSignedOut }) {
       <aside id="drawer" class="drawer" ref=${drawer} aria-label=${t.conversations} tabindex="-1"
         role=${sideBySide ? null : "dialog"} aria-modal=${modalOpen ? "true" : null}
         inert=${!drawerOpen}>
-        <${DrawerContent} conversations=${state.conversations} openId=${state.openId}
+        <${DrawerContent} conversations=${state.conversations} openId=${drawerConversationId}
           connected=${state.connected} loading=${state.listLoading} hasMore=${state.listHasMore} reduceMotion=${reduceMotion} drawerVisible=${drawerOpen} searchBack=${drawerSearchBack}
           switching=${!!state.switching || state.openStatus === "loading"}
           searchQuery=${state.searchQuery} searchResults=${state.searchResults} searchLoading=${state.searchLoading} searchFailed=${state.searchFailed}
           onRequestRename=${(request) => setRowDialog({ ...request, type: "rename" })}
           onRequestDelete=${(request) => setRowDialog({ ...request, type: "delete" })}
-          onSelect=${(id) => { sync.open(id); if (!sideBySide) settleDrawer(false); }} />
+          onSelect=${(id) => { if (id == null || id !== drawerConversationId) sync.open(id); if (!sideBySide) settleDrawer(false); }} />
       </aside>
       <div class="scrim" aria-hidden="true" onClick=${() => settleDrawer(false)}></div>
       <main class=${`chat ${composerExpanded ? "chat-composer-expanded" : ""}`} inert=${modalOpen}>

@@ -609,7 +609,7 @@ class WebUiSyncTest {
             queries += query
             (0 until 25).map { index ->
                 com.newoether.agora.data.local.MessageEntity(
-                    id = "search-$index", conversationId = if (index < 3) "a" else "b",
+                    id = "search-$index", conversationId = when { index == 0 -> "child"; index < 3 -> "a"; else -> "b" },
                     text = "x".repeat(50) + "Needle" + "y".repeat(50), participant = Participant.USER,
                     timestamp = index.toLong(), runId = "run-search",
                 ) to (0.9f - index * 0.01f)
@@ -637,7 +637,7 @@ class WebUiSyncTest {
         assertEquals(2, items[0].jsonObject["snippets"]!!.jsonArray.size)
         assertEquals("…" + "x".repeat(20) + "Needle" + "y".repeat(20) + "…",
             items[0].jsonObject["snippets"]!!.jsonArray[0].jsonObject.string("text"))
-        coVerify(exactly = 1) { conversations.getDrawerConversations(listOf("a", "b")) }
+        coVerify(exactly = 1) { conversations.getDrawerConversations(listOf("child", "a", "b")) }
         coVerify(exactly = 0) { conversations.recoverConversationRuntime(any(), any()) }
         verify(exactly = 0) { conversations.observeConversation(any()) }
         send("""{"type":"search","connectionId":"$connection","revision":1,"text":"old"}""")

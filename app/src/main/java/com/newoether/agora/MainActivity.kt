@@ -481,7 +481,7 @@ fun MainNavigation(
                             showTasks = true
                         }
                     },
-                drawerEnabled = (isNewChatMode || subagentParentId == null) && taskHistoryPreview.backTaskId(currentConversationId, isNewChatMode) == null,
+                drawerEnabled = taskHistoryPreview.backTaskId(currentConversationId, isNewChatMode) == null,
                 openDrawerOnStart = screenshotDestination == "drawer",
                 initialScrollToTop = screenshotDestination == "chat",
                 onOpenSettings = {

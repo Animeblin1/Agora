@@ -14,6 +14,10 @@ page plus the requested top candidates; corpus growth must not translate into An
   text, and synthetic tool/result/Compact rows.
 - Literal search, expanded search context and read_conversation also exclude synthetic Compact
   summaries. Branch traversal may cross these rows but must not return their bodies as messages.
+- Drawer search is a navigation projection: native and WebUI exclude isolated child conversations
+  through the canonical root-only conversation-list queries, as required by application-ui.md
+  section 39. This presentation rule does not change global RAG source eligibility, delete child
+  content or embeddings, or prevent explicitly selected child reads.
 - Compact summaries are also ineligible for cache admission, reconciliation, embedding generation
   and transactional embedding commit. Existing Compact cache rows are excluded from counts/ranking
   and reclaimed by the canonical bounded maintenance path, never by a search or startup scan.
