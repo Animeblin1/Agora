@@ -1,12 +1,9 @@
 package com.newoether.agora.ui.chat.interaction
 
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.SideEffect
-import com.newoether.agora.viewmodel.ChatViewModel
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -31,22 +29,39 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.HorizontalAlignmentLine
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.newoether.agora.R
 import com.newoether.agora.model.ConversationTodoItem
 import com.newoether.agora.ui.components.SmoothBottomSheet
+import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
 import com.newoether.agora.ui.theme.ChatType
+import com.newoether.agora.viewmodel.ChatViewModel
+import kotlin.math.roundToInt
+
+private val TodoFirstLineCenter = HorizontalAlignmentLine { first, second -> minOf(first, second) }
 
 /** Keeps both selected-owner tools above the composer without adding another scroll owner. */
 @Composable
@@ -59,7 +74,7 @@ internal fun BoxScope.ChatConversationToolsOverlay(
 ) {
     val todo by viewModel.currentConversationTodo.collectAsState()
     val items = todo.second.takeIf { todo.first == conversationId }.orEmpty()
-    var todoHeight by remember(conversationId) { mutableStateOf(0f) }
+    var todoHeight by remember { mutableStateOf(0f) }
     var interactionHeight by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     SideEffect { onHeightChanged(todoHeight + interactionHeight) }
@@ -73,7 +88,8 @@ internal fun BoxScope.ChatConversationToolsOverlay(
         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarHeight),
     )
 }
-/** Read-only progress; changing the list remains an ordinary model tool operation. */
+
+/** Read-only progress; only the outgoing capsule retains an invalidated owner's payload. */
 @Composable
 internal fun ConversationTodoBar(
     conversationId: String?,
@@ -81,44 +97,76 @@ internal fun ConversationTodoBar(
     onHeightChanged: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val desired = (conversationId to items).takeIf { conversationId != null && items.isNotEmpty() }
+    var shown by remember { mutableStateOf(desired) }
+    val progress = remember { Animatable(0f) }
+    val motion = LocalAgoraMotionPolicy.current
+    val latestDesired by rememberUpdatedState(desired)
+    val latestHeightChanged by rememberUpdatedState(onHeightChanged)
+    var measuredHeight by remember { mutableFloatStateOf(0f) }
     var opened by remember(conversationId) { mutableStateOf(false) }
-    DisposableEffect(Unit) { onDispose { onHeightChanged(0f) } }
-    if (items.isEmpty()) {
-        SideEffect {
-            opened = false
-            onHeightChanged(0f)
+    val active = desired != null && shown?.first == conversationId
+    val displayedItems = if (active) items else shown?.second.orEmpty()
+    LaunchedEffect(conversationId, desired != null) {
+        opened = false
+        if (shown != null && !active) {
+            progress.animateTo(0f, tween(180))
+            shown = null
         }
-        return
+        val target = latestDesired
+        if (target != null) {
+            shown = target
+            progress.animateTo(1f, tween(180))
+        }
     }
+    SideEffect {
+        if (active) shown = desired
+    }
+    LaunchedEffect(motion.allowSpatialTransitions, active) {
+        snapshotFlow {
+            if (shown == null) 0f else measuredHeight *
+                if (motion.allowSpatialTransitions) progress.value else if (active) 1f else 0f
+        }.collect { latestHeightChanged(it) }
+    }
+    DisposableEffect(Unit) { onDispose { latestHeightChanged(0f) } }
     val title = stringResource(R.string.todo_title)
-    val completed = items.count { it.status == "completed" }
-    val progress = stringResource(R.string.todo_progress, completed, items.size)
-    Column(
-        modifier.fillMaxWidth().padding(horizontal = 12.dp)
-            .onSizeChanged { onHeightChanged(it.height.toFloat()) }
-            .padding(bottom = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Surface(
-            onClick = { opened = true }, shape = RoundedCornerShape(24.dp), shadowElevation = 4.dp,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.widthIn(max = 840.dp).height(48.dp),
+    val completed = displayedItems.count { it.status == "completed" }
+    val count = stringResource(R.string.todo_progress, completed, displayedItems.size)
+    if (shown != null) {
+        Column(
+            modifier.fillMaxWidth().padding(horizontal = 12.dp)
+                .onSizeChanged { measuredHeight = it.height.toFloat() }
+                .padding(bottom = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(
-                Modifier.padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Surface(
+                onClick = { if (active) opened = true }, enabled = active,
+                shape = RoundedCornerShape(24.dp), shadowElevation = 4.dp,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.widthIn(max = 840.dp).height(48.dp).graphicsLayer {
+                    alpha = progress.value
+                    val scale = if (motion.allowSpatialTransitions) 0.96f + 0.04f * progress.value else 1f
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                },
             ) {
-                Icon(Icons.Default.Checklist, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(
-                    title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                Text(progress, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    Modifier.padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Default.Checklist, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(count, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
-    if (opened) {
+    if (opened && active) {
         val list = rememberLazyListState()
         SmoothBottomSheet(
             onDismissRequest = { opened = false },
@@ -134,7 +182,7 @@ internal fun ConversationTodoBar(
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        progress, style = MaterialTheme.typography.labelMedium,
+                        count, style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -151,6 +199,7 @@ internal fun ConversationTodoBar(
                         "in_progress" -> R.string.todo_in_progress
                         else -> R.string.todo_pending
                     }
+                    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -160,12 +209,22 @@ internal fun ConversationTodoBar(
                                 "completed" -> Icons.Default.CheckCircle
                                 "in_progress" -> Icons.Default.Schedule
                                 else -> Icons.Default.RadioButtonUnchecked
-                            }, stringResource(status), Modifier.size(20.dp),
+                            }, stringResource(status), Modifier.size(20.dp).alignBy { it.measuredHeight / 2 },
                             tint = if (item.status == "in_progress") MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        SelectionContainer {
-                            Text(item.content, style = MaterialTheme.typography.bodyMedium)
+                        SelectionContainer(
+                            Modifier.weight(1f).alignBy(TodoFirstLineCenter).layout { measurable, constraints ->
+                                val placeable = measurable.measure(constraints)
+                                val center = textLayout?.let { (it.getLineTop(0) + it.getLineBottom(0)) / 2f } ?: 0f
+                                layout(placeable.width, placeable.height,
+                                    mapOf(TodoFirstLineCenter to center.roundToInt())) {
+                                    placeable.placeRelative(0, 0)
+                                }
+                            },
+                        ) {
+                            Text(item.content, style = MaterialTheme.typography.bodyMedium,
+                                onTextLayout = { textLayout = it })
                         }
                     }
                 }

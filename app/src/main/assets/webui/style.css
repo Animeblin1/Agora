@@ -1543,7 +1543,8 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .interaction-action-space { flex: 1; }
 .todo-host { position: absolute; bottom: calc(100% - 12px); left: 12px; right: 12px; display: flex; justify-content: center; padding-bottom: 8px; pointer-events: none; }
 .todo-host > .detail-sheet-layer { pointer-events: auto; }
-.todo-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: 816px; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); box-shadow: var(--shadow-4); font: inherit; cursor: pointer; pointer-events: auto; }
+.todo-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: 816px; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); box-shadow: var(--shadow-4); font: inherit; cursor: pointer; pointer-events: auto; transform-origin: 50% 100%; }
+.todo-capsule:disabled { pointer-events: none; }
 .todo-capsule > svg { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--md-primary); }
 .todo-capsule strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: 0; }
 .todo-capsule > span { flex: none; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--md-on-surface-variant); }

@@ -9,9 +9,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -20,11 +23,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import com.newoether.agora.model.ConversationTodoItem
 import com.newoether.agora.ui.motion.AgoraMotionPolicy
 import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
@@ -37,9 +42,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ConversationTodoBarTest {
     @get:Rule val compose = createComposeRule()
 
@@ -121,6 +128,141 @@ class ConversationTodoBarTest {
         compose.onNodeWithText("Todo").assertExists()
     }
 
+    @Test
+    fun ownerSwitchRetainsDisabledOldCapsuleThenEntersOnlyLatestOwner() {
+        var owner by mutableStateOf("a")
+        var items by mutableStateOf(listOf(ConversationTodoItem("A", "completed")))
+        var height = 0f
+        compose.setContent {
+            MaterialTheme {
+                ConversationTodoBar(owner, items, { height = it })
+            }
+        }
+        compose.runOnIdle { }
+        val fullHeight = height
+        assertTrue(fullHeight > 0f)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            owner = "b"
+            items = listOf(ConversationTodoItem("B"), ConversationTodoItem("B2"))
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        compose.onNodeWithText("1 / 1").assertExists().assertIsNotEnabled()
+        compose.onNodeWithText("0 / 2").assertDoesNotExist()
+        assertTrue("Outgoing lift is animated: $height", height > 0f && height < fullHeight)
+        compose.runOnIdle {
+            owner = "c"
+            items = listOf(ConversationTodoItem("C"), ConversationTodoItem("C2"), ConversationTodoItem("C3"))
+        }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("0 / 2").assertDoesNotExist()
+        compose.onNodeWithText("0 / 3").assertExists()
+        assertEquals(fullHeight, height, 0.1f)
+        compose.runOnIdle { items = items.map { it.copy(status = "completed") } }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.onNodeWithText("3 / 3").assertExists()
+        assertEquals("Same-owner updates do not replay entrance", fullHeight, height, 0.1f)
+    }
+
+    @Test
+    fun clearRetainsCapsuleUntilFadeEndsButClosesSheetImmediately() {
+        var items by mutableStateOf(listOf(ConversationTodoItem("Short task")))
+        var height = 0f
+        compose.setContent { MaterialTheme { ConversationTodoBar("c", items, { height = it }) } }
+        compose.onNodeWithText("Todo").performClick()
+        compose.onNodeWithText("Short task").assertExists()
+        val fullHeight = height
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { items = emptyList() }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        compose.onNodeWithText("Short task").assertDoesNotExist()
+        compose.onNodeWithText("Todo").assertExists().assertIsNotEnabled()
+        assertTrue(height > 0f && height < fullHeight)
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Todo").assertDoesNotExist()
+        assertEquals(0f, height)
+    }
+
+    @Test
+    fun reducedMotionKeepsFadeLifetimeButSnapsLiftAndRapidRepopulationStaysClosed() {
+        val tasks = listOf(ConversationTodoItem("Short task"))
+        var items by mutableStateOf(tasks)
+        var height = 0f
+        compose.setContent {
+            CompositionLocalProvider(LocalAgoraMotionPolicy provides AgoraMotionPolicy(true)) {
+                MaterialTheme { ConversationTodoBar("c", items, { height = it }) }
+            }
+        }
+        compose.onNodeWithText("Todo").performClick()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { items = emptyList() }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        compose.onNodeWithText("Todo").assertExists().assertIsNotEnabled()
+        compose.onNodeWithText("Short task").assertDoesNotExist()
+        assertEquals(0f, height)
+        compose.runOnIdle { items = tasks }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Todo").assertExists()
+        compose.onNodeWithText("Short task").assertDoesNotExist()
+        assertTrue(height > 0f)
+    }
+
+    @Test
+    fun iconsAlignWithFirstLineAtNormalFontScale() = assertFirstLineAlignment(1f)
+
+    @Test
+    fun iconsAlignWithFirstLineAtLargeFontScale() = assertFirstLineAlignment(1.8f)
+
+    private fun assertFirstLineAlignment(fontScale: Float) {
+        val tasks = listOf(
+            ConversationTodoItem("Short task", "pending"),
+            ConversationTodoItem("First line\nSecond line", "in_progress"),
+            ConversationTodoItem("A naturally wrapped task ".repeat(8), "completed"),
+        )
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density.density, fontScale),
+                LocalAgoraMotionPolicy provides AgoraMotionPolicy(true),
+            ) {
+                MaterialTheme(typography = Typography) { ConversationTodoBar("c", tasks, {}) }
+            }
+        }
+        compose.onNodeWithText("Todo").performClick()
+        tasks.zip(listOf("Pending", "In progress", "Completed")).forEach { (task, status) ->
+            compose.onNode(hasScrollAction()).performScrollToIndex(tasks.indexOf(task))
+            val text = compose.onNodeWithText(task.content, useUnmergedTree = true)
+            val layout = text.textLayout()
+            val firstCenter = text.fetchSemanticsNode().boundsInRoot.top +
+                (layout.getLineTop(0) + layout.getLineBottom(0)) / 2f
+            val icon = compose.onNodeWithContentDescription(status, useUnmergedTree = true)
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals("$status at font scale $fontScale", firstCenter, icon.center.y, 1f)
+            if (task != tasks.first()) {
+                assertTrue(
+                    "Fixture must wrap: status=$status, scale=$fontScale, " +
+                        "size=${layout.size}, input=${layout.layoutInput.constraints}",
+                    layout.lineCount > 1,
+                )
+            }
+        }
+    }
+
     private fun showTodo(reduced: Boolean) {
         compose.setContent {
             CompositionLocalProvider(LocalAgoraMotionPolicy provides AgoraMotionPolicy(reduced)) {
@@ -133,10 +275,12 @@ class ConversationTodoBarTest {
         }
     }
 
-    private fun SemanticsNodeInteraction.textStyle(): TextStyle {
+    private fun SemanticsNodeInteraction.textStyle(): TextStyle = textLayout().layoutInput.style
+
+    private fun SemanticsNodeInteraction.textLayout(): TextLayoutResult {
         val layouts = mutableListOf<TextLayoutResult>()
         performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-        return layouts.single().layoutInput.style
+        return layouts.single()
     }
 
     private fun assertTypography(expected: TextStyle, actual: TextStyle) {

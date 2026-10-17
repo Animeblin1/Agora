@@ -1587,6 +1587,15 @@ The native list fills the sheet's remaining content viewport, including blank sp
 lists, so body drags reach SmoothBottomSheet's existing nested-scroll owner. Blank-body dragging
 expands, collapses and dismisses the sheet with both normal and Reduced Motion. The visible gaps
 from Interaction Bar to Todo and from Todo to Composer remain equal at 8dp/px on both surfaces.
+The capsule enters and exits with a `180ms` opacity transition and subtle `0.96..1` scale from its
+bottom center. Changing conversation retains only the outgoing capsule until its fade completes,
+then enters the latest selected owner's capsule; rapid changes do not queue obsolete owners.
+Same-owner progress updates do not replay the entrance. Outgoing capsules cannot open a sheet.
+Reduced Motion retains the timed fades but fixes scale at `1` and snaps the measured height lift;
+normal height lift follows the same opacity progress, returning exactly to zero after exit.
+Native status icons align their centers to the actual first text line's layout center rather than
+the top of the row or the center of a multiline text block. Font scale and wrapping preserve this
+alignment, and literal text remains selectable without fixed pixel offsets.
 The selected owner's narrow Room observation drives both surfaces. Changing owner, clearing the list
 or disconnecting closes the sheet and clears old presentation. Browser events carry the current
 conversation and selection sequence; stale events are ignored. Startup and drawer loading do not
