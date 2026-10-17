@@ -1163,20 +1163,24 @@ generation runs or 192ms otherwise before ownership releases. Content growth dur
 pulling with the 0.055s tail correction, and growth outside one leaves the reader still. Opening a
 conversation stays an instant placement under the cover, App Reduce Motion snaps, and any wheel, touch,
 key or pointer input ends the motion and hands the list to the reader.
-WebUI history pages use an independent minimum load of `262144` tokens (256K), not a maximum,
-not the conversation's generation context setting, and not historical Provider usage. Every initial,
-older, newer and explicit-bottom load keeps admitting complete rounds until its newly loaded text
-cost is strictly greater than 262144, or no content remains in that direction. An exact-256K sum
-must admit the next complete round when one exists; a short final remainder loads in full.
+WebUI history pages use an independent `262144`-token (256K) crossing threshold and a maximum of
+`10` complete rounds per newly loaded window. These are not the conversation's generation context
+setting or historical Provider usage. Every initial, older, newer and explicit-bottom load admits
+complete rounds until its newly loaded text cost first becomes strictly greater than 262144,
+10 rounds have been admitted, or no content remains in that direction, whichever happens first.
+The crossing round is included in full. An exact-256K sum admits the next complete round only
+when fewer than 10 rounds have been admitted and content remains. Ten short rounds stop below 256K;
+a short final remainder loads in full.
 The minimum unit is a complete USER-started round, including all assistant/tool/result rows until
 the next USER row; a leading non-USER prefix is one round. A single oversized round is always
 loaded whole. Page costs use the shared offline text estimator over original source text and
 additional Thought/Transcription/tool detail content, without duplicating mirrored answer text.
 Compact/provider rollout does not hide historical browser rows. Unknown costs are resolved by
 bounded adjacent payload batches on demand; they are never treated as free or priced from reported usage.
-The next unknown-cost probe admits at most 48 rows, except that an indivisible round may exceed that
-batch. Existing subscription batches survive watch growth; retained unchanged rows are not resent
-when a changed selection requires rebuilding a batch. The 48-row bound applies to each hydration
+The next unknown-cost probe stays within the remaining ten-round allowance and admits at most 48
+rows, except that an indivisible round may exceed that row batch. Existing subscription batches
+survive watch growth; retained unchanged rows are not resent when a changed selection requires
+rebuilding a batch. The 48-row bound applies to each hydration
 batch, not page membership. MessageList retains at most three adjacent, complete token windows in
 one continuous rendered/subscribed range. Loading the second or third window does not unmount the
 windows already present. Only admitting a fourth evicts the window farthest from the loading edge.
@@ -1185,9 +1189,9 @@ bounded payload probes resolve the incoming window. A window's completed round b
 stable: streaming cost changes do not reprice and discard the reader's retained history. The live
 newest window follows appended USER/assistant/tool rows without moving a new send to a separate
 history page; completed historical edges stay fixed. Accepted-send navigation from distant history
-returns to the newest minimum page, so the sent USER round directly follows its preceding tail
-context, and never consumes the request before its target is rendered. Opening settlement waits
-for that newest minimum page to be ready, so upward growth cannot leave the reader near the top.
+returns to the newest threshold-or-ten-round page, so the sent USER round directly follows its
+preceding tail context, and never consumes the request before its target is rendered. Opening settlement waits
+for that newest page to be ready, so upward growth cannot leave the reader near the top.
 Only an actual unresolved page request shows an edge loading indicator, never the mere existence
 of older/newer history. Incoming page content and the indicator fade in/out; idle or cancelled work
 cannot leave a spinning indicator. Opacity exit snapshots are inert and do not count as active loads.

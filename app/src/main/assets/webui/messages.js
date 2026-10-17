@@ -972,8 +972,9 @@ function PageProgress({ active, edge }) {
     aria-hidden=${active ? null : "true"}><span><${CircularProgress} size=${32} stroke=${3}
       label=${active ? t.loading : null} /></span></div>`;
 }
-/** Independent minimum history load; whole rounds are never split. */
+/** Independent token threshold and round cap; whole rounds are never split. */
 const PAGE_TOKEN_WINDOW = 256 * 1024;
+const MAX_PAGE_ROUNDS = 10;
 const MAX_PAGE_WINDOWS = 3;
 const OLDER_PAGE_EDGE_PX = 4;
 export function MessageList({ state, label, onPageAction }) {
@@ -1049,8 +1050,10 @@ export function MessageList({ state, label, onPageAction }) {
     }
     return total;
   };
-  /** Fill past the minimum load, or exhaust the remaining complete rounds. */
+  /** Include the first crossing round, stop at ten, or exhaust the remaining complete rounds. */
   const fit = (start, end, keep) => {
+    if (keep === "start") end = Math.min(end, start + MAX_PAGE_ROUNDS);
+    else start = Math.max(start, end - MAX_PAGE_ROUNDS);
     let first = keep === "start" ? start : end;
     let last = first;
     let tokens = 0;
