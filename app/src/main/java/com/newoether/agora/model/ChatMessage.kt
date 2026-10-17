@@ -223,6 +223,7 @@ data class ChatConversation(
     val hasUnreadGeneration: Boolean = false,
     val isPinned: Boolean = false,
     val selectedBranchesJson: String? = null,
+    val parentConversationId: String? = null,
 )
 
 fun ChatMessage.isContextCompact(): Boolean =

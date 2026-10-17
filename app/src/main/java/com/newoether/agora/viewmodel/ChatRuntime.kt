@@ -45,6 +45,8 @@ class ChatRuntime(
     skillManager: SkillManager,
     sandboxFactory: SandboxManagerFactory?,
     automationToolProvider: AutomationToolProvider,
+    subagentToolProvider: com.newoether.agora.tool.SubagentToolProvider,
+    subagentManager: com.newoether.agora.automation.SubagentManager,
     mcpToolProvider: McpToolProvider,
     askUser: AskUserController,
     shellConfirmation: ShellConfirmationController,
@@ -56,6 +58,8 @@ class ChatRuntime(
     taskExecutionEngine: TaskExecutionEngine,
     scope: CoroutineScope,
 ) {
+    internal val onConversationOpened: (String) -> Unit = subagentManager::conversationOpened
+
     // replay=0: events raised while no client is collecting are dropped rather than replayed
     // stale to the next client. The 1-slot buffer keeps tryEmit lossless for slow collectors.
     private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(
@@ -88,6 +92,7 @@ class ChatRuntime(
             sandboxFactory = sandboxFactory,
             additionalToolProviders = listOf(
                 automationToolProvider,
+                subagentToolProvider,
                 mcpToolProvider,
                 AskUserToolProvider(askUser),
             ),
@@ -190,6 +195,7 @@ class ChatRuntime(
             }
             state.onIdle = { conversationId ->
                 clients.generationActivityChanged(conversationId, active = false)
+                subagentManager.conversationIdle(conversationId)
             }
             state.onStreamCommit = clients::commitTerminalStreamingMessage
             state.onQueueDrainRequested = { settledState ->

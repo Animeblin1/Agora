@@ -19,12 +19,15 @@ data class MessageSource(
     val kind: Kind,
     /** Question/answer pairs in asking order; only used when [kind] is [Kind.ASK_USER]. */
     val askUser: List<AskUserItem> = emptyList(),
+    /** Exact outbox receipts consumed atomically with this automatic input's Run graph. */
+    val subagentResults: Map<String, String> = emptyMap(),
 ) {
     @Serializable
     enum class Kind {
         @SerialName("task") TASK,
         @SerialName("loop") LOOP,
         @SerialName("ask_user") ASK_USER,
+        @SerialName("subagent") SUBAGENT,
     }
 
     /** One asked question. A null [answer] means the user left it unanswered. */
@@ -37,6 +40,7 @@ data class MessageSource(
 
     init {
         require(kind == Kind.ASK_USER || askUser.isEmpty())
+        require(kind == Kind.SUBAGENT || subagentResults.isEmpty())
     }
 
     /**
@@ -64,6 +68,7 @@ data class MessageSource(
         fun forAutomationRequestKind(requestKind: String): MessageSource? = when (requestKind) {
             "task" -> TASK
             "loop" -> LOOP
+            "subagent" -> MessageSource(Kind.SUBAGENT)
             else -> null
         }
 

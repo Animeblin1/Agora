@@ -100,7 +100,7 @@ data class ConversationSettingsImportTransferEntity(
     }
 }
 
-@Entity(tableName = "conversations", indices = [Index(value = ["taskId"])])
+@Entity(tableName = "conversations", indices = [Index(value = ["taskId"]), Index(value = ["parentConversationId"])])
 data class ChatEntity(
     @PrimaryKey val id: String,
     val title: String,
@@ -129,6 +129,13 @@ data class ChatEntity(
     @ColumnInfo(defaultValue = "0") val isPinned: Boolean = false,
     /** Latest conversation-wide Todo list; null means no list. */
     val todoJson: String? = null,
+    /** Parent ownership is separate from message ancestry; subagents never inherit history. */
+    val parentConversationId: String? = null,
+    /** Durable completion outbox, not a second generation lifecycle. */
+    val subagentResultJson: String? = null,
+    val subagentResultId: String? = null,
+    val subagentResultStatus: String? = null,
+    val subagentDeliveredResultId: String? = null,
 )
 
 /** A saved automation: a prompt + schedule that fans out a fresh conversation on each run. */

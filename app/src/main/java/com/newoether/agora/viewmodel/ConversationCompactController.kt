@@ -260,6 +260,7 @@ internal class ConversationCompactController(
         ),
         context = context.copy(
             todoEnabled = false,
+            subagentToolsEnabled = false,
             accessSavedMemories = false,
             accessActiveMemory = false,
             skillReadAccess = false,

@@ -594,6 +594,28 @@ and drawer queries never read or enumerate Todo payloads. Native and browser cap
 projections described in application-ui.md. Required checks cover replacement/clear, stale Run/pass,
 Stop-before-write, unrelated-owner isolation, selected-only observation and archive compatibility.
 
+## 8.14 Isolated Subagents
+Subagents are ordinary conversations with indexed `parentConversationId` ownership, visible in the
+conversation list and using the canonical generation, tools, Stop and branch pipelines. One root
+may create multiple children; a child never receives any subagent-control tools. Model selection
+exposes the complete enabled model IDs only, with no inferred metadata. Child context contains only
+its explicit task and its own subsequent messages. Conversation-history tools are disabled in
+children so they cannot read the parent's history indirectly. Other tool access and conversation
+settings inherit the parent's admitted access, subject to current global permission switches.
+`SubagentManager` owns launch/cancellation and completion-outbox delivery, never Run state.
+`spawn_agent`, `send_agent_message`, `wait_agents`, `list_agents` and `stop_agent` require an exact
+live parent Run/pass. Stop cancels actual work and waits for ordinary terminal settlement. A wait
+that returns a result acknowledges that exact completion so it is not automatically delivered again.
+Otherwise completed results merge under the parent's automation lease into a normal automatic USER
+turn tagged `subagent`. Its message/Run creation and exact completion receipts commit atomically.
+Failures before admission leave receipts pending; failures after admission never resend that input.
+There are no startup owner scans or automatic process-death restarts. Opening a parent may deliver
+its pending outbox; imported pending results are treated as delivered to avoid unsolicited execution.
+Parent deletion cancels child execution and Loops before atomically deleting the owned graph and
+scheduling attachment cleanup. Fork creates an independent conversation, not another linked child.
+Required tests cover stale identity, one-level isolation, concurrent completion/wait, Stop settlement,
+process death/receipt atomicity, parent deletion, unrelated-owner preservation, and archive roundtrip.
+
 ## 9. Context assembly contract in module terms
 
 `GenerationApiPathBuilder` receives one immutable durable snapshot and a requested parent ID. It

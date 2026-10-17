@@ -1,5 +1,7 @@
 package com.newoether.agora.data
 
+import com.newoether.agora.data.NativeExportChatEntity as ExportChatEntity
+
 import android.util.JsonReader
 import com.newoether.agora.automation.LoopPolicy
 import com.newoether.agora.data.DataImporter.ImportStrategy
@@ -177,6 +179,12 @@ internal class NativeConversationGraphImporter(
                     title = conversation.title,
                     lastUpdated = conversation.lastUpdated,
                     isPinned = conversation.isPinned,
+                    parentConversationId = conversation.parentConversationId,
+                    subagentResultJson = conversation.subagentResultJson,
+                    subagentResultId = conversation.subagentResultId,
+                    subagentResultStatus = conversation.subagentResultStatus,
+                    // Restored work is dormant and must not trigger fresh paid generations.
+                    subagentDeliveredResultId = conversation.subagentResultId,
                     todoJson = com.newoether.agora.model.ConversationTodo.encode(
                         com.newoether.agora.model.ConversationTodo.decode(conversation.todoJson),
                     ),
@@ -204,6 +212,7 @@ internal class NativeConversationGraphImporter(
         } else {
             mutableSetOf()
         }.apply { addAll(conversations.map { it.id }) }
+        validateSubagentArchiveOwners(conversations, availableConversationIds, chatDao::getConversation)
 
         val availableRawRuns = rawRuns.filter {
             it.conversationId in availableConversationIds
@@ -677,26 +686,6 @@ internal class NativeConversationGraphImporter(
     }
 
     // Internal data classes for parsing export files
-    @Serializable
-    private data class ExportChatEntity(
-        val id: String,
-        val title: String,
-        val lastUpdated: Long,
-        val isPinned: Boolean = false,
-        val todoJson: String? = null,
-        val selectedBranchesJson: String? = null,
-        val systemPromptId: String? = null,
-        val modelId: String? = null,
-        val taskId: String? = null,
-        val origin: String = "user",
-        val graduated: Boolean = false,
-        val selectedRunBranchesJson: String? = null,
-        val draftText: String = "",
-        val draftAttachments: String? = null,
-        val conversationSettings: ConversationSettings? = null,
-        /** v1-v3 compatibility only; never restored across devices. */
-        val hasUnreadGeneration: Boolean = false,
-    )
 
     @Serializable
     private data class ExportRunEntity(

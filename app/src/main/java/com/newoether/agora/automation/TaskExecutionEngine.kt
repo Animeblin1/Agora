@@ -82,6 +82,7 @@ class TaskExecutionEngine(
     private val automationWakeLockOwner: AutomationWakeLockOwner =
         AutomationWakeLockOwner(appContext),
     private val pauseConversationLoop: suspend (String) -> Unit = {},
+    private val additionalTools: () -> List<com.newoether.agora.tool.ToolProvider> = { emptyList() },
 ) {
     sealed interface Result {
         data class Success(val modelMessageId: String, val text: String) : Result
@@ -150,6 +151,17 @@ class TaskExecutionEngine(
         emitSnackbar = {},
     )
     private val stopFinalizer = GenerationFinalizer(convRepo, ragManager::indexMessageForRag)
+    internal suspend fun stopConversationAndAwait(conversationId: String) {
+        val state = generationRegistry.get(conversationId) ?: return
+        val stopped = state.stop()
+        stopped.finalizationEffect?.let { effect ->
+            stopFinalizer.settleTaskStopEffect(
+                state, effect, stopped.stoppedMessage?.let(::listOf).orEmpty(),
+            )
+        }
+        state.awaitSendAvailable()
+    }
+
     private val runFinalizationEffects = RunFinalizationEffectCoordinator()
     private val titleGenerator = ConversationTitleGenerator(convRepo, settings, providerRegistry)
     private val acceptedInputGraphWriter = AcceptedInputGraphWriter(convRepo)
@@ -191,7 +203,7 @@ class TaskExecutionEngine(
         }
     }
 
-    private val generationManager = GenerationManager(
+    private val generationManager by lazy { GenerationManager(
         app = application,
         conversations = convRepo,
         memoryManager = memoryManager,
@@ -200,14 +212,14 @@ class TaskExecutionEngine(
         sandboxFactory = sandboxFactory,
         // A background run can ask the user too: the question surfaces in the chat screen's
         // interaction bar, or as a notification while that screen is not showing.
-        additionalToolProviders = listOf(mcpToolProvider, AskUserToolProvider(askUser)),
+        additionalToolProviders = listOf(mcpToolProvider, AskUserToolProvider(askUser)) + additionalTools(),
         customProviders = { settings.customProviders.value },
     ).also {
         // Foreground Task/Loop executions share the exact same prompt and session trust state as
         // Chat, including the notification-backed wait when no Activity is visible.
         it.onConfirmShellCommand = shellConfirmation::confirm
         it.onMessagePersisted = ragManager::indexMessageForRag
-    }
+    } }
 
     /**
      * Injects [userText] as a new user turn at the leaf of [conversationId] and runs
@@ -258,6 +270,8 @@ class TaskExecutionEngine(
         foregroundServiceManagedExternally: Boolean = false,
         precondition: suspend () -> Boolean = { true },
         requestKind: String = "loop",
+        source: MessageSource? = null,
+        contextOverride: com.newoether.agora.viewmodel.GenerationContext? = null,
     ): Result {
         settings.awaitInitialLoad()
         return automationWakeLockOwner.whileHeld(settings.automationWakeLockEnabled.value) {
@@ -269,6 +283,8 @@ class TaskExecutionEngine(
                 foregroundServiceManagedExternally = foregroundServiceManagedExternally,
                 precondition = precondition,
                 requestKind = requestKind,
+                source = source,
+                contextOverride = contextOverride,
             )
         }
     }
@@ -281,6 +297,8 @@ class TaskExecutionEngine(
         foregroundServiceManagedExternally: Boolean,
         precondition: suspend () -> Boolean,
         requestKind: String,
+        source: MessageSource? = null,
+        contextOverride: com.newoether.agora.viewmodel.GenerationContext? = null,
     ): Result {
         require(requestKind.isNotBlank())
         settings.awaitInitialLoad()
@@ -299,7 +317,7 @@ class TaskExecutionEngine(
         // conversation lease still spans the whole generation and the Result reflects what
         // actually happened rather than merely "the send was accepted".
         val bridge = currentForegroundSendBridge()
-        if (bridge != null) {
+        if (bridge != null && requestKind != "subagent") {
             when (
                 val outcome = bridge(
                     conversationId,
@@ -362,10 +380,13 @@ class TaskExecutionEngine(
                     )
                 },
             )
-            val taskContext = captured.context.copy(
-                // Automation tools are intentionally foreground-only: a scheduled run must
-                // not recursively create more tasks/loops without a user in the loop.
-                automationToolsEnabled = false,
+            val taskContext = (contextOverride ?: captured.context).copy(
+                conversationId = conversationId,
+                toolEffectIdentity = null,
+                subagentToolsEnabled = captured.context.subagentToolsEnabled && contextOverride == null,
+                accessPastConversations = captured.context.accessPastConversations && contextOverride == null,
+                // Subagents retain the parent's admitted tools except recursive delegation/history.
+                automationToolsEnabled = contextOverride?.automationToolsEnabled ?: false,
                 foregroundServiceManagedExternally = foregroundServiceManagedExternally,
             )
             val generationSnapshot = captured.copy(
@@ -459,7 +480,7 @@ class TaskExecutionEngine(
                     modelId = generationSnapshot.selectedModelId,
                     userTimestamp = now,
                     touchConversationOnAdmission = false,
-                    source = MessageSource.forAutomationRequestKind(requestKind),
+                    source = source ?: MessageSource.forAutomationRequestKind(requestKind),
                 ),
             )
             runCreated = true

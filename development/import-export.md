@@ -38,6 +38,12 @@ conversation category during staging, before graph mutation. Accepted Todo tool 
 conversation's `dataChangedAt` atomically, so incremental backups cannot reuse an obsolete list.
 Todo is not part of portable Settings, message history, device-local unread state or public sharing.
 
+Conversation subagent ownership and completion-outbox fields are portable metadata. Native export
+preserves the indexed parent link and exact completion. Import validates a one-level parent forest
+before graph mutation, rejects missing/self/nested parents and inconsistent result identity/status,
+and marks restored results delivered so opening imported data never starts an unsolicited generation.
+Older archives have no parent or completion. Fork remains an independent root conversation.
+
 ## 2. Archive envelope and categories
 
 The native format is a ZIP containing `manifest.json`. The manifest records

@@ -155,6 +155,7 @@ class WebUiChatSessionTest {
     }
     private val generationStop = mockk<GenerationStopAdapter>(relaxed = true)
     private val clients = ChatClients()
+    private val openedOwners = CopyOnWriteArrayList<String>()
 
     private val session by lazy { WebUiChatSession(
         generation = generation,
@@ -193,6 +194,7 @@ class WebUiChatSessionTest {
         scope = scope,
         uploadDirectory = uploadDirectory,
         compactFailureMessage = { it.reason.name },
+        onConversationOpened = openedOwners::add,
     ) }
 
     @After
@@ -424,7 +426,9 @@ class WebUiChatSessionTest {
     @Test
     fun anExistingConversationSendsWithItsOwnModelAndStopTargetsIt() = runBlocking {
         session.start()
+        assertTrue(openedOwners.isEmpty())
         session.open("a", seq = 1L)
+        assertEquals(listOf("a"), openedOwners.toList())
         awaitModel()
         withTimeout(TIMEOUT_MS) {
             while (captures.none { it.modelId == "conversation-model" }) {

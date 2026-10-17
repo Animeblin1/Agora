@@ -272,6 +272,8 @@ class GenerationRequestBuilder(
         providerRegistry.awaitInitialSync()
         val selectedModelId = providerRegistry.canonicalModelId(modelId)
         val providerName = providerRegistry.providerForModel(selectedModelId)
+        val conversation = conversationOverride ?: convRepo.getConversation(conversationId)
+        val isSubagent = conversation?.parentConversationId != null
         val effectiveSettings = if (conversationOverride != null) {
             resolveEffectiveConversationSettings(
                 conversationSettingsOverride ?: ConversationSettings(),
@@ -315,7 +317,7 @@ class GenerationRequestBuilder(
         val compactSystemPrompt = if (compactPreserveSystemPrompt) {
             resolveStandardSystemPromptForCompact(
                 conversationId = conversationId,
-                conversationOverride = conversationOverride,
+                conversationOverride = conversation,
                 modelId = compactModel,
             )
         } else {
@@ -381,7 +383,7 @@ class GenerationRequestBuilder(
         } ?: run {
             val promptTemplate = capturePromptTemplate(
                 currentId = conversationId,
-                conversationOverride = conversationOverride,
+                conversationOverride = conversation,
                 promptSettings = capturePromptSettings(),
             )
             baseConfig.copy(
@@ -400,6 +402,8 @@ class GenerationRequestBuilder(
             selectedModelId = selectedModelId,
             config = ordinaryConfig,
             context = context.copy(
+                subagentToolsEnabled = !isSubagent,
+                accessPastConversations = context.accessPastConversations && !isSubagent,
                 webSearchApiKeys = context.webSearchApiKeys.toMap(),
                 shellDevices = context.shellDevices.toList(),
             ),
@@ -442,18 +446,20 @@ class GenerationRequestBuilder(
                             effectiveSettings.lowContextModeEnabled == true
                         ),
         )
+        val conversation = convRepo.getConversation(conversationId)
+        val isSubagent = conversation?.parentConversationId != null
+        val projectionContext = context.copy(
+            subagentToolsEnabled = !isSubagent,
+            accessPastConversations = context.accessPastConversations && !isSubagent,
+            webSearchApiKeys = context.webSearchApiKeys.toMap(),
+            shellDevices = context.shellDevices.toList(),
+        )
         if (baseConfig.lowContextModeEnabled) {
-            return GenerationContextProjectionSnapshot(
-                config = baseConfig,
-                context = context.copy(
-                    webSearchApiKeys = context.webSearchApiKeys.toMap(),
-                    shellDevices = context.shellDevices.toList(),
-                ),
-            )
+            return GenerationContextProjectionSnapshot(config = baseConfig, context = projectionContext)
         }
         val promptTemplate = capturePromptTemplate(
             currentId = conversationId,
-            conversationOverride = null,
+            conversationOverride = conversation,
             promptSettings = capturePromptSettings(),
             systemPromptIdOverride = systemPromptIdOverride,
         )
@@ -467,10 +473,7 @@ class GenerationRequestBuilder(
                 assistantPostpend = resolved.assistantPostpend,
                 promptTemplate = promptTemplate,
             ),
-            context = context.copy(
-                webSearchApiKeys = context.webSearchApiKeys.toMap(),
-                shellDevices = context.shellDevices.toList(),
-            ),
+            context = projectionContext,
         )
     }
 
@@ -548,6 +551,8 @@ class GenerationRequestBuilder(
         )
         val genCtx = GenerationContext(
             conversationId = currentId,
+            subagentToolsEnabled = true,
+            enabledModelIds = settings.enabledModels.value.sorted(),
             accessSavedMemories = settings.accessSavedMemories.value,
             accessActiveMemory = settings.accessActiveMemory.value,
             skillReadAccess = skillReadAccess,

@@ -64,6 +64,7 @@ internal fun MessageSourceLabel(source: MessageSource, modifier: Modifier = Modi
 private fun sourceIconAndLabel(kind: MessageSource.Kind): Pair<ImageVector, String> = when (kind) {
     MessageSource.Kind.TASK -> Icons.Default.Schedule to stringResource(R.string.message_source_task)
     MessageSource.Kind.LOOP -> Icons.Default.Repeat to stringResource(R.string.message_source_loop)
+    MessageSource.Kind.SUBAGENT -> Icons.Default.QuestionAnswer to stringResource(R.string.message_source_subagent)
     MessageSource.Kind.ASK_USER ->
         Icons.Default.QuestionAnswer to stringResource(R.string.message_source_ask_user)
 }

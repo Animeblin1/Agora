@@ -274,7 +274,25 @@ class AppContainer(
             askUser = askUserController,
             generationRegistry = conversationStateRegistry,
             pauseConversationLoop = { conversationId -> loopManager.stopLoop(conversationId) },
+            additionalTools = { listOf(automationToolProvider, subagentToolProvider) },
         )
+    }
+
+    val subagentManager: com.newoether.agora.automation.SubagentManager by lazy {
+        com.newoether.agora.automation.SubagentManager(
+            conversations = conversationRepository,
+            settings = settingsRepository,
+            transfers = conversationSettingsTransfers,
+            engine = taskExecutionEngine,
+            registry = conversationStateRegistry,
+            coordinator = conversationExecutionCoordinator,
+            gate = automationExecutionGate,
+            scope = appScope,
+            stopLoop = { loopManager.stopLoop(it) },
+        )
+    }
+    val subagentToolProvider: com.newoether.agora.tool.SubagentToolProvider by lazy {
+        com.newoether.agora.tool.SubagentToolProvider(subagentManager)
     }
 
     val taskManager: TaskManager by lazy {
@@ -311,7 +329,7 @@ class AppContainer(
         )
     }
 
-    /** Foreground-only provider: headless automation cannot recursively create automation. */
+    /** Scheduled contexts disable this provider; delegated contexts inherit the parent's switch. */
     val automationToolProvider: AutomationToolProvider by lazy {
         AutomationToolProvider(taskManager, loopManager, { settingsManager.systemPrompts.first() }) {
             settingsManager.automationToolsEnabled.first()
@@ -339,6 +357,8 @@ class AppContainer(
             skillManager = skillManager,
             sandboxFactory = sandboxManagerFactory,
             automationToolProvider = automationToolProvider,
+            subagentToolProvider = subagentToolProvider,
+            subagentManager = subagentManager,
             mcpToolProvider = mcpToolProvider,
             askUser = askUserController,
             shellConfirmation = shellConfirmationController,
@@ -406,6 +426,7 @@ class AppContainer(
                     scope = scope,
                     uploadDirectory = appContext.filesDir,
                     compactFailureMessage = { com.newoether.agora.viewmodel.compactFailureMessage(appContext, it) },
+                    onConversationOpened = chatRuntime.onConversationOpened,
                     allowLocalSandbox = { sandboxManagerFactory?.isAvailable() == true && settingsRepository.sandboxEnabled.value },
                     sandboxHomeDir = { sandboxManagerFactory?.takeIf { it.isAvailable() }?.let { java.io.File(appContext.filesDir, "sandbox-home") } },
                 )

@@ -39,6 +39,32 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class GenerationRequestBuilderProviderDisplayTest {
     @Test
+    fun subagentAdmissionAndContextProjectionDisableDelegationAndHistoryButKeepOtherTools() = runTest {
+        val fixture = RequestBuilderFixture(Constants.PROVIDER_OPENAI, false)
+        coEvery { fixture.conversations.getConversation("conversation") } returns
+            ChatEntity("conversation", "Child", parentConversationId = "parent")
+        val admitted = fixture.builder.captureAdmissionSnapshot("conversation", "run", fixture.modelId)
+        val projected = fixture.builder.captureContextProjectionSnapshot("conversation", fixture.modelId)
+        for (context in listOf(admitted.context, projected.context)) {
+            assertFalse(context.subagentToolsEnabled)
+            assertFalse(context.accessPastConversations)
+            assertTrue(context.shellEnabled)
+            assertTrue(context.skillReadAccess)
+            assertEquals(listOf(fixture.modelId), context.enabledModelIds)
+        }
+        coVerify(exactly = 0) { fixture.conversations.getConversation("parent") }
+    }
+    @Test
+    fun enabledModelIdsAreCompleteSortedAndFrozenAtAdmission() = runTest {
+        val fixture = RequestBuilderFixture(Constants.PROVIDER_OPENAI, false)
+        val models = MutableStateFlow(setOf("Z:last", fixture.modelId, "A:first"))
+        every { fixture.settings.enabledModels } returns models
+        val admitted = fixture.builder.captureAdmissionSnapshot("conversation", "run", fixture.modelId)
+        models.value = emptySet()
+        assertEquals(listOf("A:first", fixture.modelId, "Z:last"), admitted.context.enabledModelIds)
+        assertTrue(admitted.context.subagentToolsEnabled)
+    }
+    @Test
     fun foregroundExistingAdmissionWaitsForSettingsThenUsesCapturedConversation() = runTest {
         val fixture = RequestBuilderFixture(Constants.PROVIDER_OPENAI, false)
         val gate = CompletableDeferred<Unit>()
@@ -319,7 +345,7 @@ class GenerationRequestBuilderProviderDisplayTest {
         assertFalse(snapshot.context.skillReadAccess)
         assertFalse(snapshot.context.skillModifyAccess)
         assertEquals("", snapshot.context.skillCatalog)
-        coVerify(exactly = 0) { fixture.conversations.getConversation(any()) }
+        coVerify(exactly = 1) { fixture.conversations.getConversation("conversation") }
         verify(exactly = 0) { fixture.memoryManager.getActiveMemory() }
         verify(exactly = 0) { fixture.skillManager.catalog() }
 
@@ -567,6 +593,7 @@ private class RequestBuilderFixture(
                 )
             )
         )
+        every { settings.enabledModels } returns MutableStateFlow(setOf(modelId))
         every { settings.maxContextWindow } returns MutableStateFlow(32_768)
         every { settings.defaultTemperature } returns MutableStateFlow(null)
         every { settings.defaultMaxTokens } returns MutableStateFlow(null)

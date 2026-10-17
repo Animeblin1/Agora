@@ -108,6 +108,7 @@ internal class WebUiChatSession(
     private val compactFailureMessage: (CompactResult.Failed) -> String,
     private val allowLocalSandbox: () -> Boolean = { false },
     sandboxHomeDir: () -> File? = { null },
+    private val onConversationOpened: (String) -> Unit = {},
 ) : ChatClient {
     /** Where this session shows; [browserSeq] is the browser's last open request it follows. */
     data class OpenTarget(
@@ -347,6 +348,7 @@ internal class WebUiChatSession(
         target.value = OpenTarget(conversationId, seq, movedByServer = false)
         openId.value = conversationId
         retainOwnerLocked(conversationId ?: NEW_CHAT_WORKSPACE_ID)
+        conversationId?.let(onConversationOpened)
     }
 
     /** Admits identified row commands without holding the session lock across delete completion. */

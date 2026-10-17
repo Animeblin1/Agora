@@ -63,6 +63,8 @@ data class GenerationConfig(
 
 data class GenerationContext(
     val conversationId: String? = null,
+    val subagentToolsEnabled: Boolean = false,
+    val enabledModelIds: List<String> = emptyList(),
     val todoEnabled: Boolean = true,
     /** Supplied only by the authorized executor, never by Provider arguments. */
     val toolEffectIdentity: RunEffectIdentity? = null,

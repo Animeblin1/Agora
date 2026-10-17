@@ -20,6 +20,7 @@ internal fun ChatEntity.toConversation() = ChatConversation(
     hasUnreadGeneration = hasUnreadGeneration,
     isPinned = isPinned,
     selectedBranchesJson = selectedBranchesJson,
+    parentConversationId = parentConversationId,
 )
 
 internal fun ChatMessage.toStreamCheckpoint(): MessageStreamCheckpoint {
