@@ -221,7 +221,7 @@ internal object ShellToolDefinitions {
                         "path" to ToolProperty("string", "File or directory to search in (optional)."),
                         "glob" to ToolProperty("string", "Filter files by glob pattern (optional)."),
                         "case_insensitive" to ToolProperty("boolean", "Match case-insensitively (optional, default false)."),
-                        "context" to ToolProperty("integer", "Lines of context before and after each match, 0-$SHELL_FILE_GREP_MAX_CONTEXT_LINES (optional, default 0).")
+                        "context" to ToolProperty("integer", "Lines of context before and after each match (optional, default 0). Values are clamped to 0-$SHELL_FILE_GREP_MAX_CONTEXT_LINES.")
                     ),
                     required = listOf("pattern") + fileRequired
                 )

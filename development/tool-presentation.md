@@ -36,6 +36,19 @@ The active-memory reader is a distinct display target, not an ordinary saved mem
 
 Memory/skill rename summaries show old and new names when known; description edits name the description action. `ask_user` distinguishes waiting for answers, queued questions, answered questions and skipped questions using actual returned facts. A mixed set shows answered count against returned question count without claiming every question was answered. Question outcomes are natural sentences with quantity grammar (`Answered 1 question`, `Answered 3 questions`, `Answered 2 of 3 questions`, `Skipped 2 questions`, `Queued 2 questions`), never label-colon-count text. `stop_loop` distinguishes a new stop from an already stopped Loop.
 
+## Detail Bodies
+Shell execute, get/wait and stop-job details use the same shell body, including stopped or interrupted
+server results. The compact status remains distinct from command output. A failed call with no real
+output shows only its failure, not an empty-output placeholder. Successful calls without output use
+the localized `(no output)` label. Transport failure never turns arbitrary result text into output.
+Memory, Active Memory and Skill reads render stored text literally through the existing file/code
+body, never Markdown interpretation. One file and Active Memory start their separate line-number
+gutter at 1; multi-file results retain original file separators in one unnumbered code body. Text,
+selection and copy remain unchanged. Compose and WebUI consume this same presentation projection.
+`file_grep` clamps integer `context` to the supported 0..10 range instead of rejecting it; a changed
+value prefixes model-facing text with `context: N (requested M)`, while structured content retains
+the actual backend result. Noninteger values still fail validation.
+
 ## Localization
 
 Every locale contains the same summary keys and placeholder types. Languages may reorder indexed placeholders. Running text uses `…`. Terminal text has no final period. A change to lifecycle semantics must update every locale and the presentation contract tests in the same change.

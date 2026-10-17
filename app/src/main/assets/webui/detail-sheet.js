@@ -143,7 +143,7 @@ function ToolBody({ body }) {
         <${ToolPill} text=${body.status} emphasized /><${ToolPill} text=${body.device} />
       </div>
       ${body.error && html`<div class="tool-terminal tool-gap">${body.error}</div>`}
-      <div class="tool-gap"><${ToolOutput} text=${body.output} /></div>`;
+      ${body.output != null && html`<div class="tool-gap"><${ToolOutput} text=${body.output} /></div>`}`;
     case "paths": return html`<div class="tool-paths">
       ${body.values.map((path, index) => html`<${ToolPath} key=${index} path=${path} />`)}
     </div>`;

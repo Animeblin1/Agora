@@ -36,7 +36,7 @@ internal sealed interface ToolDetailBody {
     data class Stopped(val text: String) : ToolDetailBody
     data class Muted(val text: String) : ToolDetailBody
     data class JsonContent(val values: List<String>) : ToolDetailBody
-    data class Shell(val status: String, val device: String, val error: String?, val output: String) : ToolDetailBody
+    data class Shell(val status: String, val device: String, val error: String?, val output: String?) : ToolDetailBody
     data class Paths(val values: List<ToolDetailPath>) : ToolDetailBody
     data class Grep(val groups: List<ToolDetailMatchGroup>) : ToolDetailBody
     /** [lines] is set for line-mode reads so the number gutter is rendered outside the text. */
@@ -152,12 +152,14 @@ private fun codeArgumentSource(presentation: ToolPresentation): JsonObject? {
 private const val MAX_LIVE_COMMAND_ARGUMENT_CHARS = 96 * 1024
 
 private fun Resources.toolDetailBody(presentation: ToolPresentation): ToolDetailBody {
-    if (presentation.kind in setOf(ToolKind.SHELL_EXECUTE, ToolKind.SHELL_JOB_GET, ToolKind.SHELL_JOB_WAIT)) {
+    if (presentation.kind in setOf(ToolKind.SHELL_EXECUTE, ToolKind.SHELL_JOB_GET, ToolKind.SHELL_JOB_WAIT, ToolKind.SHELL_JOB_STOP)) {
         return ToolDetailBody.Shell(
             status = shellExecutionSummary(presentation),
             device = presentation.device?.takeIf(String::isNotBlank) ?: getString(R.string.tool_unknown_device),
             error = presentation.errorMessage?.takeIf { presentation.state == ToolPresentationState.FAILED && it.isNotBlank() },
-            output = shellOutputText(presentation) ?: getString(R.string.tool_no_output),
+            output = shellOutputText(presentation) ?: getString(R.string.tool_no_output).takeUnless {
+                presentation.state == ToolPresentationState.FAILED
+            },
         )
     }
     return when (presentation.state) {
@@ -234,6 +236,8 @@ private fun Resources.completedToolDetailBody(presentation: ToolPresentation): T
         ToolKind.MEMORY_EDIT,
         ToolKind.SKILL_EDIT,
         ToolKind.MEMORY_UPDATE_ACTIVE -> memoryPatchBody(presentation) ?: rawToolDetailBody(presentation)
+        ToolKind.MEMORY_READ,
+        ToolKind.SKILL_READ -> storedFileReadBody(presentation) ?: rawToolDetailBody(presentation)
         ToolKind.WEB_SEARCH -> {
             val results = (result?.get("results") as? JsonArray).orEmpty().mapIndexed { index, value ->
                 val item = value as? JsonObject
@@ -258,6 +262,27 @@ private fun Resources.completedToolDetailBody(presentation: ToolPresentation): T
         }
         else -> rawToolDetailBody(presentation)
     }
+}
+
+/**
+ * Memory and skill reads return the stored Markdown as-is, so they render like file_read: a
+ * single file (or the active memory) gets a line-number gutter from line 1, while a multi-file
+ * read keeps its `--- name ---` separators in one unnumbered code block.
+ */
+private fun Resources.storedFileReadBody(presentation: ToolPresentation): ToolDetailBody? {
+    val content = presentation.rawTextResult ?: presentation.rawResult ?: return null
+    val activeMemory = presentation.toolName == "read_active_memory"
+    // The resolver sets a read's subject only when exactly one file was requested.
+    val name = presentation.subject?.takeUnless { activeMemory }
+    val lines = if (activeMemory || name != null) numberedCodeLines(content) else null
+    return ToolDetailBody.FileContent(
+        path = name?.let { toolDetailPath(it) },
+        lineCount = lines?.size?.takeIf { it > 0 }?.let { getString(R.string.tool_line_count, it) },
+        content = content,
+        emptyText = getString(R.string.tool_read_file_empty_default),
+        truncationText = null,
+        lines = lines,
+    )
 }
 
 // Shell/file tools give the model plain text but keep the JSON envelope as the structured

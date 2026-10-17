@@ -34,7 +34,7 @@ class ToolDetailPresentationTest {
         )
         assertEquals(ToolDetailBody.Failed(resources.getString(R.string.tool_call_failed), null), body(failed))
         assertEquals(
-            ToolDetailBody.Stopped(resources.getString(R.string.tool_execution_stopped)),
+            ToolDetailBody.Stopped(resources.stoppedToolSummary(ToolPresentationResolver.resolve(segment("web_search", "{}", ToolExecutionStates.STOPPED)))),
             body(segment("web_search", "{}", ToolExecutionStates.STOPPED)),
         )
         val background = segment("unknown", "{\"output\":\"live\"}", ToolExecutionStates.BACKGROUND_RUNNING)
@@ -234,6 +234,20 @@ class ToolDetailPresentationTest {
         assertNull(resources.toolDetailPresentation(raw.copy(toolArgs = "{}")).arguments)
     }
 
+    @Test fun memoryReadsKeepLiteralMarkdownAndSingleFileLineNumbers() {
+        val markdown = "# title\nError: this is stored content\n{\"error\":\"literal\"}"
+        val read = body(segment("read_memory_file", markdown, args = """{"name":"notes.md"}""")) as ToolDetailBody.FileContent
+        assertEquals(markdown, read.content)
+        assertEquals(ToolDetailPath("notes.md", null), read.path)
+        assertEquals(listOf(1, 2, 3), read.lines!!.map { (it as ToolDetailCodeRow.Line).number })
+        val active = body(segment("read_active_memory", markdown)) as ToolDetailBody.FileContent
+        assertNull(active.path)
+        assertEquals(read.lines, active.lines)
+        val batch = body(segment("read_memory_file", markdown, args = """{"names":["a","b"]}""")) as ToolDetailBody.FileContent
+        assertNull(batch.lines)
+        val failed = body(segment("stop_shell_job", "", ToolExecutionStates.FAILED)) as ToolDetailBody.Shell
+        assertNull(failed.output)
+    }
     @Test fun composeRendersTheSharedShellAndFileDetails() {
         val current = mutableStateOf(segment("execute_shell_command", "{\"exit_code\":7,\"output\":\"command output\"}"))
         compose.setContent { MaterialTheme { ToolDetailContent(current.value) { _, _ -> } } }
@@ -250,6 +264,6 @@ class ToolDetailPresentationTest {
         compose.onNodeWithText(resources.getString(R.string.tool_call_failed)).assertExists()
         compose.onNodeWithText("hidden result").assertDoesNotExist()
         compose.runOnIdle { current.value = segment("web_search", "{}", ToolExecutionStates.STOPPED) }
-        compose.onNodeWithText(resources.getString(R.string.tool_execution_stopped)).assertExists()
+        compose.onNodeWithText(resources.stoppedToolSummary(ToolPresentationResolver.resolve(current.value))).assertExists()
     }
 }

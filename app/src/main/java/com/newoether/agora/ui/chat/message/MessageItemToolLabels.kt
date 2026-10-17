@@ -419,7 +419,8 @@ private fun Resources.optionalSubjectSummary(
 
 internal fun Resources.stoppedToolSummary(presentation: ToolPresentation): String =
     getString(if (presentation.jobState == "interrupted") R.string.tool_interrupted
-        else if (presentation.kind == ToolKind.SHELL_EXECUTE) R.string.tool_state_stopped
+        else if (presentation.kind in setOf(ToolKind.SHELL_EXECUTE, ToolKind.SHELL_JOB_GET,
+            ToolKind.SHELL_JOB_WAIT, ToolKind.SHELL_JOB_STOP)) R.string.tool_state_stopped
         else R.string.tool_execution_stopped)
 
 private fun Resources.editActionSummary(presentation: ToolPresentation, subject: String?, active: Boolean): String? =

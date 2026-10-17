@@ -768,11 +768,9 @@ class ShellToolProvider(
         val basePath = arg(args, "path")
         val fileGlob = arg(args, "glob")
         val rawContext = arg(args, "context")
-        val context = if (rawContext.isBlank()) 0 else rawContext.toIntOrNull()
+        val requestedContext = if (rawContext.isBlank()) 0 else rawContext.toIntOrNull()
             ?: return jsonError("file_grep", "context must be an integer")
-        if (context !in 0..SHELL_FILE_GREP_MAX_CONTEXT_LINES) {
-            return jsonError("file_grep", "context must be between 0 and $SHELL_FILE_GREP_MAX_CONTEXT_LINES")
-        }
+        val context = requestedContext.coerceIn(0, SHELL_FILE_GREP_MAX_CONTEXT_LINES)
         val options = ShellGrepOptions(
             caseInsensitive = boolArg(args, "case_insensitive"),
             context = context,

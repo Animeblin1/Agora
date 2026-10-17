@@ -83,7 +83,11 @@ internal fun shellModelFacingResult(
     val args = parseToolArgs(arguments)
     val searchRoot = arg(args, "path").takeIf { name == "file_glob" || name == "file_grep" }
     val text = shellToolModelText(name, result.text, parseTailLines(arguments), searchRoot) ?: return result
-    return result.copy(text = text, structuredContent = result.text)
+    val requested = arg(args, "context").toIntOrNull()
+    val rendered = if (name == "file_grep" && requested != null && requested !in 0..com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTEXT_LINES) {
+        "context: ${requested.coerceIn(0, com.newoether.agora.util.SHELL_FILE_GREP_MAX_CONTEXT_LINES)} (requested $requested)\n$text"
+    } else text
+    return result.copy(text = rendered, structuredContent = result.text)
 }
 
 internal fun parseTailLines(arguments: String): Int? =

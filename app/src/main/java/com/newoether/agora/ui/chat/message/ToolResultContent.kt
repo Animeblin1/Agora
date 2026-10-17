@@ -349,8 +349,10 @@ private fun ShellResult(body: ToolDetailBody.Shell) {
         Spacer(Modifier.height(8.dp))
         ToolErrorContent(it)
     }
-    Spacer(Modifier.height(8.dp))
-    TerminalOutput(body.output)
+    body.output?.let {
+        Spacer(Modifier.height(8.dp))
+        TerminalOutput(it)
+    }
 }
 
 @Composable

@@ -168,6 +168,17 @@ class ShellToolTextTest {
     }
 
     @Test
+    fun grepClampingIsReportedWithoutChangingStructuredResult() {
+        val raw = """{"type":"file_grep","matches":[],"truncated":false}"""
+        for ((requested, effective) in listOf(30 to 10, -3 to 0)) {
+            val result = shellModelFacingResult("file_grep", """{"context":$requested}""", ToolExecutionResult(raw))
+            assertTrue(result.text.startsWith("context: $effective (requested $requested)\n"))
+            assertEquals(raw, result.structuredContent)
+        }
+        assertFalse(shellModelFacingResult("file_grep", """{"context":10}""", ToolExecutionResult(raw)).text.contains("requested"))
+    }
+
+    @Test
     fun globAndGrepShowPathsRelativeToTheSearchRoot() {
         val glob = """{"type":"file_glob","files":["C:\\repo\\src\\a.kt","C:\\repo\\b.kt","D:\\other.kt"],"truncated":false}"""
         val globResult = shellModelFacingResult("file_glob", """{"path":"C:\\repo\\"}""", ToolExecutionResult(glob))

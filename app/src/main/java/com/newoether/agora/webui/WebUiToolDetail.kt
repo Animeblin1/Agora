@@ -130,7 +130,7 @@ internal sealed interface WebToolBody {
     @Serializable @SerialName("documents")
     data class Documents(val values: List<WebToolDocument>) : WebToolBody
     @Serializable @SerialName("shell")
-    data class Shell(val status: String, val device: String, val error: String?, val output: String) : WebToolBody
+    data class Shell(val status: String, val device: String, val error: String?, val output: String?) : WebToolBody
     @Serializable @SerialName("paths")
     data class Paths(val values: List<WebToolPath>) : WebToolBody
     @Serializable @SerialName("grep")

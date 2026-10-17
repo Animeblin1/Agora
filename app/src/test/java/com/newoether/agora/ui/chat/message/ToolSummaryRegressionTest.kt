@@ -268,7 +268,7 @@ class ToolSummaryRegressionTest {
                     val summary = resources.toolSummary(segment)
                     if (state == "stopped" || state == "interrupted") {
                         assertEquals(ToolExecutionStates.STOPPED, wire)
-                        assertEquals(if (state == "interrupted") "Interrupted" else if (name == "execute_shell_command") "Stopped" else "Tool execution stopped", summary)
+                        assertEquals(if (state == "interrupted") "Interrupted" else "Stopped", summary)
                     } else {
                         assertEquals(ToolExecutionStates.BACKGROUND_RUNNING, wire)
                         assertEquals("Running in background", summary)
