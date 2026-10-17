@@ -1576,6 +1576,17 @@ count. Tapping opens a read-only list through the existing SmoothBottomSheet/Det
 rows show selectable literal content and accessible pending/in-progress/completed status icons.
 There are no checkbox toggles, edits or browser mutation commands: only the model's ordinary
 `update_todo` tool changes the list. Closing a sheet does not modify it.
+Typography follows the existing interaction and detail surfaces rather than inherited defaults:
+the native capsule title is `titleSmall` with explicit Bold, its count is `labelMedium`, and the
+sheet title uses `ChatType.detailTitle` (22sp/28sp Bold). The native sheet count remains
+`labelMedium`; its centered header uses the existing 24dp horizontal/12dp vertical title insets
+and inset divider. Literal rows retain `bodyMedium` Normal. WebUI matches its established
+Interaction Bar metrics (14px/20px Bold title, 12px/16px Medium count), reuses the shared
+DetailSheet title, and keeps 14px/20px Normal rows. Every text tier uses the effective App font.
+The native list fills the sheet's remaining content viewport, including blank space below short
+lists, so body drags reach SmoothBottomSheet's existing nested-scroll owner. Blank-body dragging
+expands, collapses and dismisses the sheet with both normal and Reduced Motion. The visible gaps
+from Interaction Bar to Todo and from Todo to Composer remain equal at 8dp/px on both surfaces.
 The selected owner's narrow Room observation drives both surfaces. Changing owner, clearing the list
 or disconnecting closes the sheet and clears old presentation. Browser events carry the current
 conversation and selection sequence; stale events are ignored. Startup and drawer loading do not
