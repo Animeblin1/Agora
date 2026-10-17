@@ -11,6 +11,7 @@ internal suspend fun ConversationRepository.forwardTargetTools(
     session: WebUiChatSession, target: WebUiChatSession.OpenTarget,
     connectionId: String, outbound: SendChannel<WebSyncEvent>,
 ) = kotlinx.coroutines.coroutineScope {
+    launch { forwardSubagents(target.conversationId, target.browserSeq, outbound) }
     launch { forwardTodo(target.conversationId, target.browserSeq, outbound) }
     launch { forwardBranchReplacement(session, target, connectionId, outbound) }
 }

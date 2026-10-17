@@ -275,7 +275,7 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
  * ChatTopBar: title capsule (menu + brand, or the conversation title at conversationTitleSolo)
  * and actions capsule (new chat + more).
  */
-function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, menuButton, reduceMotion, onSignedOut, connected, onFork, onShare, pageBusy, onSystemPrompt, promptEnabled, search, generating }) {
+function TopBar({ title, subtitle, conversationId, parentConversationId, drawerOpen, onToggleDrawer, menuButton, reduceMotion, onSignedOut, connected, onFork, onShare, pageBusy, onSystemPrompt, promptEnabled, search, generating }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [retainedMenu, setRetainedMenu] = useState(false);
   const moreButton = useRef(null);
@@ -434,9 +434,9 @@ function TopBar({ title, subtitle, conversationId, drawerOpen, onToggleDrawer, m
       <div class="capsule title-capsule">
         <div class="title-canvas" ref=${titleCanvas}>
           <div class="title-content">
-            <button class="bar-button" type="button" ref=${menuButton} aria-label=${t.menu}
-              aria-controls="drawer" aria-expanded=${drawerOpen ? "true" : "false"} onClick=${onToggleDrawer}>
-              ${icon(ICON_MENU)}
+            <button class="bar-button" type="button" ref=${menuButton} aria-label=${parentConversationId ? t.backToParent : t.menu}
+              aria-controls=${parentConversationId ? null : "drawer"} aria-expanded=${parentConversationId ? null : drawerOpen ? "true" : "false"} onClick=${onToggleDrawer}>
+              ${icon(parentConversationId ? ICON_ARROW_BACK : ICON_MENU)}
             </button>
             <div class="title-labels">
               ${presentations.map((frame) => html`<h1 key=${frame.identity}
@@ -765,7 +765,7 @@ export function Shell({ onSignedOut }) {
   }
   function beginDrawerDrag(event) {
     dragClick.current = null;
-    if (sideBySide || !event.isPrimary || event.button !== 0 ||
+    if (state.parentConversationId || sideBySide || !event.isPrimary || event.button !== 0 ||
         event.target.closest(".detail-sheet-layer, .dropdown, dialog, input, textarea, a, [contenteditable]") ||
         !window.getSelection()?.isCollapsed ||
         (event.pointerType === "mouse" && event.target.closest(".markdown, .user-text"))) return;
@@ -816,6 +816,7 @@ export function Shell({ onSignedOut }) {
     endDrawerDrag(null, true);
     const was = previousWide.current;
     previousWide.current = sideBySide;
+    if (state.parentConversationId) { settleDrawer(false); return; }
     if (was === null) {
       const open = sideBySide && readDrawerPinned();
       drawerTarget.current = open ? 1 : 0;
@@ -825,7 +826,7 @@ export function Shell({ onSignedOut }) {
     }
     if (was === sideBySide) { settleDrawer(drawerTarget.current > 0); return; }
     settleDrawer(sideBySide && readDrawerPinned());
-  }, [sideBySide, reduceMotion]);
+  }, [sideBySide, reduceMotion, state.parentConversationId]);
   // ChatTopBar falls back to the brand while the title is blank.
   const openTitle = state.conversations.find((c) => c.id === state.openId)?.title?.trim() || null;
   // ChatTopBar stacks the token subtitle under a conversation title and hides it with the brand
@@ -893,13 +894,14 @@ export function Shell({ onSignedOut }) {
       </aside>
       <div class="scrim" aria-hidden="true" onClick=${() => settleDrawer(false)}></div>
       <main class=${`chat ${composerExpanded ? "chat-composer-expanded" : ""}`} inert=${modalOpen}>
-        <${TopBar} title=${openTitle} subtitle=${contextSubtitle} conversationId=${state.openId} drawerOpen=${drawerOpen} menuButton=${menuButton} reduceMotion=${reduceMotion} onSignedOut=${onSignedOut} connected=${state.connected}
+        <${TopBar} title=${openTitle} subtitle=${contextSubtitle} conversationId=${state.openId} parentConversationId=${state.parentConversationId} drawerOpen=${drawerOpen} menuButton=${menuButton} reduceMotion=${reduceMotion} onSignedOut=${onSignedOut} connected=${state.connected}
           generating=${!!state.generating}
           search=${state.conversationSearch}
           onSystemPrompt=${() => openPageAction("system_prompt")}
           promptEnabled=${state.connected && !!state.composer?.systemPrompt && !state.composer?.controls?.lowContextModeEnabled && !state.pendingAction}
           onFork=${() => openPageAction("fork")} onShare=${() => openPageAction("share")} pageBusy=${!!state.pageAction}
           onToggleDrawer=${() => {
+            if (state.parentConversationId) { sync.open(state.parentConversationId); return; }
             if (!sideBySide) { settleDrawer(drawerTarget.current === 0); return; }
             // In the wide window the button toggles the persisted pin, not a temporary overlay.
             const next = !drawerPinned;

@@ -132,6 +132,7 @@ function formatRowTime(value) {
 const SOURCE_LABELS = {
   task: [ICON_SCHEDULE, "sourceTask"],
   loop: [ICON_REPEAT, "sourceLoop"],
+  subagent: [ICON_QUESTION_ANSWER, "sourceSubagent"],
   ask_user: [ICON_QUESTION_ANSWER, "sourceAskUser"],
 };
 

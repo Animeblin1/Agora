@@ -81,6 +81,8 @@ class WebUiSyncTest {
     private val todo = MutableStateFlow<String?>(null)
     private val todoDao = mockk<com.newoether.agora.data.local.ChatDao> {
         every { observeConversationTodo(any()) } returns todo
+        every { observeParentConversationId(any()) } returns flowOf(null)
+        every { observeSubagents(any()) } returns flowOf(emptyList())
     }
     private val conversations = mockk<ConversationRepository> {
         every { chatDao } returns todoDao

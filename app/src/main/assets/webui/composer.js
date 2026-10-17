@@ -8,6 +8,7 @@ import { icon, ICON_ADD, ICON_ARROW_UPWARD, ICON_EXPAND_ALL, ICON_COLLAPSE_ALL, 
 import { sync } from "./sync.js";
 import { Markdown } from "./markdown.js";
 import { TodoBar } from "./todo.js";
+import { SubagentsBar } from "./subagents.js";
 import { InteractionBar } from "./interaction.js";
 import { DetailSheet } from "./detail-sheet.js";
 import { ICON_NEUROLOGY, ICON_MEMORY, ICON_SPEED, ICON_TERMINAL, ICON_LANGUAGE, ICON_COMPRESS, ICON_TUNE, ICON_CHEVRON_DOWN, ICON_GOOGLE, ICON_OPENAI } from "./icons.js";
@@ -524,6 +525,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
     <div class=${`composer-host ${expanded ? "composer-expanded" : ""}`} ref=${host}>
       <${InteractionBar} state=${state} />
       <${TodoBar} state=${state} />
+      <${SubagentsBar} state=${state} />
       <div class="composer-outer-spacer" ref=${outerSpacer} aria-hidden="true"></div>
       <form class="composer" onSubmit=${(event) => {
         event.preventDefault();

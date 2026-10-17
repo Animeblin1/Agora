@@ -41,7 +41,7 @@ let state = {
   /** This connection's own drawer-row delete: the command in flight and the answer it got. */
   conversationDelete: null,
   conversationDeleteResult: null,
-  todo: [],
+  todo: [], subagents: [], parentConversationId: null,
   interactions: [],
   interactionPending: 0,
   snackbar: null,
@@ -104,7 +104,7 @@ function select(conversationId, patch = {}) {
     phase: "IDLE", generating: false, stopping: false } : null;
   update({ openId: conversationId, openStatus: conversationId ? "loading" : null,
     path: [], generating: false, streaming: null, bodies: new Map(), scrollRequest: null, branchReplacement: null,
-    pageAction: null, pageResult: null, shareText: null, todo: [], interactions: [], interactionPending: 0, conversationSearch: null,
+    pageAction: null, pageResult: null, shareText: null, todo: [], subagents: [], parentConversationId: null, interactions: [], interactionPending: 0, conversationSearch: null,
     composer, context: state.context, ...patch });
 }
 
@@ -141,6 +141,10 @@ function receive(event, size) {
       if (event.connectionId !== state.connectionId || event.revision !== searchRevision || event.query !== state.searchQuery) return;
       update({ searchLoading: event.searching, searchFailed: !!event.failed,
         ...(!event.searching ? { searchResults: event.items || [] } : {}) });
+      break;
+    case "subagents":
+      if ((event.conversationId ?? null) !== state.openId || event.seq !== openSeq) return;
+      update({ subagents: event.items || [], parentConversationId: event.parentConversationId ?? null });
       break;
     case "todo":
       if ((event.conversationId ?? null) !== state.openId || event.seq !== openSeq) return;
@@ -278,7 +282,7 @@ function connect() {
     retryMs = 1_000;
     update({ connected: true, composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, branchReplacement: null, connectionId: null,
       conversationDelete: null, conversationDeleteResult: null,
-      listLoading: true, listLimit: 0, todo: [], interactions: [], interactionPending: 0 });
+      listLoading: true, listLimit: 0, todo: [], subagents: [], parentConversationId: null, interactions: [], interactionPending: 0 });
     update({ searchQuery: "", searchResults: [], searchLoading: false, searchFailed: false });
     update({ conversationSearch: null });
     send({ type: "open", conversationId: state.openId, seq: openSeq });
@@ -297,7 +301,7 @@ function connect() {
     update({ connected: false, switching: state.switching ? { ...state.switching, phase: "settling", confirmation: false } : null,
       composer: null, context: null, pendingAction: 0, pageAction: null, pageResult: null, shareText: null, branchReplacement: null, connectionId: null,
       conversationDelete: null, conversationDeleteResult: null,
-      todo: [], interactions: [], interactionPending: 0,
+      todo: [], subagents: [], parentConversationId: null, interactions: [], interactionPending: 0,
       conversationSearch: null,
       searchQuery: "", searchResults: [], searchLoading: false, searchFailed: false,
       snackbar: state.pendingAction ? { id: ++noticeId, message: t.sendUnconfirmed } : state.snackbar });

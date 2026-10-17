@@ -70,6 +70,11 @@ internal sealed interface WebSyncEvent {
         val conversationId: String?, val seq: Long,
         val items: List<com.newoether.agora.model.ConversationTodoItem>,
     ) : WebSyncEvent
+    @Serializable @SerialName("subagents")
+    data class Subagents(
+        val conversationId: String?, val seq: Long, val parentConversationId: String?,
+        val items: List<com.newoether.agora.model.SubagentSummary>,
+    ) : WebSyncEvent
     @Serializable @SerialName("conversations")
     data class Conversations(val items: List<WebConversation>, val hasMore: Boolean = false, val limit: Int = WebUiSync.DRAWER_PAGE_SIZE) : WebSyncEvent
 
