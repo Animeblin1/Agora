@@ -167,6 +167,7 @@ class ConversationForkShareService(
         val forkConversation = ChatEntity(
             id = newConversationId,
             title = source.title,
+            todoJson = source.todoJson,
             selectedBranchesJson = explicitMessageSelections.encodeSelections(),
             systemPromptId = source.systemPromptId,
             modelId = source.modelId,

@@ -42,7 +42,7 @@ import com.newoether.agora.util.gradientBlur
 import com.newoether.agora.ui.chat.bottombar.CHAT_BOTTOM_BAR_OUTER_SHAPE
 import com.newoether.agora.ui.chat.bottombar.ChatBottomBar
 import com.newoether.agora.ui.chat.bottombar.LoopStatusBackdrop
-import com.newoether.agora.ui.chat.interaction.ChatUserInteractionBar
+import com.newoether.agora.ui.chat.interaction.ChatConversationToolsOverlay
 import com.newoether.agora.ui.components.AnimatedBlobBackground
 import com.newoether.agora.ui.components.clearFocusOnTap
 import com.newoether.agora.ui.common.LocalAgoraHaptics
@@ -663,7 +663,7 @@ fun ChatApp(
 
             // Pending questions and shell confirmations sit above the composer instead of in a
             // dialog, so the conversation stays readable while they wait for an answer.
-            ChatUserInteractionBar(
+            ChatConversationToolsOverlay(
                 viewModel = viewModel,
                 conversationId = currentConversationId,
                 autoWrapCodeBlocks = autoWrapCodeBlocks,

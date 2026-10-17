@@ -259,6 +259,7 @@ internal class ConversationCompactController(
             thinkingEnabled = false,
         ),
         context = context.copy(
+            todoEnabled = false,
             accessSavedMemories = false,
             accessActiveMemory = false,
             skillReadAccess = false,

@@ -1475,7 +1475,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .user-row > .branch-selector { align-self: flex-end; margin-top: 4px; }
 .message-actions > .branch-selector { margin-left: 8px; }
 /* Native bottom FAB: interaction lift is published by the existing card appearance owner. */
-.scroll-bottom-slot { position: absolute; bottom: calc(var(--chat-bottom-inset) + var(--chat-interaction-lift, 0px) + 8px); left: 0; right: 0; width: 48px; height: 48px; margin: 0 auto; display: grid; place-items: center; z-index: 1; }
+.scroll-bottom-slot { position: absolute; bottom: calc(var(--chat-bottom-inset) + var(--chat-interaction-lift, 0px) + var(--chat-todo-lift, 0px) + 8px); left: 0; right: 0; width: 48px; height: 48px; margin: 0 auto; display: grid; place-items: center; z-index: 1; }
 .scroll-bottom-button { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--tonal-4); color: var(--md-on-surface); opacity: 0; transform: scale(.6); cursor: pointer; }
 .scroll-bottom-button svg { width: 24px; height: 24px; fill: currentColor; }
 /* ChatComposerSurface: 12 dp above, 8 dp around, content at most 840 dp. */
@@ -1485,7 +1485,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(100% - 12px);
+  bottom: calc(100% - 12px + var(--chat-todo-lift, 0px));
   /* InteractionDeck: widthIn(max = 840) then padding(horizontal = 12), so the card is inset 12 dp
      on each side and at most 816 dp wide. */
   width: min(calc(100% - 24px), 816px);
@@ -1541,6 +1541,18 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .interaction-actions button:disabled { cursor: default; color: color-mix(in srgb, var(--md-on-surface) 38%, transparent); }
 .interaction-actions .filled-button:disabled { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent); }
 .interaction-action-space { flex: 1; }
+.todo-host { position: absolute; bottom: calc(100% - 12px); left: 12px; right: 12px; display: flex; justify-content: center; padding-bottom: 8px; pointer-events: none; }
+.todo-host > .detail-sheet-layer { pointer-events: auto; }
+.todo-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: 816px; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); box-shadow: var(--shadow-4); font: inherit; cursor: pointer; pointer-events: auto; }
+.todo-capsule > svg { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--md-primary); }
+.todo-capsule strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; letter-spacing: 0; }
+.todo-capsule > span { flex: none; font-size: 12px; color: var(--md-on-surface-variant); }
+.todo-list { padding: 4px 24px 24px; }
+.todo-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; font-size: 14px; line-height: 20px; }
+.todo-status { width: 20px; height: 20px; flex: none; color: var(--md-on-surface-variant); }
+.todo-status svg { width: 20px; height: 20px; fill: currentColor; }
+.todo-item[data-status="in_progress"] .todo-status { color: var(--md-primary); }
+.todo-content { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .composer-host {
   position: relative;
   z-index: 1;

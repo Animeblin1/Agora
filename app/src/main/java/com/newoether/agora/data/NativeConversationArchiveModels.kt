@@ -21,6 +21,7 @@ internal data class NativeExportChatEntity(
     val lastUpdated: Long,
     val dataChangedAt: Long = 0L,
     val isPinned: Boolean = false,
+    val todoJson: String? = null,
     val selectedBranchesJson: String? = null,
     val systemPromptId: String? = null,
     val modelId: String? = null,

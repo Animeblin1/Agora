@@ -65,6 +65,11 @@ internal sealed interface WebSyncEvent {
     ) : WebSyncEvent
     @Serializable @SerialName("interactions")
     data class Interactions(val conversationId: String?, val seq: Long, val actionId: Long, val items: List<JsonObject>) : WebSyncEvent
+    @Serializable @SerialName("todo")
+    data class Todo(
+        val conversationId: String?, val seq: Long,
+        val items: List<com.newoether.agora.model.ConversationTodoItem>,
+    ) : WebSyncEvent
     @Serializable @SerialName("conversations")
     data class Conversations(val items: List<WebConversation>, val hasMore: Boolean = false, val limit: Int = WebUiSync.DRAWER_PAGE_SIZE) : WebSyncEvent
 

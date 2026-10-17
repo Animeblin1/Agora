@@ -31,6 +31,13 @@ export and import preserve it; archives without the field default to false. Pin/
 conversation's `dataChangedAt` watermark atomically, so incremental backups cannot reuse a stale pin
 value. Pinning does not change `lastUpdated`, the message graph, drafts or device-local unread state.
 
+Conversation `todoJson` is also portable conversation metadata. Native export, import and fork keep
+its complete ordered list independently of branch selection. Missing fields in older archives mean
+no Todo; an empty list normalizes to SQL null. Known malformed contents or statuses reject the
+conversation category during staging, before graph mutation. Accepted Todo tool writes advance the
+conversation's `dataChangedAt` atomically, so incremental backups cannot reuse an obsolete list.
+Todo is not part of portable Settings, message history, device-local unread state or public sharing.
+
 ## 2. Archive envelope and categories
 
 The native format is a ZIP containing `manifest.json`. The manifest records

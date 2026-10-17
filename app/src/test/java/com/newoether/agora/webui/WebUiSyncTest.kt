@@ -78,7 +78,12 @@ class WebUiSyncTest {
         "m1" to message("m1", "root", Participant.MODEL, "x \\(a^2\\) y"),
         "m2" to message("m2", "root", Participant.MODEL, "other"),
     )
+    private val todo = MutableStateFlow<String?>(null)
+    private val todoDao = mockk<com.newoether.agora.data.local.ChatDao> {
+        every { observeConversationTodo(any()) } returns todo
+    }
     private val conversations = mockk<ConversationRepository> {
+        every { chatDao } returns todoDao
         every { observeDrawerConversations(any()) } answers {
             val limit = firstArg<Int>()
             list.map { rows -> rows.take(limit).map { DrawerConversationRow(it.id, it.title, it.hasUnreadGeneration, it.isPinned) } }
@@ -145,6 +150,24 @@ class WebUiSyncTest {
         }
     }
 
+    @Test
+    fun todoIsObservedOnlyForTheSelectedOwnerAndCarriesItsSequence() = sync { send, received ->
+        received()
+        io.mockk.verify(exactly = 0) { todoDao.observeConversationTodo(any()) }
+        send("""{"type":"open","conversationId":"a","seq":11}""")
+        val opened = received().single { it.type == "todo" }
+        assertEquals("a", opened.string("conversationId"))
+        assertEquals("11", opened.string("seq"))
+        todo.value = """[{"content":"Check result","status":"in_progress"}]"""
+        val changed = received().single { it.type == "todo" }
+        assertEquals("Check result", changed["items"]!!.jsonArray.single().jsonObject.string("content"))
+        send("""{"type":"open","seq":12}""")
+        val cleared = received().single { it.type == "todo" }
+        assertEquals("12", cleared.string("seq"))
+        todo.value = """[{"content":"Late result","status":"completed"}]"""
+        assertTrue(received().none { it.type == "todo" })
+        io.mockk.verify(exactly = 1) { todoDao.observeConversationTodo("a") }
+    }
     @Test
     fun drawerPagesAreBoundedAndDuplicateLoadRequestsDoNotAdvanceTwice() = sync { send, received ->
         received()
@@ -769,32 +792,4 @@ class WebUiSyncTest {
     private fun JsonObject.ids(): List<String> =
         this["messages"]!!.jsonArray.map { it.jsonObject.string("id") }
 
-    private fun topology(id: String, parent: String?, participant: Participant, timestamp: Long) =
-        MessageContextTopology(
-            id = id,
-            conversationId = "a",
-            parentId = parent,
-            status = MessageStatus.SUCCESS,
-            participant = participant,
-            timestamp = timestamp,
-            modelName = null,
-            runId = "run-$id",
-            runSequence = timestamp,
-            consumedAtPass = null,
-        )
-
-    private fun message(
-        id: String,
-        parent: String?,
-        participant: Participant,
-        text: String,
-        status: MessageStatus = MessageStatus.SUCCESS,
-    ) = ChatMessage(
-        id = id,
-        parentId = parent,
-        text = text,
-        participant = participant,
-        status = status,
-        timestamp = 10,
-    )
 }

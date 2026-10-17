@@ -579,6 +579,21 @@ conversation title, user text and attachment summaries, assistant answer and tra
 and error content. Inline text versus Markdown-file transport, share selection, and Android chooser
 behavior remain transport/UI concerns and may not reintroduce private Thinking or tool payloads.
 
+### 8.13 Conversation Todo tools
+`TodoToolProvider` exposes `read_todo` and `update_todo` through the ordinary tool executor for an
+opened conversation. One optional `conversations.todoJson` value owns the complete ordered list;
+it is conversation-scoped, not branch-scoped or reconstructed from tool history. Each item has
+nonblank `content` and a `pending`, `in_progress`, or `completed` status. `update_todo` replaces the
+whole list and an empty array clears it. Todo does not schedule automation or create a Task/Loop.
+The executor supplies the authorized `RunEffectIdentity`, never Provider arguments. A single Room
+statement accepts a mutation only for the exact conversation and live ACTIVE Run/pass, active slot
+and absent Stop request, and advances `dataChangedAt` without touching conversation recency, drafts,
+messages or branches. Stale, stopping and terminal writes fail without mutation. Compact disables
+these tools with its other tools. Only explicit selected-owner observation may load Todo; startup
+and drawer queries never read or enumerate Todo payloads. Native and browser capsules are read-only
+projections described in application-ui.md. Required checks cover replacement/clear, stale Run/pass,
+Stop-before-write, unrelated-owner isolation, selected-only observation and archive compatibility.
+
 ## 9. Context assembly contract in module terms
 
 `GenerationApiPathBuilder` receives one immutable durable snapshot and a requested parent ID. It

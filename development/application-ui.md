@@ -1563,6 +1563,22 @@ menu's existing scale/opacity spring, not the generic dialog entrance. A later m
 menu owns input above that exiting menu. The composer's bottom gradient therefore never paints over the
 top-bar title or action capsules; the Compose top bar raises itself to `zIndex(1.5)` above the composer's
 `1` occlusion layer for the same reason.
+## 38. Conversation Todo Capsule
+An opened Agora-owned conversation may have one database-backed Todo list shared across branches.
+Native and WebUI show its content-width, horizontally centered, 48dp/px capsule below the User
+Interaction Bar and above the measured Composer, with an 8dp/px trailing gap. Empty lists and New Chat
+show no capsule. The capsule displays a checklist icon, localized Todo title and completed/total
+count. Tapping opens a read-only list through the existing SmoothBottomSheet/DetailSheet; ordered
+rows show selectable literal content and accessible pending/in-progress/completed status icons.
+There are no checkbox toggles, edits or browser mutation commands: only the model's ordinary
+`update_todo` tool changes the list. Closing a sheet does not modify it.
+The selected owner's narrow Room observation drives both surfaces. Changing owner, clearing the list
+or disconnecting closes the sheet and clears old presentation. Browser events carry the current
+conversation and selection sequence; stale events are ignored. Startup and drawer loading do not
+observe Todo or scan conversation owners. Todo height lifts the existing Interaction Bar and scroll
+button and enters the existing combined bottom-inset measurement, without adding another scroll
+owner. Shared shell focus, selection, motion and Reduced Motion behavior stay canonical.
+
 ## 15. Verification
 
 Focused verification must cover the onboarding action's fixed 32 dp inset and 48 dp height, absence

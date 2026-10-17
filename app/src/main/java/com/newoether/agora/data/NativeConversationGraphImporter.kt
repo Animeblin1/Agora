@@ -177,6 +177,9 @@ internal class NativeConversationGraphImporter(
                     title = conversation.title,
                     lastUpdated = conversation.lastUpdated,
                     isPinned = conversation.isPinned,
+                    todoJson = com.newoether.agora.model.ConversationTodo.encode(
+                        com.newoether.agora.model.ConversationTodo.decode(conversation.todoJson),
+                    ),
                     selectedBranchesJson = conversation.selectedBranchesJson,
                     systemPromptId = resolveSystemPromptId(conversation.systemPromptId),
                     modelId = conversation.modelId,
@@ -680,6 +683,7 @@ internal class NativeConversationGraphImporter(
         val title: String,
         val lastUpdated: Long,
         val isPinned: Boolean = false,
+        val todoJson: String? = null,
         val selectedBranchesJson: String? = null,
         val systemPromptId: String? = null,
         val modelId: String? = null,

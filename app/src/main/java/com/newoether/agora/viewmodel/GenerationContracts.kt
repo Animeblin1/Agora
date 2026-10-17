@@ -63,6 +63,9 @@ data class GenerationConfig(
 
 data class GenerationContext(
     val conversationId: String? = null,
+    val todoEnabled: Boolean = true,
+    /** Supplied only by the authorized executor, never by Provider arguments. */
+    val toolEffectIdentity: RunEffectIdentity? = null,
     val accessSavedMemories: Boolean = true,
     val accessActiveMemory: Boolean = true,
     val skillReadAccess: Boolean = true,

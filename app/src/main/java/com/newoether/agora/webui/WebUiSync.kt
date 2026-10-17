@@ -223,7 +223,7 @@ internal class WebUiSync(
                             outbound.send(WebSyncEvent.Opened(target.conversationId, target.browserSeq))
                         }
                         coroutineScope {
-                            launch { forwardBranchReplacement(session, target, connectionId, outbound) }
+                            launch { conversations.forwardTargetTools(session, target, connectionId, outbound) }
                             launch {
                                 session.composerState
                                     .combine(customProviders) { state, _ -> state }

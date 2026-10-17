@@ -127,6 +127,8 @@ data class ChatEntity(
     /** True after a completed model generation until this conversation becomes the open target. */
     val hasUnreadGeneration: Boolean = false,
     @ColumnInfo(defaultValue = "0") val isPinned: Boolean = false,
+    /** Latest conversation-wide Todo list; null means no list. */
+    val todoJson: String? = null,
 )
 
 /** A saved automation: a prompt + schedule that fans out a fresh conversation on each run. */

@@ -99,6 +99,7 @@ internal class GenerationToolExecutor private constructor(
             }
             return GenerationToolExecutor(
                 providers = listOf(
+                    com.newoether.agora.tool.TodoToolProvider(conversations),
                     MemoryToolProvider(memoryManager),
                     SkillToolProvider(skillManager),
                     WebSearchToolProvider(),
@@ -211,7 +212,8 @@ internal class GenerationToolExecutor private constructor(
             val attemptJob = Job()
             val attempt = CoroutineScope(currentCoroutineContext() + attemptJob).async {
                 var completedResult: ToolExecutionResult? = null
-                provider.executeEvents(call.name, completeArguments, call.context).collect { event ->
+                val context = call.context.copy(toolEffectIdentity = call.batchIdentity)
+                provider.executeEvents(call.name, completeArguments, context).collect { event ->
                     if (event is ToolExecutionEvent.Completed) {
                         completedResult = event.result
                     }
