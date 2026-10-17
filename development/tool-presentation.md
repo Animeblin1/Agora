@@ -45,6 +45,12 @@ Memory, Active Memory and Skill reads render stored text literally through the e
 body, never Markdown interpretation. One file and Active Memory start their separate line-number
 gutter at 1; multi-file results retain original file separators in one unnumbered code body. Text,
 selection and copy remain unchanged. Compose and WebUI consume this same presentation projection.
+Empty JSON arrays and objects render the same localized `No content` label in native and WebUI
+details, including nested values; do not show the `[]`/`{}` literal or an `(empty)` suffix.
+Only complete containers are empty; an open streaming prefix must not claim emptiness or invent
+closing syntax. Nested empty values appear
+once beside their key, without an ellipsis or an extra child block. Raw tool content, copy data,
+and lifecycle semantics stay unchanged; this is shared JSON presentation, not a Todo exception.
 `file_grep` clamps integer `context` to the supported 0..10 range instead of rejecting it; a changed
 value prefixes model-facing text with `context: N (requested M)`, while structured content retains
 the actual backend result. Noninteger values still fail validation.

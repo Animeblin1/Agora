@@ -26,6 +26,7 @@ function ToolDocument({ document }) {
 
 /** Draw only the shared parser's real prefix nodes; never complete or parse JSON in the browser. */
 function ToolJsonNode({ node, depth = 0 }) {
+  if (node.emptyText != null) return html`<span class="tool-muted">${node.emptyText}</span>`;
   if (node.type === "scalar") return html`<span class=${`tool-scalar ${node.kind === "STRING" ? "" : "tool-code literal"}`}>
     ${node.kind === "NULL" && node.complete ? "\u2014" : node.content}</span>`;
   if (node.type === "array") return html`<div class="tool-json-array">
@@ -39,7 +40,7 @@ function ToolJsonNode({ node, depth = 0 }) {
       const value = entry.value;
       const block = value?.type === "scalar" && value.kind === "STRING" &&
         (value.content.length > 40 || value.content.includes("\n"));
-      const nested = value && value.type !== "scalar";
+      const nested = value && value.type !== "scalar" && value.emptyText == null;
       return html`<div class="tool-json-entry" key=${index}>
         <div class="tool-json-row">
           ${(entry.key || entry.keyComplete) && html`<span class="tool-json-label key">${entry.key}</span>`}

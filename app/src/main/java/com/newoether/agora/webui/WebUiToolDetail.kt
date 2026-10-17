@@ -13,6 +13,7 @@ import com.newoether.agora.ui.chat.message.ToolDetailBody
 import com.newoether.agora.ui.chat.message.ToolDetailCodeRow
 import com.newoether.agora.ui.chat.message.ToolDetailPath
 import com.newoether.agora.ui.chat.message.ToolKind
+import com.newoether.agora.ui.chat.message.emptyContainerLiteral
 import com.newoether.agora.ui.chat.message.isImageGenerationSegment
 import com.newoether.agora.ui.chat.message.persistenceAwareJsonSource
 import com.newoether.agora.ui.chat.message.toolDetailPresentation
@@ -27,7 +28,7 @@ internal fun Resources.webToolDetail(segment: MessageSegment): WebToolDetail {
         kind = detail.kind.name,
         argumentsLabel = detail.argumentsLabel,
         resultLabel = detail.resultLabel,
-        arguments = detail.arguments?.let(::webToolDocument),
+        arguments = detail.arguments?.let { webToolDocument(it) },
         codeArgument = detail.codeArgument?.let { code ->
             WebToolCodeArgument(code.name, code.text, code.rows?.map(::webToolCodeRow))
         },
@@ -37,7 +38,7 @@ internal fun Resources.webToolDetail(segment: MessageSegment): WebToolDetail {
             is ToolDetailBody.Failed -> WebToolBody.Failed(body.text, body.output)
             is ToolDetailBody.Stopped -> WebToolBody.Stopped(body.text)
             is ToolDetailBody.Muted -> WebToolBody.Muted(body.text)
-            is ToolDetailBody.JsonContent -> WebToolBody.Documents(body.values.map(::webToolDocument))
+            is ToolDetailBody.JsonContent -> WebToolBody.Documents(body.values.map { webToolDocument(it) })
             is ToolDetailBody.Shell -> WebToolBody.Shell(body.status, body.device, body.error, body.output)
             is ToolDetailBody.Paths -> WebToolBody.Paths(body.values.map(::webToolPath))
             is ToolDetailBody.Grep -> WebToolBody.Grep(body.groups.map { group ->
@@ -84,22 +85,25 @@ private fun webToolCodeRow(row: ToolDetailCodeRow): WebToolCodeRow = when (row) 
     )
 }
 
-internal fun webToolDocument(text: String): WebToolDocument {
+internal fun Resources.webToolDocument(text: String): WebToolDocument {
     val source = persistenceAwareJsonSource(text)
     val document = StreamingJsonParser.parse(source)
     if (document.status == StreamingJsonStatus.INVALID) return WebToolDocument(text = text)
     return WebToolDocument(
-        roots = visibleJsonRoots(document.roots).map(::webToolNode),
+        roots = visibleJsonRoots(document.roots).map { webToolNode(it) },
         marker = text.substring(source.length).trimStart().takeIf(String::isNotEmpty),
     )
 }
 
-private fun webToolNode(node: StreamingJsonNode): WebToolNode = when (node) {
-    is StreamingJsonObject -> WebToolNode.Object(node.entries.map {
-        WebToolEntry(it.key, it.keyComplete, it.value?.let(::webToolNode))
-    }, node.complete)
-    is StreamingJsonArray -> WebToolNode.Array(node.values.map(::webToolNode), node.complete)
-    is StreamingJsonScalar -> WebToolNode.Scalar(node.content, node.kind.name, node.complete)
+private fun Resources.webToolNode(node: StreamingJsonNode): WebToolNode {
+    val emptyText = if (node.emptyContainerLiteral != null) getString(R.string.tool_json_empty_container) else null
+    return when (node) {
+        is StreamingJsonObject -> WebToolNode.Object(node.entries.map {
+            WebToolEntry(it.key, it.keyComplete, it.value?.let { value -> webToolNode(value) })
+        }, node.complete, emptyText)
+        is StreamingJsonArray -> WebToolNode.Array(node.values.map { webToolNode(it) }, node.complete, emptyText)
+        is StreamingJsonScalar -> WebToolNode.Scalar(node.content, node.kind.name, node.complete)
+    }
 }
 
 @Serializable
@@ -180,9 +184,13 @@ internal data class WebToolDocument(
 @Serializable
 internal sealed interface WebToolNode {
     @Serializable @SerialName("object")
-    data class Object(val entries: List<WebToolEntry>, val complete: Boolean) : WebToolNode
+    data class Object(
+        val entries: List<WebToolEntry>, val complete: Boolean, val emptyText: String? = null,
+    ) : WebToolNode
     @Serializable @SerialName("array")
-    data class Array(val values: List<WebToolNode>, val complete: Boolean) : WebToolNode
+    data class Array(
+        val values: List<WebToolNode>, val complete: Boolean, val emptyText: String? = null,
+    ) : WebToolNode
     @Serializable @SerialName("scalar")
     data class Scalar(val content: String, val kind: String, val complete: Boolean) : WebToolNode
 }
