@@ -72,7 +72,6 @@ internal fun AddCustomProviderPage(
                 Icon(
                     Icons.Default.Save,
                     contentDescription = stringResource(R.string.save),
-                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         },
