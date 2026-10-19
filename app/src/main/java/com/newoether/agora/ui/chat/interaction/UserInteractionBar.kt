@@ -133,7 +133,9 @@ internal fun UserInteractionBar(
     inSharedRow: Boolean = false,
     onMessageInsetChanged: (Float) -> Unit = {},
     appearanceReady: Boolean = true,
+    animateEntry: Boolean = true,
     onTransitionChanged: (String?, Boolean) -> Unit = { _, _ -> },
+    onExpansionChanged: (Float) -> Unit = {},
 ) {
     val motionPolicy = LocalAgoraMotionPolicy.current
     val desired = (conversationId to interactions).takeIf { interactions.isNotEmpty() }
@@ -143,6 +145,7 @@ internal fun UserInteractionBar(
     val progress = remember { Animatable(0f) }
     val latestOnCardGone by rememberUpdatedState(onCardGone)
     val latestAppearanceReady by rememberUpdatedState(appearanceReady)
+    val latestAnimateEntry by rememberUpdatedState(animateEntry)
     val latestTransitionChanged by rememberUpdatedState(onTransitionChanged)
     LaunchedEffect(Unit) {
         snapshotFlow { shown?.first to (shown != null && progress.value > 0f) }
@@ -157,7 +160,8 @@ internal fun UserInteractionBar(
         latestDesired?.let {
             shown = it
             snapshotFlow { latestAppearanceReady }.first { it }
-            progress.animateTo(1f, tween(AppearDurationMs))
+            if (latestAnimateEntry) progress.animateTo(1f, tween(AppearDurationMs))
+            else progress.snapTo(1f)
         }
     }
     var cardHeight by remember { mutableFloatStateOf(0f) }
@@ -174,11 +178,20 @@ internal fun UserInteractionBar(
             latestOnMessageInsetChanged(inset)
         }
     }
+    val latestExpansionChanged by rememberUpdatedState(onExpansionChanged)
     DisposableEffect(Unit) {
-        onDispose { latestOnHeightChanged(0f); latestOnMessageInsetChanged(0f) }
+        onDispose {
+            latestOnHeightChanged(0f)
+            latestOnMessageInsetChanged(0f)
+            latestExpansionChanged(0f)
+        }
     }
-    val current = shown ?: return
+    val current = shown ?: run {
+        SideEffect { latestExpansionChanged(0f) }
+        return
+    }
     val (owner, waiting) = current
+    val expansionPresence = if (motionPolicy.allowSpatialTransitions) progress.value else if (active) 1f else 0f
     key(owner) {
         DisposableEffect(owner) { onDispose { latestOnCardGone(owner) } }
         Box(modifier.then(if (inSharedRow) Modifier else Modifier.fillMaxWidth()).graphicsLayer {
@@ -201,6 +214,7 @@ internal fun UserInteractionBar(
                 pageKey = pageIn[owner],
                 onPageChange = { key -> if (active) onPageChange(owner, key) },
                 inSharedRow = inSharedRow,
+                onExpansionChanged = { latestExpansionChanged(it * expansionPresence) },
                 active = active,
             )
         }
@@ -221,6 +235,7 @@ private fun InteractionDeck(
     pageKey: String?,
     onPageChange: (String) -> Unit,
     inSharedRow: Boolean,
+    onExpansionChanged: (Float) -> Unit,
     active: Boolean,
 ) {
     val shell = interactions.firstNotNullOfOrNull { (it as? UserInteraction.ShellCommand)?.pending }
@@ -263,6 +278,7 @@ private fun InteractionDeck(
                 minimized = minimized,
                 onMinimizedChange = { if (active) onMinimizedChange(it) },
                 inSharedRow = inSharedRow,
+                onExpansionChanged = onExpansionChanged,
             ) {
                 // The header and the buttons stay put and simply show the current page; only the
                 // content between them slides a full width, while the card follows its height.

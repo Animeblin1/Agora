@@ -29,6 +29,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontWeight
 import androidx.test.core.app.ApplicationProvider
 import com.newoether.agora.R
 import com.newoether.agora.model.ChatMessage
@@ -261,6 +262,33 @@ class AutomaticUserMessageBubbleTest {
         }
         compose.runOnIdle { current = message(MessageSource(MessageSource.Kind.SUBAGENT), "Inspect the native bubble") }
         compose.onNodeWithText("Inspect the native bubble", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun completionTextUsesNeutralHierarchyAndKeepsExistingTypography() {
+        var expectedName = Color.Unspecified
+        var expectedStatus = Color.Unspecified
+        content {
+            expectedName = MaterialTheme.colorScheme.onSurface
+            expectedStatus = MaterialTheme.colorScheme.onSurfaceVariant
+            bubble(message(completion()))
+        }
+        fun style(text: String): androidx.compose.ui.text.TextStyle {
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(text, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            return layouts.single().layoutInput.style
+        }
+        val name = style("Worker")
+        val status = style(label(R.string.subagent_completed))
+        assertEquals(expectedName, name.color)
+        assertEquals(FontWeight.SemiBold, name.fontWeight)
+        assertEquals(14f, name.fontSize.value, 0f)
+        assertEquals(20f, name.lineHeight.value, 0f)
+        assertEquals(expectedStatus, status.color)
+        assertEquals(FontWeight.Medium, status.fontWeight)
+        assertEquals(12f, status.fontSize.value, 0f)
+        assertEquals(16f, status.lineHeight.value, 0f)
     }
 
     @Test

@@ -73,6 +73,7 @@ internal fun ConversationTodoBar(
     onPresenceChanged: (Boolean) -> Unit = {},
     onMessageInsetChanged: (Float) -> Unit = {},
     appearanceReady: Boolean = true,
+    animateEntry: Boolean = true,
     onTransitionChanged: (String?, Boolean) -> Unit = { _, _ -> },
 ) {
     val desired = (conversationId to items).takeIf { conversationId != null && items.isNotEmpty() }
@@ -85,6 +86,7 @@ internal fun ConversationTodoBar(
     val clearance = with(LocalDensity.current) { 8.dp.toPx() }
     val latestPresenceChanged by rememberUpdatedState(onPresenceChanged)
     val latestAppearanceReady by rememberUpdatedState(appearanceReady)
+    val latestAnimateEntry by rememberUpdatedState(animateEntry)
     val latestTransitionChanged by rememberUpdatedState(onTransitionChanged)
     LaunchedEffect(Unit) {
         snapshotFlow { shown?.first to (shown != null && progress.value > 0f) }
@@ -104,7 +106,7 @@ internal fun ConversationTodoBar(
         if (target != null) {
             shown = target
             snapshotFlow { latestAppearanceReady }.first { it }
-            progress.animateTo(1f, tween(180))
+            if (latestAnimateEntry) progress.animateTo(1f, tween(180)) else progress.snapTo(1f)
         }
     }
     SideEffect {

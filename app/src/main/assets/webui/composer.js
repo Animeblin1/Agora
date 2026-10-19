@@ -56,6 +56,19 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   const expandButton = useRef(null);
   const collapseButton = useRef(null);
   const expansionMotion = useRef({ expanded, outer: null, spacer: null, buttons: new Map() });
+  // Native keeps the tools overlay anchored to the last measured non-expanded bar.
+  useLayoutEffect(() => {
+    const node = host.current;
+    if (expanded) return;
+    const measure = () => {
+      if (!node.classList.contains("composer-expanded"))
+        node.style.setProperty("--composer-collapsed-height", `${node.getBoundingClientRect().height}px`);
+    };
+    measure();
+    const geometry = new ResizeObserver(measure);
+    geometry.observe(node, { box: "border-box" });
+    return () => geometry.disconnect();
+  }, [expanded]);
   const composing = useRef(false);
   const modelButton = useRef(null);
   const addButton = useRef(null);
@@ -368,8 +381,11 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
     const node = field.current;
     if (!node) return;
     if (expanded) { node.style.height = ""; return; }
+    const overflowY = node.style.overflowY;
+    node.style.overflowY = "hidden";
     node.style.height = "auto";
     node.style.height = `${Math.min(node.scrollHeight, FIELD_MAX_HEIGHT)}px`;
+    node.style.overflowY = overflowY;
   }
   // Only the input/attachment column owns the 400 ms size transition. Queue and controls are
   // siblings, so their geometry cannot be squeezed by an animated total bar height.
@@ -522,6 +538,7 @@ export function Composer({ state, MoreMenu, expanded = false, onExpandedChange }
   return html`
     <div class=${`composer-host ${expanded ? "composer-expanded" : ""}`} ref=${host}>
       <${ChatToolsRow} state=${state} />
+      <div class="composer-expanded-backdrop" aria-hidden="true"></div>
       <div class="composer-outer-spacer" ref=${outerSpacer} aria-hidden="true"></div>
       <form class="composer" onSubmit=${(event) => {
         event.preventDefault();

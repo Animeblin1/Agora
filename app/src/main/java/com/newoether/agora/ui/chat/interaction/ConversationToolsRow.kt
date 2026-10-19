@@ -70,7 +70,7 @@ internal fun BoxScope.ChatConversationToolsOverlay(
     val loaded by viewModel.loadedMessagesConversationId.collectAsState()
     val subagents = family.forSelection(conversationId)
     val scope = rememberCoroutineScope()
-    ChatUserInteractionBarHost(viewModel, conversationId, autoWrapCodeBlocks) { waiting, revealKey, interaction ->
+    ChatUserInteractionBarHost(viewModel, conversationId, autoWrapCodeBlocks) { waiting, revealKey, expanded, expansion, interaction ->
         ConversationToolsRow(
             conversationId = conversationId,
             items = todo.second.takeIf { todo.first == conversationId }.orEmpty(),
@@ -78,8 +78,11 @@ internal fun BoxScope.ChatConversationToolsOverlay(
             familyId = subagents?.familyId,
             subagentCapsuleDisplayMode = capsuleDisplayMode,
             hasInteraction = waiting,
-            contentReady = conversationId == null || loaded == conversationId,
+            contentReady = conversationId == null || loaded == conversationId &&
+                todo.first == conversationId && subagents != null,
             interactionRevealKey = revealKey,
+            interactionExpanded = expanded,
+            interactionExpansion = expansion,
             interaction = interaction,
             onSelect = { id -> scope.launch { viewModel.selectConversation(id) } },
             onHeightChanged = onHeightChanged,
@@ -102,11 +105,13 @@ internal fun ConversationToolsRow(
     familyId: String? = conversationId,
     onMessageInsetChanged: (Float) -> Unit = {},
     interactionRevealKey: Any? = null,
+    interactionExpanded: Boolean = false,
+    interactionExpansion: Float = 0f,
     contentReady: Boolean = true,
     subagentCapsuleDisplayMode: String = SubagentCapsuleDisplayModes.INDIVIDUAL,
     interaction: @Composable (
-        Modifier, (Float) -> Unit, (Float) -> Unit, Boolean, (String?, Boolean) -> Unit,
-    ) -> Unit = { _, _, _, _, _ -> },
+        Modifier, (Float) -> Unit, (Float) -> Unit, Boolean, Boolean, (String?, Boolean) -> Unit,
+    ) -> Unit = { _, _, _, _, _, _ -> },
 ) {
     val motion = LocalAgoraMotionPolicy.current
     val latestHeightChanged by rememberUpdatedState(onHeightChanged)
@@ -117,17 +122,22 @@ internal fun ConversationToolsRow(
     var todoHeight by remember { mutableFloatStateOf(0f) }
     var todoInset by remember { mutableFloatStateOf(0f) }
     var todoPresent by remember { mutableStateOf(false) }
-    var todoReady by remember { mutableStateOf(false) }
+    var todoReady by remember { mutableStateOf<Pair<String?, Boolean>>(null to false) }
     var interactionReady by remember { mutableStateOf(false) }
     var interactionTransition by remember { mutableStateOf<Pair<String?, Boolean>>(null to false) }
     var todoTransition by remember { mutableStateOf<Pair<String?, Boolean>>(null to false) }
     val destination = conversationId to familyId
     var layoutOwner by remember { mutableStateOf(destination) }
+    var enteringRow by remember { mutableStateOf(true) }
+    val rowProgress = remember { Animatable(0f) }
     val retainingFamily = layoutOwner.second != null && layoutOwner.second == familyId
     val replacingOwner = layoutOwner != destination && !retainingFamily
     SideEffect { if (retainingFamily) layoutOwner = destination }
+    LaunchedEffect(destination) {
+        if (replacingOwner) enteringRow = true
+    }
+    val latestEnteringRow by rememberUpdatedState(enteringRow)
     val latestReplacingOwner by rememberUpdatedState(replacingOwner)
-    val latestAppearanceReady by rememberUpdatedState(!replacingOwner && contentReady)
     val desired = (familyId to agents).takeIf { familyId != null && agents.isNotEmpty() }
     val grouped = SubagentCapsuleDisplayModes.normalize(subagentCapsuleDisplayMode) ==
         SubagentCapsuleDisplayModes.GROUPED
@@ -143,6 +153,29 @@ internal fun ConversationToolsRow(
     val heights = remember { mutableStateMapOf<String, Float>() }
     val agentProgresses = remember { mutableStateMapOf<String, Animatable<Float, AnimationVector1D>>() }
     val occupiedWidths = remember { mutableStateMapOf<String, Int>() }
+    val agentReady = remember { mutableStateMapOf<String, Boolean>() }
+    SideEffect {
+        if (active) {
+            shownAgents = familyId to if (shownGrouped) agents else
+                retainLeavingSubagents(shownAgents?.second.orEmpty(), agents)
+        }
+    }
+    val agentKeys = if (shownGrouped && displayedAgents.isNotEmpty()) {
+        listOf("subagents:${shownAgents?.first}")
+    } else displayedAgents.map { "subagent:${shownAgents?.first}:${it.id}" }
+    // Initial paint is admitted as one row after every loaded tool has reserved its width.
+    val appearanceReady = !replacingOwner && contentReady &&
+        (!hasInteraction || interactionReady) &&
+        (items.isEmpty() || todoReady == (conversationId to true)) &&
+        (desired == null || active && if (grouped) agentReady["subagents:$familyId"] == true
+        else agents.all { agentReady["subagent:$familyId:${it.id}"] == true })
+    val latestInteractionVisible by rememberUpdatedState(interactionTransition == (conversationId to true))
+    val latestTodoVisible by rememberUpdatedState(todoTransition == (conversationId to true))
+    val latestHasInteraction by rememberUpdatedState(hasInteraction)
+    val latestHasTodo by rememberUpdatedState(items.isNotEmpty())
+    val latestAgentKeys by rememberUpdatedState(agentKeys)
+    val latestHasAgents by rememberUpdatedState(desired != null)
+    val latestAppearanceReady by rememberUpdatedState(appearanceReady)
     LaunchedEffect(familyId, desired != null, grouped) {
         if (shownAgents != null && !active) {
             agentProgress.animateTo(0f, tween(180))
@@ -153,18 +186,10 @@ internal fun ConversationToolsRow(
             shownGrouped = latestGrouped
             shownAgents = it
             snapshotFlow { latestAppearanceReady }.first { it }
-            agentProgress.animateTo(1f, tween(180))
+            if (latestEnteringRow) agentProgress.snapTo(1f)
+            else agentProgress.animateTo(1f, tween(180))
         }
     }
-    SideEffect {
-        if (active) {
-            shownAgents = familyId to if (shownGrouped) agents else
-                retainLeavingSubagents(shownAgents?.second.orEmpty(), agents)
-        }
-    }
-    val agentKeys = if (shownGrouped && displayedAgents.isNotEmpty()) {
-        listOf("subagents:${shownAgents?.first}")
-    } else displayedAgents.map { "subagent:${shownAgents?.first}:${it.id}" }
     val sheetFamily = familyId.takeIf { grouped && active && agents.size >= 2 && contentReady }
     var openedFamily by remember(sheetFamily) { mutableStateOf<String?>(null) }
     val interactionPresent = hasInteraction || interactionHeight > 0f
@@ -192,8 +217,9 @@ internal fun ConversationToolsRow(
                     if (height > 0f) agentInset = maxOf(agentInset, (height + clearance) * fraction)
                 }
             }
-            maxOf(interactionHeight, todoHeight, agentHeight) to
-                maxOf(interactionInset, todoInset, agentInset)
+            val fraction = if (motion.allowSpatialTransitions) rowProgress.value else 1f
+            maxOf(interactionHeight, todoHeight, agentHeight) * fraction to
+                maxOf(interactionInset, todoInset, agentInset) * fraction
         }.collect { (height, inset) ->
             latestHeightChanged(height)
             latestMessageInsetChanged(inset)
@@ -206,6 +232,7 @@ internal fun ConversationToolsRow(
         heights.keys.retainAll(agentKeys.toSet())
         agentProgresses.keys.retainAll(agentKeys.toSet())
         occupiedWidths.keys.retainAll(agentKeys.toSet())
+        agentReady.keys.retainAll(agentKeys.toSet())
     }
 
     BoxWithConstraints(modifier.fillMaxWidth()) {
@@ -214,9 +241,9 @@ internal fun ConversationToolsRow(
         val gap = with(density) { 8.dp.roundToPx() }
         val minimumTrackWidth = with(density) { (maxWidth - 24.dp).roundToPx() }
         val scroll = rememberScrollState()
-        val startFade by animateFloatAsState(if (scroll.canScrollBackward) 1f else 0f,
+        val startFade by animateFloatAsState(if (!interactionExpanded && scroll.canScrollBackward) 1f else 0f,
             tween(200, easing = FastOutSlowInEasing), label = "tools-start-fade")
-        val endFade by animateFloatAsState(if (scroll.canScrollForward) 1f else 0f,
+        val endFade by animateFloatAsState(if (!interactionExpanded && scroll.canScrollForward) 1f else 0f,
             tween(200, easing = FastOutSlowInEasing), label = "tools-end-fade")
         val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         val dragged by scroll.interactionSource.collectIsDraggedAsState()
@@ -250,7 +277,7 @@ internal fun ConversationToolsRow(
         val latestGeometry by rememberUpdatedState(geometry)
         val latestLayoutReady by rememberUpdatedState(
             (!hasInteraction || interactionTransition.first == conversationId && interactionReady) &&
-                (items.isEmpty() || todoTransition.first == conversationId && todoReady) &&
+                (items.isEmpty() || todoReady == (conversationId to true)) &&
                 (desired == null || shownAgents?.first == familyId) &&
                 (interactionTransition.first == null || interactionTransition.first == conversationId) &&
                 (todoTransition.first == null || todoTransition.first == conversationId) &&
@@ -259,6 +286,8 @@ internal fun ConversationToolsRow(
         )
         LaunchedEffect(destination, snapLayout) {
             if (!snapLayout) return@LaunchedEffect
+            // The outgoing row keeps its shared paint and lift until its own exit is invisible.
+            rowProgress.snapTo(0f)
             // Reset the unrelated family's viewport only after every old capsule is invisible.
             scroll.scrollTo(0)
             snapshotFlow { latestLayoutReady }.first { it }
@@ -272,10 +301,10 @@ internal fun ConversationToolsRow(
             revealTargets = latestTargets
             layoutOwner = destination
         }
-        LaunchedEffect(interactionRevealKey, dragged, replacingOwner) {
+        LaunchedEffect(interactionRevealKey, dragged, replacingOwner, interactionExpanded, destination) {
             if (replacingOwner) return@LaunchedEffect
-            val event = interactionRevealKey ?: return@LaunchedEffect
-            if (event == handledRevealKey) return@LaunchedEffect
+            val event = interactionRevealKey
+            if (!interactionExpanded && (event == null || event == handledRevealKey)) return@LaunchedEffect
             handledRevealKey = event
             if (dragged) return@LaunchedEffect
             revealingInteraction = true
@@ -299,7 +328,7 @@ internal fun ConversationToolsRow(
             previousGeometry = geometry
             if (dragged) cancelledTargets = targets
             if (before == null || before == geometry || dragged || cancelledTargets == targets ||
-                revealingInteraction || revealTargets == targets ||
+                revealingInteraction || interactionExpanded || interactionExpansion > 0f || revealTargets == targets ||
                 interactionRevealKey != null && interactionRevealKey != handledRevealKey) {
                 anchor = sharedToolsAnchor(geometry.map { it.first }, geometry.toMap(), scroll.value)
                 return@LaunchedEffect
@@ -316,23 +345,57 @@ internal fun ConversationToolsRow(
         var placedTrackWidth by remember { mutableStateOf(0) }
         var placedTrackHeight by remember { mutableStateOf(0) }
         var placedTrackOffset by remember { mutableStateOf(0) }
+        LaunchedEffect(destination, replacingOwner, enteringRow) {
+            if (replacingOwner || !enteringRow) return@LaunchedEffect
+            snapshotFlow {
+                latestAppearanceReady && latestLayoutReady &&
+                    (!latestHasInteraction || latestInteractionVisible && interactionHeight > 0f) &&
+                    (!latestHasTodo || latestTodoVisible) &&
+                    (!latestHasAgents || agentProgress.value == 1f && latestAgentKeys.all {
+                        agentProgresses[it]?.value == 1f
+                    })
+            }.first { it }
+            // Admit only a placed, unchanged track after every child's own entry has finished hidden.
+            var geometry = latestGeometry
+            var settled: Boolean
+            do {
+                withFrameNanos { }
+                settled = geometry == latestGeometry && latestAppearanceReady && latestLayoutReady
+                geometry = latestGeometry
+            } while (!settled)
+            if (!latestHasInteraction && !latestHasTodo && !latestHasAgents) rowProgress.snapTo(1f)
+            else rowProgress.animateTo(1f, tween(180))
+            enteringRow = false
+        }
         Row(
             modifier = Modifier.testTag("conversation-tools-row")
                 .horizontalEdgeFade(
                     leftWeight = if (rtl) endFade else startFade,
                     rightWeight = if (rtl) startFade else endFade,
                 )
-                .horizontalScroll(scroll).padding(horizontal = 12.dp)
+                .horizontalScroll(scroll, enabled = !interactionExpanded).padding(horizontal = 12.dp)
+                .graphicsLayer {
+                    alpha = rowProgress.value
+                    val scale = if (motion.allowSpatialTransitions) 0.96f + 0.04f * alpha else 1f
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
                 .layout { measurable, constraints ->
                     val placeable = measurable.measure(constraints)
                     val holdOutgoingLayout = replacingOwner && !snapLayout
+                    val centeredInteraction = with(density) {
+                        ((maxWidth - 24.dp - minOf(itemMaxWidth, 840.dp)).coerceAtLeast(0.dp).toPx() *
+                            interactionExpansion / 2f).toInt()
+                    }
                     val width = if (holdOutgoingLayout) placedTrackWidth else
-                        maxOf(placeable.width, minimumTrackWidth)
+                        maxOf(placeable.width + centeredInteraction, minimumTrackWidth)
                     val height = if (holdOutgoingLayout) placedTrackHeight else placeable.height
-                    val offset = if (holdOutgoingLayout) placedTrackOffset else
-                        if (targets.sumOf { it.second } <= minimumTrackWidth) {
-                            (minimumTrackWidth - placeable.width).coerceAtLeast(0) / 2
-                        } else 0
+                    val offset = if (holdOutgoingLayout) placedTrackOffset else {
+                        // Center the occupied track, including prefix widths still entering or leaving.
+                        val fittedOffset = (minimumTrackWidth - placeable.width).coerceAtLeast(0) / 2
+                        centeredInteraction + (fittedOffset * (1f - interactionExpansion)).toInt()
+                    }
                     if (!holdOutgoingLayout) {
                         placedTrackWidth = width
                         placedTrackHeight = height
@@ -341,17 +404,19 @@ internal fun ConversationToolsRow(
                     val measuredGeometry = slotKeys.map { it to (occupied[it] ?: 0) }.filter { it.second > 0 }
                     val before = previousGeometry
                     val compensateAnchor = !replacingOwner && !dragged && !revealingInteraction &&
+                        !interactionExpanded && interactionExpansion == 0f &&
                         cancelledTargets != targets && revealTargets != targets &&
                         (interactionRevealKey == null || interactionRevealKey == handledRevealKey) &&
                         before != null && before != measuredGeometry
-                    // Measurement can publish a new occupied width before the scroll effect runs.
-                    // Preserve the same painted anchor in that frame; the sole scroller then adopts it.
-                    val anchorOffset = if (compensateAnchor) scroll.value - sharedToolsScrollTarget(
+                    // The outer scroll modifier clamps its offset after measuring this track.
+                    // Read the accepted offset during placement so range shrinkage is not applied twice.
+                    val anchorTarget = if (compensateAnchor) sharedToolsScrollTarget(
                         anchor, before.orEmpty().map { it.first }, measuredGeometry.map { it.first },
                         measuredGeometry.toMap(), scroll.value,
                         (measuredGeometry.sumOf { it.second } - minimumTrackWidth).coerceAtLeast(0),
-                    ) else 0
+                    ) else null
                     layout(width, height) {
+                        val anchorOffset = anchorTarget?.let { scroll.value - it } ?: 0
                         placeable.placeRelative(offset + anchorOffset, height - placeable.height)
                     }
                 },
@@ -362,22 +427,25 @@ internal fun ConversationToolsRow(
             SharedToolSlot("interaction", interactionPresent && keys.lastOrNull() != "interaction", gap,
                 { widths["interaction"] = it }, visible = interactionPresent,
                 followContentWidth = true, contentVisible = interactionTransition.second,
-                freezeWidth = replacingOwner && !snapLayout, snapWidth = snapLayout,
+                freezeWidth = replacingOwner && !snapLayout, snapWidth = snapLayout || enteringRow && !replacingOwner,
                 onReadyChanged = { interactionReady = it },
                 onOccupiedWidth = { occupied["interaction"] = it }) { slot ->
                 interaction(slot.widthIn(max = itemMaxWidth), { interactionHeight = it }, { interactionInset = it },
-                    interactionReady && !replacingOwner && contentReady, { owner, visible -> interactionTransition = owner to visible })
+                    interactionReady && appearanceReady, !enteringRow,
+                    { owner, visible -> interactionTransition = owner to visible })
             }
+            val measuredTodoOwner = todoTransition.first
             SharedToolSlot("todo", todoVisible && keys.lastOrNull() != "todo", gap,
                 { widths["todo"] = it }, visible = todoVisible, preserveContentWidth = true,
                 contentVisible = todoPresent,
-                freezeWidth = replacingOwner && !snapLayout, snapWidth = snapLayout,
-                onReadyChanged = { todoReady = it },
+                freezeWidth = replacingOwner && !snapLayout, snapWidth = snapLayout || enteringRow && !replacingOwner,
+                onReadyChanged = { todoReady = measuredTodoOwner to it },
                 onOccupiedWidth = { occupied["todo"] = it }) { slot ->
                 ConversationTodoBar(
                     conversationId, items, { todoHeight = it }, slot.widthIn(max = itemMaxWidth),
                     inSharedRow = true, onPresenceChanged = { todoPresent = it },
-                    onMessageInsetChanged = { todoInset = it }, appearanceReady = todoReady && !replacingOwner && contentReady,
+                    onMessageInsetChanged = { todoInset = it }, appearanceReady = appearanceReady,
+                    animateEntry = !enteringRow,
                     onTransitionChanged = { owner, visible -> todoTransition = owner to visible },
                 )
             }
@@ -388,9 +456,10 @@ internal fun ConversationToolsRow(
                     val progress = remember { Animatable(0f) }
                     var ready by remember { mutableStateOf(false) }
                     SideEffect { agentProgresses[entryKey] = progress }
-                    LaunchedEffect(present, ready, contentReady) {
-                        if (present && (!ready || !contentReady && progress.value == 0f)) return@LaunchedEffect
-                        progress.animateTo(if (present) 1f else 0f, tween(180))
+                    LaunchedEffect(present, ready, appearanceReady) {
+                        if (present && (!ready || !appearanceReady && progress.value == 0f)) return@LaunchedEffect
+                        if (present && enteringRow) progress.snapTo(1f)
+                        else progress.animateTo(if (present) 1f else 0f, tween(180))
                         if (!present && active) {
                             snapshotFlow { occupiedWidths[entryKey] == 0 }.first { it }
                             if (latestDesired?.first == shownAgents?.first &&
@@ -404,8 +473,8 @@ internal fun ConversationToolsRow(
                     SharedToolSlot(entryKey, index < agentKeys.lastIndex, gap,
                         { widths[entryKey] = it }, visible = present, preserveContentWidth = true,
                         contentVisible = minOf(agentProgress.value, progress.value) > 0f,
-                        freezeWidth = replacingOwner && !snapLayout, snapWidth = snapLayout,
-                        onReadyChanged = { ready = it },
+                        freezeWidth = replacingOwner && !snapLayout, snapWidth = snapLayout || enteringRow && !replacingOwner,
+                        onReadyChanged = { ready = it; agentReady[entryKey] = it },
                         onOccupiedWidth = { width ->
                             occupiedWidths[entryKey] = width
                             occupied[entryKey] = width

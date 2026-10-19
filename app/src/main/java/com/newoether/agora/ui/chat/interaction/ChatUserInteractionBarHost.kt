@@ -5,6 +5,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,8 +22,8 @@ internal fun ChatUserInteractionBarHost(
     viewModel: ChatViewModel,
     conversationId: String?,
     autoWrapCodeBlocks: Boolean,
-    content: @Composable (Boolean, Any?, @Composable (
-        Modifier, (Float) -> Unit, (Float) -> Unit, Boolean, (String?, Boolean) -> Unit,
+    content: @Composable (Boolean, Any?, Boolean, Float, @Composable (
+        Modifier, (Float) -> Unit, (Float) -> Unit, Boolean, Boolean, (String?, Boolean) -> Unit,
     ) -> Unit) -> Unit,
 ) {
     val questions by viewModel.askUser.requests.collectAsState()
@@ -66,11 +67,13 @@ internal fun ChatUserInteractionBarHost(
         }
         seenRequests = visibleRequests
     }
+    var expansionProgress by remember { mutableFloatStateOf(0f) }
     val interactionRevealKey = revealEvent.takeIf {
         observedOwner == conversationId && it?.first == minimizedKey
     }
-    content(interactions.isNotEmpty(), interactionRevealKey) {
-            modifier, onHeightChanged, onMessageInsetChanged, appearanceReady, onTransitionChanged ->
+    content(interactions.isNotEmpty(), interactionRevealKey,
+        interactions.isNotEmpty() && minimizedKey !in minimizedIn, expansionProgress) {
+            modifier, onHeightChanged, onMessageInsetChanged, appearanceReady, animateEntry, onTransitionChanged ->
         UserInteractionBar(
             conversationId = minimizedKey,
             interactions = interactions,
@@ -102,7 +105,9 @@ internal fun ChatUserInteractionBarHost(
             modifier = modifier,
             inSharedRow = true,
             appearanceReady = appearanceReady,
+            animateEntry = animateEntry,
             onTransitionChanged = onTransitionChanged,
+            onExpansionChanged = { expansionProgress = it },
         )
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -100,15 +101,67 @@ class SharedToolsOwnerReplacementTest {
         assertTrue(redPixels("tools-slot:todo") > 0)
         // Scroll-to retries need clock advancement after the frame-controlled admission checks.
         compose.mainClock.autoAdvance = true
+        compose.onNodeWithContentDescription(text(R.string.interaction_minimize)).performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("old worker 5 investigation").performScrollTo()
         compose.waitForIdle()
         assertTrue(redPixels("tools-slot:subagent:old:old-5") > 0)
         assertEquals(identity, compose.onNodeWithTag("tools-slot:$key").fetchSemanticsNode().id)
     }
 
+    @Test fun todoFirstLoadDoesNotPaintUntilEveryAgentIsReady() {
+        assertInitialToolsArriveTogether(todoFirst = true)
+    }
+
+    @Test fun agentsFirstLoadDoesNotPaintUntilTodoIsReady() {
+        assertInitialToolsArriveTogether(todoFirst = false)
+    }
+
+    private fun assertInitialToolsArriveTogether(todoFirst: Boolean) {
+        var todoLoaded by mutableStateOf(false)
+        var agentsLoaded by mutableStateOf(false)
+        initialContentReady = false
+        mount(width = 840.dp, productionHost = true, waiting = { false },
+            todoCount = { if (todoLoaded) 1 else 0 }, agentCount = { if (agentsLoaded) 2 else 0 })
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            if (todoFirst) todoLoaded = true else agentsLoaded = true
+        }
+        repeat(30) {
+            frame()
+            assertEquals("A partial Todo snapshot stays invisible", 0, redPixels("tools-slot:todo"))
+            assertEquals("A partial family snapshot stays invisible", 0, redPixels("tools-slot:subagent:old:old-0"))
+        }
+        compose.runOnIdle {
+            todoLoaded = true
+            agentsLoaded = true
+            initialContentReady = true
+        }
+        var paintedFrames = 0
+        val paintStrengths = mutableListOf<List<Int>>()
+        repeat(60) { index ->
+            frame()
+            val todoPainted = redPixels("tools-slot:todo") > 0
+            val firstPainted = redPixels("tools-slot:subagent:old:old-0") > 0
+            val lastPainted = redPixels("tools-slot:subagent:old:old-1") > 0
+            assertEquals("Todo and first agent share admission at frame $index", todoPainted, firstPainted)
+            assertEquals("Every loaded agent shares admission at frame $index", firstPainted, lastPainted)
+            if (todoPainted) {
+                paintedFrames++
+                paintStrengths += listOf("todo", "subagent:old:old-0", "subagent:old:old-1")
+                    .map { strongestRed("tools-slot:$it") }
+            }
+        }
+        assertTrue("The complete row eventually enters", paintedFrames > 0)
+        assertTrue("Every surface uses the same entrance opacity: $paintStrengths",
+            paintStrengths.all { it.max() - it.min() <= 2 })
+    }
+
     @Test fun sameFamilyLoadingKeepsAdmittedSubagentWhileParentToolsWait() {
         mount(productionHost = true, family = { "family" },
             waiting = { it == "old" }, todoCount = { if (it == "old") 1 else 0 })
+        compose.onNodeWithContentDescription(text(R.string.interaction_minimize)).performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("family worker 5 investigation").performScrollTo()
         val key = "subagent:family:family-5"
         val identity = compose.onNodeWithTag("tools-slot:$key").fetchSemanticsNode().id
@@ -280,6 +333,8 @@ class SharedToolsOwnerReplacementTest {
     private fun assertParentReturn(reducedMotion: Boolean) {
         mount(reducedMotion = reducedMotion, todoCount = { if (it == "old") 1 else 0 },
             waiting = { it == "old" }, family = { "family" }, productionHost = true)
+        compose.onNodeWithContentDescription(text(R.string.interaction_minimize)).performClick()
+        compose.waitForIdle()
         val key = "subagent:family:family-3"
         compose.onNodeWithText("family worker 3 investigation").performScrollTo()
         val identity = compose.onNodeWithTag("tools-slot:$key").fetchSemanticsNode().id
@@ -439,7 +494,7 @@ class SharedToolsOwnerReplacementTest {
         assertEquals(fullWidth, slotWidth("interaction"), 1f)
         compose.onNodeWithText("Question old?").assertExists()
         compose.onAllNodes(hasScrollAction() and
-            SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).assertCountEquals(1)
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).assertCountEquals(0)
     }
 
     private fun assertInteractionReservation(key: String, identity: Int) {
@@ -532,22 +587,54 @@ class SharedToolsOwnerReplacementTest {
         compose.runOnIdle { selected = "new" }
         val incomingLefts = mutableListOf<Float>()
         val incomingWidths = mutableListOf<Float>()
+        val todoWidths = mutableListOf<Float>()
         repeat(40) {
             frame()
             if (interactionTransition == ("new" to true)) {
-                incomingLefts += slotLeft("interaction")
-                incomingWidths += slotWidth("interaction")
+                val bounds = compose.onNodeWithTag("tools-slot:interaction").fetchSemanticsNode().boundsInRoot
+                incomingLefts += bounds.left / densityScale
+                incomingWidths += bounds.width / densityScale
+                todoWidths += compose.onNodeWithTag("tools-slot:todo").fetchSemanticsNode().boundsInRoot.width / densityScale
             }
         }
         assertTrue("The incoming fade is observed", incomingLefts.isNotEmpty())
         assertTrue("A fitting row is centered", incomingLefts.last() > rowLeft() + 12f)
-        assertTrue("There is no old-position travel after incoming admission: $incomingLefts",
-            incomingLefts.all { it == incomingLefts.last() })
-        assertTrue("A visible incoming capsule never changes its layout width: $incomingWidths",
-            incomingWidths.all { it == incomingWidths.last() })
+        val row = compose.onNodeWithTag("conversation-tools-row").getUnclippedBoundsInRoot()
+        val center = (row.left.value + row.right.value) / 2f
+        val finalWidth = incomingWidths.last()
+        incomingLefts.indices.forEach { index ->
+            val scale = incomingWidths[index] / finalWidth
+            val normalizedLeft = center + (incomingLefts[index] - center) / scale
+            assertEquals("Only the shared bottom-center scale moves incoming paint",
+                incomingLefts.last(), normalizedLeft, 0.1f)
+            assertEquals("Both natural slot widths follow that same scale",
+                todoWidths.last() * scale, todoWidths[index], 0.1f)
+        }
         assertEquals(0f, scrollValue(), 0f)
         compose.onAllNodes(hasScrollAction() and
             SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).assertCountEquals(1)
+    }
+
+    @Test fun sameFamilyTodoReplacementReservesItsNaturalWidthBeforePaint() {
+        mount(productionHost = true, family = { "family" }, waiting = { false },
+            todoCount = { if (it == "old") 1 else 100 })
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { selected = "family-0" }
+        val paintedWidths = mutableListOf<Float>()
+        repeat(64) {
+            frame()
+            val count = compose.onAllNodesWithText("0 / 100").fetchSemanticsNodes().singleOrNull()
+            if (count != null && redPixels("tools-slot:todo") > 0) {
+                val firstAgent = slotLeft("subagent:family:family-0")
+                val countRight = count.boundsInRoot.right / densityScale
+                assertTrue("Incoming Todo content must not overlap the retained first agent",
+                    countRight <= firstAgent)
+                paintedWidths += slotWidth("todo")
+            }
+        }
+        assertTrue("The incoming Todo fade is sampled", paintedWidths.isNotEmpty())
+        assertTrue("Incoming Todo paint starts only at its settled width: $paintedWidths",
+            paintedWidths.all { kotlin.math.abs(it - paintedWidths.last()) < 0.1f })
     }
 
     @Test fun sameOwnerTodoInsertionStillAnimatesAndPreservesTheReadingAnchor() {
@@ -614,7 +701,7 @@ class SharedToolsOwnerReplacementTest {
                             allowMultiple = false, blocking = false,
                         )) else emptyList()
                         if (productionHost) {
-                            ChatUserInteractionBarHost(viewModel, owner, false) { present, reveal, interaction ->
+                            ChatUserInteractionBarHost(viewModel, owner, false) { present, reveal, expanded, expansion, interaction ->
                                 ConversationToolsRow(
                                     owner, List(todoCount(owner)) { ConversationTodoItem("Task $it") },
                                     List(agentCount(owner)) {
@@ -622,9 +709,10 @@ class SharedToolsOwnerReplacementTest {
                                     }, onSelect, { height = it }, familyId = root, hasInteraction = present,
                                     onMessageInsetChanged = { inset = it }, interactionRevealKey = reveal,
                                     contentReady = initialContentReady,
-                                ) { modifier, reportHeight, reportInset, ready, reportTransition ->
+                                    interactionExpanded = expanded, interactionExpansion = expansion,
+                                ) { modifier, reportHeight, reportInset, ready, animateEntry, reportTransition ->
                                     interaction(modifier.testTag("interaction-card"), reportHeight, reportInset,
-                                        ready, reportTransition)
+                                        ready, animateEntry, reportTransition)
                                 }
                             }
                         } else ConversationToolsRow(
@@ -633,13 +721,13 @@ class SharedToolsOwnerReplacementTest {
                                 SubagentSummary("$root-$it", "$root worker $it investigation", "model", root, "idle")
                             }, onSelect, { height = it }, familyId = root, hasInteraction = requests.isNotEmpty(),
                             onMessageInsetChanged = { inset = it },
-                        ) { modifier, reportHeight, reportInset, ready, reportTransition ->
+                        ) { modifier, reportHeight, reportInset, ready, animateEntry, reportTransition ->
                             UserInteractionBar(
                                 owner, userInteractions(owner, requests, null), false, {}, {}, { _, _, _ -> },
                                 reportHeight, folded, { _, _ -> }, drafts, pages,
                                 { cardOwner, page -> pages = pages + (cardOwner to page) }, { gone += it },
                                 modifier = modifier, inSharedRow = true, onMessageInsetChanged = reportInset,
-                                appearanceReady = ready,
+                                appearanceReady = ready, animateEntry = animateEntry,
                                 onTransitionChanged = { cardOwner, visible ->
                                     interactionTransition = cardOwner to visible
                                     transitions += interactionTransition
@@ -653,6 +741,8 @@ class SharedToolsOwnerReplacementTest {
         }
         compose.waitForIdle()
     }
+
+    private fun text(id: Int) = RuntimeEnvironment.getApplication().getString(id)
 
     private fun frame() {
         Snapshot.sendApplyNotifications()
@@ -674,7 +764,11 @@ class SharedToolsOwnerReplacementTest {
     private fun scrollValue(): Float = compose.onNodeWithTag("conversation-tools-row")
         .fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
 
-    private fun redPixels(tag: String): Int {
+    private fun redPixels(tag: String): Int = sampleRed(tag, strongest = false)
+
+    private fun strongestRed(tag: String): Int = sampleRed(tag, strongest = true)
+
+    private fun sampleRed(tag: String, strongest: Boolean): Int {
         val node = compose.onAllNodesWithTag(tag).fetchSemanticsNodes().singleOrNull() ?: return 0
         val bounds = node.boundsInRoot
         if (bounds.width <= 0f || bounds.height <= 0f) return 0
@@ -694,7 +788,8 @@ class SharedToolsOwnerReplacementTest {
             var count = 0
             for (y in top until bottom) for (x in left until right) {
                 val pixel = Color(bitmap.getPixel(x, y))
-                if (pixel.red - pixel.green > 0.08f && pixel.red - pixel.blue > 0.08f) count++
+                if (strongest) count = maxOf(count, ((pixel.red - pixel.green) * 255f).toInt())
+                else if (pixel.red - pixel.green > 0.08f && pixel.red - pixel.blue > 0.08f) count++
             }
             return count
         } finally {

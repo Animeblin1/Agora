@@ -503,7 +503,17 @@ class WebUiMessagePresentationTest {
     @Test
     fun capsuleDisplayModeProjectsAndRoundTripsInDisplayEvents() {
         val original = display()
-        assertEquals("individual", original.toEvent().subagentCapsuleDisplayMode)
+        assertEquals("grouped", original.toEvent().subagentCapsuleDisplayMode)
+        val defaultEvent = original.toEvent()
+        assertEquals("grouped", WebSyncEvent.Display(
+            toolCallDisplayMode = defaultEvent.toolCallDisplayMode,
+            thinkingSegmentDisplayMode = defaultEvent.thinkingSegmentDisplayMode,
+            autoExpandActiveGroup = defaultEvent.autoExpandActiveGroup,
+            autoWrapCodeBlocks = defaultEvent.autoWrapCodeBlocks,
+            blurEffectsEnabled = defaultEvent.blurEffectsEnabled,
+            reduceMotion = defaultEvent.reduceMotion,
+            liveThinking = defaultEvent.liveThinking,
+        ).subagentCapsuleDisplayMode)
         for (mode in listOf("individual", "grouped")) {
             val event = original.copy(subagentCapsuleDisplayMode = mode).toEvent()
             assertEquals(mode, event.subagentCapsuleDisplayMode)

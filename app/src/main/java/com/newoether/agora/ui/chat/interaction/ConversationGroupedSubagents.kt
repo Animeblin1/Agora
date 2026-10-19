@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,13 +29,15 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.newoether.agora.R
 import com.newoether.agora.model.SubagentSummary
+import com.newoether.agora.ui.components.OPTION_HIGHLIGHT_SHAPE
 import com.newoether.agora.ui.components.SmoothBottomSheet
 import com.newoether.agora.ui.components.rememberSmoothBottomSheetState
-import com.newoether.agora.ui.theme.ChatType
 
 /** The shared row keeps this entry's family key at both sides of the single/count threshold. */
 @Composable
@@ -88,7 +89,10 @@ internal fun ConversationSubagentsSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    stringResource(R.string.settings_subagents), style = ChatType.detailTitle,
+                    stringResource(R.string.settings_subagents),
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold,
+                    ),
                     modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
@@ -117,7 +121,7 @@ internal fun ConversationSubagentsSheet(
                         }
                     },
                     enabled = pendingSelection == null,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = OPTION_HIGHLIGHT_SHAPE,
                     color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
                     contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
@@ -130,7 +134,9 @@ internal fun ConversationSubagentsSheet(
                     ) {
                         SubagentStatus(agent.status, "subagents-sheet-status:${agent.id}")
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(agent.title, style = MaterialTheme.typography.bodyMedium)
+                            Text(agent.title, style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
+                            ))
                             Text(
                                 subagentStatusLabel(agent.status), style = MaterialTheme.typography.labelMedium,
                                 color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else

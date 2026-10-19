@@ -806,11 +806,11 @@ input, textarea { user-select: text; }
   position: relative;
   flex: 1;
   min-height: 0;
-  margin-bottom: calc(-1 * var(--chat-bottom-inset));
+  margin-bottom: calc(var(--chat-tools-message-inset, 0px) - var(--chat-bottom-inset));
   overflow-y: auto;
   mask-image: linear-gradient(to bottom,
-    #000 calc(100% - var(--chat-bottom-inset)),
-    transparent calc(100% - var(--chat-bottom-inset) + 40px));
+    #000 calc(100% - var(--chat-bottom-inset) + var(--chat-tools-message-inset, 0px)),
+    transparent calc(100% - var(--chat-bottom-inset) + var(--chat-tools-message-inset, 0px) + 40px));
   mask-mode: alpha;
 }
 /* ChatSwitchingOverlay: full body barrier, indicator in the measured top/composer range. */
@@ -896,16 +896,21 @@ input, textarea { user-select: text; }
 .row-placeholder { min-height: 0; }
 /* UserMessageBubble: at the end, UserBubbleShape (27 dp corners, a 6 dp bottom-end tail). */
 .user-row { display: flex; flex-direction: column; align-items: flex-end; }
-.user-message-content { position: relative; max-width: 100%; }
-.user-hover-actions { position: absolute; right: 100%; top: 0; display: flex; opacity: 0; pointer-events: none; transition: opacity 150ms linear; }
+.user-message-content { position: relative; display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; align-items: flex-end; max-width: 100%; }
+.user-hover-actions { flex: none; display: flex; opacity: 0; pointer-events: none; transition: opacity 150ms linear; }
 .user-message-content:is(:hover, :focus-within) .user-hover-actions { opacity: 1; pointer-events: auto; }
-@media (hover: none) { .user-hover-actions { position: static; justify-content: flex-end; opacity: 1; pointer-events: auto; } }
+@media (hover: none) {
+  .user-message-content { flex-direction: column; flex-wrap: nowrap; align-items: flex-end; }
+  .user-hover-actions { order: 1; opacity: 1; pointer-events: auto; }
+}
 .user-bubble {
+  flex: none;
+  width: max-content;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-width: 54px;
-  max-width: 300px;
+  max-width: min(300px, 100%);
   padding: 15px;
   border-radius: 27px;
   border-end-end-radius: 6px;
@@ -1211,6 +1216,11 @@ input, textarea { user-select: text; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.detail-sheet:has(.subagent-choices) .detail-sheet-header h2 {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 700;
 }
 .detail-sheet-header-trailing {
   flex: none;
@@ -1573,10 +1583,10 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .subagent-title { display: grid; max-width: 100%; font-size: 14px; line-height: 20px; font-weight: 700; }
 .subagent-title > span { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0; }
 .subagent-choices { padding: 4px 24px calc(32px + env(safe-area-inset-bottom)); }
-.subagent-choice { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 0; border-radius: 16px; background: transparent; color: var(--md-on-surface); font: inherit; text-align: start; cursor: pointer; }
+.subagent-choice { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 0; border-radius: 24px; background: transparent; color: var(--md-on-surface); font: inherit; text-align: start; cursor: pointer; }
 .subagent-choice[aria-current="page"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 .subagent-choice-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.subagent-choice-text > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 500; }
+.subagent-choice-text > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; line-height: 24px; font-weight: 600; }
 .subagent-choice-text > small { font-size: 12px; line-height: 16px; color: var(--md-on-surface-variant); }
 .subagent-choice[aria-current="page"] .subagent-choice-text > small { color: inherit; }
 .subagent-capsule[aria-current="page"] .subagent-text > small { color: inherit; }
@@ -1663,6 +1673,14 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   display: flex;
   flex-direction: column;
   padding-top: 8px;
+}
+.composer-expanded > .tools-row { bottom: calc(var(--composer-collapsed-height) - 12px); }
+.composer-expanded-backdrop { display: none; }
+.composer-expanded > .composer-expanded-backdrop {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   background: linear-gradient(transparent min(20px, 12%), var(--md-background) calc(min(20px, 12%) + min(40px, 24%)));
 }
 .composer-expanded .composer { flex: 1; min-height: 0; width: 100%; justify-content: flex-end; }
@@ -2142,6 +2160,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   pointer-events: none; opacity: 0; transition: opacity 200ms linear;
 }
 .scrollbar-overlay.scrollable:is(.hover, .dragging) { opacity: 1; pointer-events: auto; touch-action: none; }
+.tools-row:has(.tools-scroll[data-tools-expanded="true"]) .tools-scrollbar { opacity: 0; pointer-events: none; }
 .chat:has(.conversation-loading-cover) > .scrollbar-overlay,
 .chat:has(.conversation-loading-cover) .tools-scrollbar { visibility: hidden; }
 .scrollbar-overlay > span {
@@ -2186,11 +2205,12 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .ask-user-answer + .ask-user-question { margin-top: 24.2px; }
 .ask-user-answer.unanswered { color: color-mix(in srgb, currentColor 60%, transparent); }
 /* Completion receipts keep the existing bubble and match the native compact text tiers. */
+.user-bubble.subagent-result-bubble { background: var(--md-surface-container-high); }
 .subagent-result { display: flex; flex-direction: column; gap: 4px; }
 .subagent-result-name {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
-.subagent-result-name { font-size: 14px; line-height: 20px; font-weight: 500; }
+.subagent-result-name { color: var(--md-on-surface); font-size: 14px; line-height: 20px; font-weight: 600; }
 .subagent-result-status { color: var(--md-on-surface-variant); font-size: 12px; line-height: 16px; font-weight: 500; }
 /* AssistantMessageContent's action Box: 44 dp with 12 dp of top padding and 2 dp between icons. */
 .message-action-slot { position: relative; min-height: 44px; }

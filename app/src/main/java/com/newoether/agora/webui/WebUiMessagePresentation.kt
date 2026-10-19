@@ -52,7 +52,7 @@ internal data class WebDisplayContext(
     /** The phone's model aliases and provider-name visibility, for MessageInfoDialog's model line. */
     val modelAliases: Map<String, String> = emptyMap(),
     val modelProviderNames: Map<String, Boolean> = emptyMap(),
-    val subagentCapsuleDisplayMode: String = "individual",
+    val subagentCapsuleDisplayMode: String = com.newoether.agora.data.SubagentCapsuleDisplayModes.DEFAULT,
 ) {
     /** Settings plus the live timer templates; the browser formats the running seconds. */
     fun toEvent() = WebSyncEvent.Display(

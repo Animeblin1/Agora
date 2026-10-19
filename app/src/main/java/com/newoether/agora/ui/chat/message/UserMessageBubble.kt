@@ -147,7 +147,7 @@ internal fun UserMessageBubble(
         Box {
             Surface(
             shape = shape,
-            color = backgroundColor,
+            color = if (subagentResult != null) MaterialTheme.colorScheme.surfaceContainerHigh else backgroundColor,
             modifier = Modifier
                 .widthIn(min = USER_BUBBLE_MIN_WIDTH, max = 300.dp)
                 .then(contextAlpha)
@@ -300,7 +300,7 @@ internal fun UserMessageBubble(
                     }
                     val askUser = message.source?.takeIf { it.kind == MessageSource.Kind.ASK_USER }
                     if (subagentResult != null) {
-                        SubagentResultSummary(result = subagentResult, textColor = textColor)
+                        SubagentResultSummary(result = subagentResult)
                     } else if (askUser != null) {
                         AskUserAnswerBlocks(
                             source = askUser,

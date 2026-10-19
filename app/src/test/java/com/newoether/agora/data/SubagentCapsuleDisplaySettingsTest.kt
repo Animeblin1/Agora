@@ -21,11 +21,14 @@ import org.junit.Test
 
 class SubagentCapsuleDisplaySettingsTest {
     @Test
-    fun defaultsAndInvalidValuesKeepTheEstablishedIndividualMode() {
-        for (value in listOf(null, "", "unknown", "GROUPED", "individual")) {
-            assertEquals(SubagentCapsuleDisplayModes.INDIVIDUAL, SubagentCapsuleDisplayModes.normalize(value))
+    fun defaultsAndInvalidValuesUseGroupedWhileExplicitChoicesRemainValid() {
+        assertEquals(SubagentCapsuleDisplayModes.GROUPED, SubagentCapsuleDisplayModes.DEFAULT)
+        for (value in listOf(null, "", "unknown", "GROUPED")) {
+            assertEquals(SubagentCapsuleDisplayModes.GROUPED, SubagentCapsuleDisplayModes.normalize(value))
         }
-        assertEquals(SubagentCapsuleDisplayModes.GROUPED, SubagentCapsuleDisplayModes.normalize("grouped"))
+        for (value in listOf("individual", "grouped")) {
+            assertEquals(value, SubagentCapsuleDisplayModes.normalize(value))
+        }
     }
 
     @Test
@@ -47,30 +50,33 @@ class SubagentCapsuleDisplaySettingsTest {
         every { SecretCrypto.decrypt(any()) } answers { firstArg<String>() }
         try {
             val manager = SettingsManager(context)
-            assertEquals("individual", manager.subagentCapsuleDisplayMode.first())
+            assertEquals("grouped", manager.subagentCapsuleDisplayMode.first())
             manager.saveSubagentToolsEnabled(false)
-            manager.saveSubagentCapsuleDisplayMode("grouped")
-            assertEquals("grouped", SettingsManager(context).subagentCapsuleDisplayMode.first())
+            manager.saveSubagentCapsuleDisplayMode("individual")
+            assertEquals("individual", SettingsManager(context).subagentCapsuleDisplayMode.first())
             assertFalse(manager.subagentToolsEnabled.first())
             val exported = PortableSettingsArchive.toJsonObject(manager, false)
-            assertEquals(JsonPrimitive("grouped"), exported["subagentCapsuleDisplayMode"])
+            assertEquals(JsonPrimitive("individual"), exported["subagentCapsuleDisplayMode"])
             val empty = JsonObject(emptyMap())
             PortableSettingsArchive.restoreFromJsonObject(empty, manager, false, false, null) { it }
-            assertEquals("grouped", manager.subagentCapsuleDisplayMode.first())
-            PortableSettingsArchive.restoreFromJsonObject(empty, manager, true, false, null) { it }
             assertEquals("individual", manager.subagentCapsuleDisplayMode.first())
+            PortableSettingsArchive.restoreFromJsonObject(empty, manager, true, false, null) { it }
+            assertEquals("grouped", manager.subagentCapsuleDisplayMode.first())
             val grouped = JsonObject(mapOf("subagentCapsuleDisplayMode" to JsonPrimitive("grouped")))
             PortableSettingsArchive.restoreFromJsonObject(grouped, manager, false, false, null) { it }
             assertEquals("grouped", manager.subagentCapsuleDisplayMode.first())
             manager.saveSubagentCapsuleDisplayMode("future")
-            assertEquals("individual", manager.subagentCapsuleDisplayMode.first())
+            assertEquals("grouped", manager.subagentCapsuleDisplayMode.first())
             PortableSettingsArchive.restoreFromJsonObject(grouped, manager, true, false, null) { it }
             assertEquals("grouped", SettingsManager(context).subagentCapsuleDisplayMode.first())
+            val individual = JsonObject(mapOf("subagentCapsuleDisplayMode" to JsonPrimitive("individual")))
+            PortableSettingsArchive.restoreFromJsonObject(individual, manager, true, false, null) { it }
+            assertEquals("individual", SettingsManager(context).subagentCapsuleDisplayMode.first())
             PortableSettingsArchive.restoreFromJsonObject(
                 JsonObject(mapOf("subagentCapsuleDisplayMode" to JsonPrimitive("future"))),
                 manager, false, false, null,
             ) { it }
-            assertEquals("individual", manager.subagentCapsuleDisplayMode.first())
+            assertEquals("grouped", manager.subagentCapsuleDisplayMode.first())
         } finally {
             unmockkObject(SecretCrypto)
             unmockkStatic(movesClass)

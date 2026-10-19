@@ -383,7 +383,7 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
             aria-haspopup="menu" aria-expanded=${menuOpen} onClick=${() => { setRetainedMenu(true); setMenuOpen(!menuOpen); }}>
             ${icon(ICON_MORE_VERT)}</button>
         </div>
-        <div class="user-bubble">
+        <div class=${`user-bubble${result ? " subagent-result-bubble" : ""}`}>
           ${attachments.length > 0 && html`<div class="user-attachments" data-body-gap=${hasBody}>
             ${attachments.map(item => {
               const index = media.findIndex(current => current.index === item.index);
@@ -1342,7 +1342,8 @@ export function MessageList({ state, label, onPageAction }) {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(root);
-    observer.observe(column);
+    // Composer/tools clearance changes padding without resizing the column's content box.
+    observer.observe(column, { box: "border-box" });
     return () => observer.disconnect();
   }, [tailAnchorId, ids]);
   useLayoutEffect(() => {

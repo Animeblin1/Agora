@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -59,7 +60,7 @@ class SharedToolsGeometryRegressionTest {
                 ConversationToolsRow(selected,
                     if (selected == "parent") listOf(ConversationTodoItem("Task")) else emptyList(),
                     agents, {}, {}, modifier = Modifier.width(412.dp), familyId = "parent",
-                ) { modifier, height, clearance, _, _ -> EmptyProductionInteraction(modifier, height, clearance) }
+                ) { modifier, height, clearance, _, _, _ -> EmptyProductionInteraction(modifier, height, clearance) }
             }
         }
         assertTrue(slotWidth("todo") > 0f)
@@ -90,7 +91,7 @@ class SharedToolsGeometryRegressionTest {
                 ConversationToolsRow(selected,
                     if (selected == "parent") listOf(ConversationTodoItem("Task")) else emptyList(),
                     agents, {}, {}, modifier = Modifier.width(412.dp), familyId = "parent",
-                ) { modifier, height, clearance, _, _ -> EmptyProductionInteraction(modifier, height, clearance) }
+                ) { modifier, height, clearance, _, _, _ -> EmptyProductionInteraction(modifier, height, clearance) }
             }
         }
         val row = compose.onNodeWithTag("conversation-tools-row")
@@ -114,11 +115,75 @@ class SharedToolsGeometryRegressionTest {
         }
     }
 
+    @Test fun pointerTapAtMaximumScrollKeepsEveryVisibleCapsuleFixed() {
+        assertPointerMaximumScroll(reduced = false)
+    }
+
+    @Test fun reducedMotionPointerTapAtMaximumScrollKeepsEveryVisibleCapsuleFixed() {
+        assertPointerMaximumScroll(reduced = true)
+    }
+
+    private fun assertPointerMaximumScroll(reduced: Boolean) {
+        var selected by mutableStateOf("parent")
+        val family = (0..15).map {
+            SubagentSummary("child-$it", "Worker $it investigation", "model", "parent", "idle")
+        }
+        compose.setContent {
+            CompositionLocalProvider(LocalAgoraMotionPolicy provides AgoraMotionPolicy(reduced)) {
+                MaterialTheme {
+                    ConversationToolsRow(selected,
+                        if (selected == "parent") listOf(ConversationTodoItem("Task")) else emptyList(),
+                        family, { selected = it }, {}, modifier = Modifier.width(412.dp), familyId = "parent",
+                    ) { modifier, height, clearance, _, _, _ -> EmptyProductionInteraction(modifier, height, clearance) }
+                }
+            }
+        }
+        val row = compose.onNodeWithTag("conversation-tools-row")
+        row.performSemanticsAction(SemanticsActions.ScrollBy) { it(100_000f, 0f) }
+        compose.waitForIdle()
+        val range = row.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange]
+        assertEquals(range.maxValue(), range.value(), 0f)
+        val viewport = row.fetchSemanticsNode().boundsInRoot
+        val visible = family.mapNotNull { agent ->
+            val tag = "tools-slot:subagent:parent:${agent.id}"
+            val node = compose.onNodeWithTag(tag).fetchSemanticsNode()
+            if (node.boundsInRoot.right > viewport.left && node.boundsInRoot.left < viewport.right) {
+                Triple(tag, node.id, node.boundsInRoot.left)
+            } else null
+        }
+        assertTrue(visible.isNotEmpty())
+        val todo = compose.onNodeWithTag("tools-slot:todo").fetchSemanticsNode().boundsInRoot
+        assertTrue("Todo is fully outside the tapped viewport", todo.right <= viewport.left)
+        compose.mainClock.autoAdvance = false
+        repeat(2) { cycle ->
+            val tap = compose.onNodeWithText("Worker 15 investigation").fetchSemanticsNode().boundsInRoot.center
+            row.performTouchInput { click(tap - viewport.topLeft) }
+            repeat(60) { index ->
+                frame(0)
+                assertEquals("Pointer click selects the real capsule", "child-15", selected)
+                visible.forEach { (tag, identity, left) ->
+                    val node = compose.onNodeWithTag(tag).fetchSemanticsNode()
+                    assertEquals(identity, node.id)
+                    assertEquals("Pointer cycle $cycle exit frame $index for $tag", left, node.boundsInRoot.left, 1f)
+                }
+            }
+            compose.runOnIdle { selected = "parent" }
+            repeat(60) { index ->
+                frame(0)
+                visible.forEach { (tag, identity, left) ->
+                    val node = compose.onNodeWithTag(tag).fetchSemanticsNode()
+                    assertEquals(identity, node.id)
+                    assertEquals("Pointer cycle $cycle return frame $index for $tag", left, node.boundsInRoot.left, 1f)
+                }
+            }
+        }
+    }
+
     @Test fun initialEmptyInteractionAndTodoLeaveNoSpaceBeforeOverflowingFamily() {
         compose.setContent {
             MaterialTheme {
                 ConversationToolsRow("parent", emptyList(), agents, {}, {}, modifier = Modifier.width(412.dp)) {
-                        modifier, height, clearance, _, _ -> EmptyProductionInteraction(modifier, height, clearance)
+                        modifier, height, clearance, _, _, _ -> EmptyProductionInteraction(modifier, height, clearance)
                 }
             }
         }
@@ -135,7 +200,7 @@ class SharedToolsGeometryRegressionTest {
             MaterialTheme {
                 ConversationToolsRow("parent", emptyList(), agents, {}, {}, modifier = Modifier.width(412.dp),
                     hasInteraction = waiting, interactionRevealKey = token,
-                ) { modifier, height, _, _, _ ->
+                ) { modifier, height, _, _, _, _ ->
                     if (waiting) Box(modifier.width(if (expanded) 388.dp else 180.dp).height(56.dp))
                 }
             }

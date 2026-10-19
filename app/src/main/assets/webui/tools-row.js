@@ -18,14 +18,42 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
   let selection = viewport.dataset?.toolsOwner, family = viewport.dataset?.toolsFamily;
   let replacement = viewport.toolsReplacement || null;
   let replacing = !!replacement || viewport.dataset?.toolsEnter === "false";
+  let admitted = null, entrance = null, openingOwner = null;
+  const publishInset = () => {
+    const opening = viewport.dataset?.toolsOpening === "true";
+    const outgoing = replacing && items().some(node => node.dataset.toolsExiting === "true");
+    const fraction = !reduced && (entrance || opening && !outgoing) ? entrance?.progress || 0 : 1;
+    const dimensions = items().map(node => {
+      const natural = node.firstElementChild.offsetHeight;
+      const progress = Math.max(0, Math.min(1, Number(node.dataset.toolsProgress) || 0));
+      return { height: natural * progress, inset: (natural + 8) * progress };
+    });
+    const lift = `${Math.max(0, ...dimensions.map(item => item.height)) * fraction}px`;
+    const inset = `${Math.max(0, ...dimensions.map(item => item.inset)) * fraction}px`;
+    const changed = chat?.style.getPropertyValue("--chat-tools-lift") !== lift ||
+      chat?.style.getPropertyValue("--chat-tools-message-inset") !== inset;
+    chat?.style.setProperty("--chat-tools-lift", lift);
+    chat?.style.setProperty("--chat-tools-message-inset", inset);
+    if (changed) viewport.dispatchEvent(new Event("toolsresize"));
+  };
   const observed = new Set();
   const items = () => [...track.children].filter(node => node.hasAttribute("data-tools-key"));
+  const expanded = () => items().find(node => node.dataset.toolsExpanded === "true");
+  const centeredScroll = () => {
+    const node = expanded();
+    if (!node) return 0;
+    const bounds = viewport.getBoundingClientRect(), card = node.firstElementChild.getBoundingClientRect();
+    const target = viewport.scrollLeft + (card.left + card.right - 2 * bounds.left - viewport.clientWidth) / 2;
+    const maximum = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    return getComputedStyle(viewport).direction === "rtl"
+      ? Math.max(-maximum, Math.min(0, target)) : Math.max(0, Math.min(maximum, target));
+  };
   const paintEdges = () => {
     const maximum = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
     const rtl = getComputedStyle(viewport).direction === "rtl";
     const left = rtl ? maximum + viewport.scrollLeft : viewport.scrollLeft;
     const right = rtl ? -viewport.scrollLeft : maximum - viewport.scrollLeft;
-    const overflowing = viewport.clientWidth > 0 && items().length > 0 && maximum > 1;
+    const overflowing = !expanded() && viewport.clientWidth > 0 && items().length > 0 && maximum > 1;
     viewport.style.setProperty("--tools-edge-left", overflowing && left > 2 ? "1" : "0");
     viewport.style.setProperty("--tools-edge-right", overflowing && right > 2 ? "1" : "0");
   };
@@ -83,10 +111,60 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
     range.style.width = "0px";
     viewport.scrollLeft = 0;
   };
+  const mounted = required => required !== undefined && JSON.parse(required).every(([tool, owner]) =>
+    items().some(node => node.dataset.toolsKey === tool && node.dataset.owner === owner && node.offsetWidth > 0));
+  const admit = () => {
+    const required = viewport.dataset?.toolsRequired;
+    const key = `${selection}:${required}`;
+    if (admitted === key || !mounted(required)) return;
+    admitted = key;
+    onSettled(selection, required);
+  };
+  const enterTogether = () => {
+    const required = viewport.dataset?.toolsRequired;
+    if (viewport.dataset?.toolsOpening !== "true" || openingOwner === selection || !mounted(required) ||
+        advance || reveal || items().some(node => node.style.translate) ||
+        admitted !== `${selection}:${required}` || items().some(node =>
+          Number(node.dataset.toolsProgress) !== 1 || Number(node.dataset.toolsOpacity) !== 1)) return;
+    // Initial children reserve their complete layout invisibly; one row animation owns first paint.
+    openingOwner = selection;
+    entrance?.cancel();
+    if (!items().length) {
+      entrance = null;
+      viewport.style.opacity = "1";
+      track.style.scale = "";
+      publishInset();
+      onSettled(selection, required, true);
+      return;
+    }
+    const current = { progress: 0, frame: 0, cancel() { cancelAnimationFrame(this.frame); } };
+    entrance = current;
+    const started = performance.now();
+    track.style.transformOrigin = "50% 100%";
+    function tick(now) {
+      const time = Math.min(1, (now - started) / DURATION);
+      current.progress = tweenProgress(time);
+      viewport.style.opacity = String(current.progress);
+      track.style.scale = String(reduced ? 1 : .96 + .04 * current.progress);
+      publishInset();
+      if (time < 1) current.frame = requestAnimationFrame(tick);
+      else {
+        entrance = null;
+        track.style.scale = "";
+        previous = snapshot();
+      }
+    }
+    tick(started);
+    onSettled(selection, required, true);
+  };
   const measure = () => {
     cancelAnimationFrame(queued);
     queued = 0;
     const nodes = items(), width = Math.max(0, viewport.clientWidth - PADDING);
+    const locked = !!expanded();
+    if (viewport.dataset.toolsExpanded !== String(locked)) viewport.dataset.toolsExpanded = String(locked);
+    viewport.style.overflowX = locked ? "hidden" : "";
+    viewport.style.touchAction = locked ? "pan-y" : "";
     const owner = viewport.dataset?.toolsOwner;
     if (owner !== selection) {
       const nextFamily = viewport.dataset?.toolsFamily;
@@ -94,6 +172,8 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
       selection = owner;
       family = nextFamily;
       if (replacing || !sameFamily) {
+        // Freeze shared progress until the outgoing capsules finish their own exit.
+        entrance?.cancel();
         replacing = true;
         if (!replacement) freeze();
         replacement.geometry = null;
@@ -110,7 +190,7 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
     if (request) {
       const owner = request.dataset.toolsReveal;
       delete request.dataset.toolsReveal;
-      if (request.dataset.toolsKey === "interaction" && owner === request.dataset.owner && !dragging) {
+      if (request.dataset.toolsKey === "interaction" && owner === request.dataset.owner && (!dragging || locked)) {
         reveal = { owner, from: viewport.scrollLeft, started: performance.now() };
         interrupted = false;
       }
@@ -120,20 +200,14 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
       interrupted = true;
     }
     viewport.style.setProperty("--tools-viewport-width", `${width}px`);
+    if (replacing && !nodes.some(node => node.dataset.toolsExiting === "true")) {
+      entrance?.cancel();
+      entrance = null;
+      track.style.scale = "";
+    }
     const paintHeight = Math.max(0, ...nodes.map(node => node.firstElementChild.offsetHeight));
-    const dimensions = nodes.map(node => {
-      const natural = node.firstElementChild.offsetHeight;
-      const progress = Math.max(0, Math.min(1, Number(node.dataset.toolsProgress) || 0));
-      return { height: natural * progress, inset: (natural + 8) * progress };
-    });
-    const lift = `${Math.max(0, ...dimensions.map(item => item.height))}px`;
-    const inset = `${Math.max(0, ...dimensions.map(item => item.inset))}px`;
-    const changed = chat?.style.getPropertyValue("--chat-tools-lift") !== lift ||
-      chat?.style.getPropertyValue("--chat-tools-message-inset") !== inset;
-    chat?.style.setProperty("--chat-tools-lift", lift);
-    chat?.style.setProperty("--chat-tools-message-inset", inset);
     viewport.style.height = `${paintHeight ? paintHeight + 16 : 0}px`;
-    if (changed) viewport.dispatchEvent(new Event("toolsresize"));
+    publishInset();
     paintEdges();
     const nextLayout = JSON.stringify([viewport.clientWidth, track.offsetWidth,
       nodes.map(node => [node.dataset.toolsKey, node.dataset.owner, node.offsetLeft, node.offsetWidth])]);
@@ -150,6 +224,14 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
         return;
       }
       release();
+      if (viewport.dataset?.toolsOpening === "true") {
+        viewport.style.opacity = "0";
+        if (!mounted(viewport.dataset?.toolsRequired)) {
+          replacement.geometry = null;
+          previous = snapshot();
+          return;
+        }
+      }
       const geometry = JSON.stringify([viewport.clientWidth, track.offsetWidth,
         nodes.map(node => [node.dataset.toolsKey, node.dataset.owner, node.offsetLeft, node.offsetWidth])]);
       range.style.width = `${track.offsetWidth}px`;
@@ -166,8 +248,12 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
       delete viewport.toolsReplacement;
       interrupted = false;
       onSettled(selection);
+      admit();
+      enterTogether();
       return;
     }
+    admit();
+    enterTogether();
     // Revealing an interaction owns scroll until completion, even while fold/entry geometry changes.
     if (reveal) {
       cancelAnimationFrame(frame);
@@ -180,7 +266,8 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
       travel = true;
       function tick(now) {
         const time = reduced ? 1 : Math.min(1, (now - current.started) / 350);
-        viewport.scrollLeft = time === 1 ? 0 : current.from * (1 - tweenProgress(time));
+        const target = centeredScroll();
+        viewport.scrollLeft = current.from + (target - current.from) * tweenProgress(time);
         previous = snapshot();
         if (time < 1) frame = requestAnimationFrame(tick);
         else {
@@ -194,6 +281,19 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
       }
       advance = tick;
       tick(performance.now());
+      return;
+    }
+    // Expanded interaction geometry follows its existing fold tween through the same scroll owner.
+    if (locked) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      advance = null;
+      clearPlacement();
+      range.style.width = `${track.offsetWidth}px`;
+      viewport.scrollLeft = centeredScroll();
+      layout = nextLayout;
+      travel = false;
+      previous = snapshot();
       return;
     }
     // Height fades must not restart an otherwise unchanged horizontal animation.
@@ -298,12 +398,18 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
   };
   const mutations = new MutationObserver(observeItems);
   mutations.observe(viewport, { childList: true, subtree: true, characterData: true,
-    attributes: true, attributeFilter: ["data-tools-progress", "data-tools-reveal", "data-owner",
-      "data-tools-owner", "data-tools-family", "data-tools-exiting"] });
+    attributes: true, attributeFilter: ["data-tools-progress", "data-tools-opacity", "data-tools-reveal", "data-tools-expanded", "data-owner",
+      "data-tools-owner", "data-tools-family", "data-tools-exiting", "data-tools-required", "data-tools-opening"] });
   geometry.observe(viewport);
   observeItems();
   measure();
-  const cancelTravel = () => {
+  const cancelTravel = (event) => {
+    if (expanded()) {
+      if (event?.type === "wheel" && (event.deltaX || event.shiftKey) || event?.type === "keydown" &&
+          ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) &&
+          !event.target?.closest?.("input, textarea, [contenteditable]")) event.preventDefault();
+      return;
+    }
     travel = false;
     interrupted = !!advance || items().some(node => node.dataset.toolsReveal !== undefined);
     if (reveal) {
@@ -315,16 +421,22 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
     items().forEach(node => { delete node.dataset.toolsReveal; });
     previous = snapshot();
   };
-  const pointerDown = () => { dragging = true; cancelTravel(); };
+  const pointerDown = () => { if (!expanded()) { dragging = true; cancelTravel(); } };
   const pointerUp = () => { dragging = false; previous = snapshot(); };
-  const scrolled = () => { paintEdges(); if (!travel) previous = snapshot(); };
+  const scrolled = () => {
+    if (expanded() && !travel) viewport.scrollLeft = centeredScroll();
+    paintEdges();
+    if (!travel) previous = snapshot();
+  };
   viewport.addEventListener("pointerdown", pointerDown, { passive: true });
   window.addEventListener("pointerup", pointerUp, { passive: true });
   window.addEventListener("pointercancel", pointerUp, { passive: true });
-  viewport.addEventListener("wheel", cancelTravel, { passive: true });
+  viewport.addEventListener("wheel", cancelTravel, { passive: false });
   viewport.addEventListener("keydown", cancelTravel);
   viewport.addEventListener("scroll", scrolled, { passive: true });
   return () => {
+    entrance?.cancel();
+    track.style.scale = "";
     cancelAnimationFrame(frame);
     cancelAnimationFrame(queued);
     geometry.disconnect();
@@ -340,6 +452,9 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
     viewport.removeEventListener("wheel", cancelTravel);
     viewport.removeEventListener("keydown", cancelTravel);
     viewport.removeEventListener("scroll", scrolled);
+    viewport.style.overflowX = "";
+    viewport.style.touchAction = "";
+    delete viewport.dataset.toolsExpanded;
     viewport.style.removeProperty("--tools-edge-left");
     viewport.style.removeProperty("--tools-edge-right");
     chat?.style.removeProperty("--chat-tools-lift");
@@ -354,19 +469,30 @@ export function ChatToolsRow({ state }) {
   const family = state.connected && state.openId
     ? `${state.connectionId || ""}:${state.parentConversationId || state.openId}` : owner;
   const [settled, setSettled] = useState({ family });
-  const current = useRef({ owner, family }), closed = useRef(false);
-  if (current.current.family !== family) closed.current = true;
+  const ready = state.initialToolsReady === undefined || state.openId == null || state.initialToolsReady === 7;
+  const agents = state.connected && state.openId ? state.subagents || [] : [];
+  const agentOwner = `${state.connectionId || ""}:${state.parentConversationId || state.openId || ""}`;
+  const required = ready ? JSON.stringify([
+    ...(state.connected && state.interactions?.length ? [["interaction", `${state.connectionId || ""}:${state.openId || ""}`]] : []),
+    ...(state.connected && state.openId && state.todo?.length ? [["todo", owner]] : []),
+    ...(state.display?.subagentCapsuleDisplayMode === "grouped" && agents.length
+      ? [[`subagents:${agentOwner}`, agentOwner]] : agents.map(agent => [`subagent:${agent.id}`, agentOwner])),
+  ]) : undefined;
+  const current = useRef({ owner, family }), closed = useRef(false), entered = useRef(false);
+  if (current.current.family !== family) { closed.current = true; entered.current = false; }
   current.current = { owner, family };
-  const enter = settled.family === family && !closed.current &&
-    (state.initialToolsReady === undefined || state.openId == null || state.initialToolsReady === 7);
-  useLayoutEffect(() => attachToolsRow(host.current, reduced, selected => {
+  const enter = settled.family === family && !closed.current && ready &&
+    settled.owner === owner && settled.required === required;
+  useLayoutEffect(() => attachToolsRow(host.current, reduced, (selected, measured, painted) => {
     if (current.current.owner !== selected) return;
+    if (painted) entered.current = true;
     closed.current = false;
-    setSettled({ family: current.current.family });
+    setSettled({ family: current.current.family, owner: selected, required: measured });
   }), [reduced]);
   useLayoutEffect(() => attachScrollbar(host.current, bar.current, undefined, "horizontal"), []);
   return html`<div class="tools-row"><div class="tools-scroll" ref=${host}
-    data-tools-owner=${owner} data-tools-family=${family} data-tools-enter=${String(enter)}>
+    data-tools-owner=${owner} data-tools-family=${family} data-tools-enter=${String(enter)}
+    data-tools-required=${required} data-tools-opening=${String(!entered.current)}>
     <div class="tools-track">
       <${InteractionBar} state=${state} enter=${enter} />
       <${TodoBar} state=${state} enter=${enter} />

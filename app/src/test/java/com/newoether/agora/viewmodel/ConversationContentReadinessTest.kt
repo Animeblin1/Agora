@@ -21,7 +21,10 @@ import org.junit.Test
 class ConversationContentReadinessTest {
     @Test
     fun delayedTodoAndFamilyRequireRealInitialSnapshotsInEitherOrder() = runTest {
-        for (todoFirst in listOf(true, false)) {
+        for (todoFirst in listOf(true, false)) for (todoEmpty in listOf(true, false))
+            for (agentsEmpty in listOf(true, false)) {
+            val todos = if (todoEmpty) emptyList() else listOf(ConversationTodoItem("Task"))
+            val children = if (agentsEmpty) emptyList() else listOf(agent("child", "root"))
             val selected = MutableStateFlow<String?>("root")
             val loaded = MutableStateFlow<String?>("root")
             val todoRows = MutableSharedFlow<List<ConversationTodoItem>>()
@@ -37,14 +40,15 @@ class ConversationContentReadinessTest {
             assertNull(todo.value.first)
             assertNull(ready.value)
 
-            if (todoFirst) todoRows.emit(emptyList()) else familyRows.emit(emptyList())
+            if (todoFirst) todoRows.emit(todos) else familyRows.emit(children)
             runCurrent()
             assertNull(ready.value)
-            if (todoFirst) familyRows.emit(emptyList()) else todoRows.emit(emptyList())
+            if (todoFirst) familyRows.emit(children) else todoRows.emit(todos)
             runCurrent()
             assertEquals("root", ready.value)
             assertEquals("root", todo.value.first)
-            assertTrue(todo.value.second.isEmpty())
+            assertEquals(todos, todo.value.second)
+            assertEquals(children, family.value.agents)
 
             // A later live mutation updates the existing projection without reopening the cover.
             familyRows.emit(listOf(agent("child", "root")))

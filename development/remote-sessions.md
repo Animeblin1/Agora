@@ -123,7 +123,11 @@ This is presentation state only; Filo verifies native ownership/state at dispatc
 
 The session catalog title is the configured device name (localized Device fallback), replacing
 Sessions. Immediately below it, a horizontally scrollable chip row currently contains one
-informational Codex Desktop chip with the existing OpenAI icon and an 8dp status dot. The dot
+informational Codex Desktop chip with the existing OpenAI icon and an 8dp status dot. The chip
+has a 40dp-high capsule shape with secondaryContainer/onSecondaryContainer colors, no outline,
+and a bounded press ripple. Press feedback
+never navigates, selects a provider, changes connection state or sends a request; the chip retains
+its informational accessibility semantics. The dot
 reflects the selected device's existing authenticated Filo connection state: connected is Online,
 connecting is Connecting, otherwise Offline. It does not claim a separate native Desktop writer
 health check. Keep the chip visible during load, failure and native mutations; status uses a

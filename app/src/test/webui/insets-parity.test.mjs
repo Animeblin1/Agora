@@ -60,6 +60,32 @@ test("the production shell consumes the continuous message inset through its sin
   assert.equal(observed.length, 0);
 });
 
+test("the full-height message viewport reserves tools clearance instead of cancelling it with its flex margin", () => {
+  const css = source("style.css");
+  const messages = css.match(/\.messages\s*\{([^}]+)\}/)[1];
+  const column = css.match(/\.message-column\s*\{([^}]+)\}/)[1];
+  const margin = messages.match(/margin-bottom:\s*([^;]+);/)[1];
+  const padding = column.match(/padding:\s*140px 8px ([^;]+);/)[1];
+  const mask = messages.match(/mask-image:\s*([^;]+);/)[1];
+  const stops = [mask.match(/#000 calc\((.*)\),/)[1], mask.match(/transparent calc\((.*)\)\)/)[1]];
+  function length(expression, values) {
+    const calculation = expression.replace(/var\((--[\w-]+)(?:,\s*[^)]+)?\)/g, (_, key) => values[key])
+      .replace(/calc\(/g, "(").replace(/px/g, "");
+    return vm.runInNewContext(calculation);
+  }
+  for (const composer of [139, 220, 400]) for (const tools of [0, .056, 28, 56, 224]) {
+    const values = { "--chat-bottom-inset": composer + tools, "--chat-tools-message-inset": tools };
+    // In the production flex column, the composer and the message margin consume the remaining height.
+    const viewport = 800 - composer - length(margin, values);
+    const tailBottom = viewport - length(padding, values);
+    assert.equal(viewport, 800, JSON.stringify({ composer, tools }));
+    assert.equal(length(stops[0].replace("100%", String(viewport)), values), 800 - composer);
+    assert.equal(length(stops[1].replace("100%", String(viewport)), values), 840 - composer);
+    assert.ok(Math.abs((800 - composer - tailBottom) - (tools + 8)) < 1e-8,
+      JSON.stringify({ composer, tools, tailBottom }));
+  }
+});
+
 test("Interaction resize uses live viewport geometry before the row publishes its new width", () => {
   const code = source("interaction.js");
   const start = code.indexOf("  useLayoutEffect(() => {\n    const container = card.current, content = full.current, label = capsule.current;");

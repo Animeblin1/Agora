@@ -75,6 +75,11 @@ class ConversationGroupedSubagentsTest {
         compose.onAllNodes(hasScrollAction()).assertCountEquals(1)
         compose.onNodeWithTag("subagents-capsule:parent").performClick()
         compose.onNode(isDialog()).assertExists()
+        val nameLayouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.onNodeWithText("Worker z", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(nameLayouts) }
+        assertEquals(16f, nameLayouts.single().layoutInput.style.fontSize.value, 0.01f)
+        assertEquals(androidx.compose.ui.text.font.FontWeight.SemiBold, nameLayouts.single().layoutInput.style.fontWeight)
         val first = compose.onNodeWithTag("subagents-sheet-agent:z").fetchSemanticsNode()
         val second = compose.onNodeWithTag("subagents-sheet-agent:a").fetchSemanticsNode()
         assertTrue("Rows consume the canonical creation order, not alphabetical order",

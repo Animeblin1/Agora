@@ -15,9 +15,9 @@ function load(name, globals) {
   vm.runInContext(code, context, { filename: name });
   return context;
 }
-function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false, entering = true, outgoing = [], family } = {}) {
+function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false, entering = true, outgoing = [], family, required } = {}) {
   let now = 0, next = 0, resize, mutate;
-  const settled = [];
+  const settled = [], measurements = [];
   const frames = new Map(), handlers = new Map(), windowHandlers = new Map();
   const style = () => ({ setProperty(key, value) { this[key] = value; },
     getPropertyValue(key) { return this[key] || ""; }, removeProperty(key) { delete this[key]; } });
@@ -37,6 +37,7 @@ function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false,
     get offsetWidth() { return parseFloat(this.style.width) || Math.max(width - 24,
       nodes.reduce((sum, node) => sum + node.offsetWidth, 0) + Math.max(0, nodes.length - 1) * 8); },
   };
+  if (required !== undefined) viewport.dataset.toolsRequired = JSON.stringify(required);
   viewport.firstElementChild = track;
   function setItems(values) {
     const old = new Map((nodes || []).map(node => [node.dataset.toolsKey, node]));
@@ -55,7 +56,8 @@ function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false,
           - viewport.scrollLeft + (parseFloat(this.style.translate) || 0);
         return { left, right: left + this.offsetWidth };
       },
-    }, { naturalWidth: itemWidth, offsetHeight: height, firstElementChild: { style: {}, offsetHeight: height } }));
+    }, { naturalWidth: itemWidth, offsetHeight: height, firstElementChild: { style: {}, offsetHeight: height,
+      getBoundingClientRect() { return nodes.find(node => node.firstElementChild === this).getBoundingClientRect(); } } }));
   }
   setItems(specs);
   nodes.forEach(node => {
@@ -72,9 +74,12 @@ function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false,
     window: { addEventListener: (key, callback) => windowHandlers.set(key, callback),
       removeEventListener: key => windowHandlers.delete(key) },
   });
-  const dispose = context.attachToolsRow(viewport, reduced, owner => settled.push(owner));
+  const dispose = context.attachToolsRow(viewport, reduced, (owner, measured) => {
+    settled.push(owner); measurements.push([owner, measured]);
+  });
   return {
-    viewport, chat, range, track, dispose, settled,
+    viewport, chat, range, track, dispose, settled, measurements,
+    require(values) { viewport.dataset.toolsRequired = JSON.stringify(values); mutate(); },
     reattach(reduced) { dispose(); return context.attachToolsRow(viewport, reduced, owner => settled.push(owner)); },
     select(owner, family) {
       viewport.dataset.toolsOwner = owner;
@@ -92,6 +97,12 @@ function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false,
       nodes.find(node => node.dataset.toolsKey === "interaction").dataset.toolsReveal = owner;
       mutate();
     },
+    expand(value = true) {
+      const node = nodes.find(node => node.dataset.toolsKey === "interaction");
+      if (value) { node.dataset.toolsExpanded = "true"; node.dataset.toolsReveal = node.dataset.owner; }
+      else delete node.dataset.toolsExpanded;
+      mutate();
+    },
     pending: () => frames.size,
     bindings: () => handlers.size + windowHandlers.size,
     progress(values) {
@@ -100,10 +111,81 @@ function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false,
       });
       mutate();
     },
-    input(type) { (handlers.get(type) || windowHandlers.get(type))?.(); },
+    input(type, event) { (handlers.get(type) || windowHandlers.get(type))?.(event); },
     step(ms) { now += ms; const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(now)); },
   };
 }
+
+test("expanded interaction centers through the existing reveal and restores scrolling and edges on collapse", () => {
+  for (const reduced of [false, true]) for (const rtl of [false, true]) {
+    const f = fixture([["interaction", 150, 160], ["todo", 180], ["subagent:a", 180]],
+      { width: 240, scroll: rtl ? -120 : 120, reduced, rtl });
+    f.expand(); f.step(16);
+    assert.equal(f.viewport.style.overflowX, "hidden");
+    assert.equal(f.viewport.style.touchAction, "pan-y");
+    assert.equal(f.viewport.style["--tools-edge-left"], "0");
+    assert.equal(f.viewport.style["--tools-edge-right"], "0");
+    if (!reduced) {
+      f.step(100);
+      assert.notEqual(Math.abs(f.viewport.scrollLeft), 120, "the original reveal frame advances centering");
+      f.input("pointerdown");
+    }
+    f.update([["interaction", 224, 160], ["todo", 180], ["subagent:a", 180]]);
+    f.resize(); f.step(400);
+    const card = f.nodes()[0].getBoundingClientRect();
+    assert.ok(Math.abs((card.left + card.right) / 2 - 120) <= 1,
+      JSON.stringify({ rtl, reduced, card, scroll: f.viewport.scrollLeft }));
+    let prevented = false;
+    f.input("wheel", { type: "wheel", deltaX: 80, preventDefault() { prevented = true; } });
+    assert.equal(prevented, true);
+    f.viewport.scrollLeft += rtl ? -60 : 60; f.input("scroll");
+    const corrected = f.nodes()[0].getBoundingClientRect();
+    assert.ok(Math.abs((corrected.left + corrected.right) / 2 - 120) <= 1);
+    f.expand(false); f.step(16); f.step(400);
+    assert.equal(f.viewport.style.overflowX, "");
+    assert.equal(f.viewport.style.touchAction, "");
+    f.viewport.scrollLeft = rtl ? -100 : 100; f.input("scroll");
+    assert.equal(f.viewport.style["--tools-edge-left"], "1");
+    assert.equal(f.viewport.style["--tools-edge-right"], "1");
+    f.input("pointerdown"); f.viewport.scrollLeft = rtl ? -70 : 70;
+    f.input("pointerup"); f.step(400);
+    assert.equal(f.viewport.scrollLeft, rtl ? -70 : 70);
+    f.dispose();
+    assert.equal(f.viewport.dataset.toolsExpanded, undefined);
+  }
+});
+
+test("admission waits for every owner-matching width and wakes on required mutations", () => {
+  const f = fixture([["todo", 100]], { required: [["todo", "session:root"], ["subagent:a", "session:root"]] });
+  assert.deepEqual(f.measurements, []);
+  f.update([["todo", 100], ["subagent:a", 0]], true);
+  assert.deepEqual(f.measurements, []);
+  f.nodes()[1].dataset.owner = "session:stale";
+  f.nodes()[1].naturalWidth = 120;
+  f.resize();
+  assert.deepEqual(f.measurements, []);
+  f.nodes()[1].dataset.owner = "session:root";
+  f.resize();
+  assert.deepEqual(f.measurements, [["session:root:1", f.viewport.dataset.toolsRequired]]);
+  f.resize();
+  assert.equal(f.measurements.length, 1);
+  f.require([]); f.step(16);
+  assert.deepEqual(f.measurements.at(-1), ["session:root:1", "[]"]);
+  f.select("session:child:2", "family"); f.step(16); f.step(16);
+  assert.deepEqual(f.measurements.at(-1), ["session:child:2", "[]"]);
+  f.dispose();
+});
+
+test("loaded-empty tools settle without a mounted capsule in either motion mode", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture([], { reduced, entering: false, required: [] });
+    assert.deepEqual(f.measurements, []);
+    f.step(16);
+    assert.deepEqual(f.measurements.at(-1), ["session:root:1", "[]"]);
+    assert.equal(f.viewport.scrollLeft, 0);
+    f.dispose();
+  }
+});
 
 test("initial render never scrolls and lift is the maximum height, not the sum", () => {
   const f = fixture([["interaction", 224, 160], ["todo", 100], ["agent:a", 120]]);

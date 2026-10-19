@@ -112,8 +112,10 @@ and WebUI share this contract.
   content, and a full-row ripple.
 - Keep counts and status details on a second line. Do not place them beside the
   primary label.
-- Destructive actions use the error color. Primary creation and save actions
-  use the primary color. Disabled appearance is owned by the component.
+- Destructive actions use the error color. Primary creation and save buttons
+  use the primary color. Top-bar Save icon actions use the scaffold's normal
+  foreground, including Add Provider; they do not set a primary tint.
+  Disabled appearance is owned by the component.
 - Settings destination rows never use a passive next-page chevron. Details,
   more, refresh, external-link, and other actual action icons use the full
   `onSurfaceVariant` color.
@@ -267,7 +269,7 @@ and WebUI share this contract.
   child execution per parent; extra work waits through the existing execution admission owner.
   Lowering either limit never stops or deletes existing children and lets running work finish.
 - Subagents includes an immediate-save Capsule display row with its leading icon, description,
-  current value and existing selected-check dropdown: Individual (default) and Grouped. It stays
+  current value and existing selected-check dropdown: Individual and Grouped (default). It stays
   available when delegation is disabled because existing child navigation stays available. Chinese
   copy is胶囊显示方式/独立显示/合并显示. There is no Save action. Native/WebUI capsule and sheet behavior
   belongs to application-ui.md39; persistence/default/restore belongs to import-export.md.

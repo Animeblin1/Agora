@@ -130,14 +130,18 @@ test("same-owner Todo updates retain identity while clear and disconnect release
   }
 });
 
-test("same-family parent child and sibling selection never closes the shared entry gate", () => {
+test("same-family navigation waits for new slots under the retained family gate", () => {
   const f = harness("ChatToolsRow");
-  f.render(state("root", 1));
+  const initial = rowTools(f.render(state("root", 1)));
+  f.settlements[0]("session:root:1", initial.viewport.props["data-tools-required"]);
+  assert.ok(rowTools(f.flush()).children.every(node => node.props.enter));
   for (const [openId, seq] of [["a", 2], ["b", 3], ["root", 4]]) {
     const selected = rowTools(f.render({ ...state(openId, seq), parentConversationId: "root" }));
     assert.equal(selected.viewport.props["data-tools-family"], "session:root");
-    assert.equal(selected.viewport.props["data-tools-enter"], "true");
-    assert.ok(selected.children.every(node => node.props.enter));
+    assert.equal(selected.viewport.props["data-tools-enter"], "false");
+    assert.ok(selected.children.every(node => !node.props.enter));
+    f.settlements[0](`session:${openId}:${seq}`, selected.viewport.props["data-tools-required"]);
+    assert.ok(rowTools(f.flush()).children.every(node => node.props.enter));
   }
   assert.equal(f.settlements.length, 1);
   f.dispose();
@@ -145,27 +149,34 @@ test("same-family parent child and sibling selection never closes the shared ent
 
 test("returning rapidly to the original family keeps its interrupted exit barrier closed", () => {
   const f = harness("ChatToolsRow");
-  f.render(state("root", 1));
+  const initial = rowTools(f.render(state("root", 1)));
+  f.settlements[0]("session:root:1", initial.viewport.props["data-tools-required"]);
+  f.flush();
   f.render(state("other", 2));
   const returned = rowTools(f.render(state("root", 3)));
   assert.equal(returned.viewport.props["data-tools-enter"], "false");
   assert.ok(returned.children.every(node => !node.props.enter));
-  f.settlements[0]("session:other:2");
+  f.settlements[0]("session:other:2", returned.viewport.props["data-tools-required"]);
   assert.ok(rowTools(f.flush()).children.every(node => !node.props.enter));
   f.settlements[0]("session:root:3");
+  assert.ok(rowTools(f.flush()).children.every(node => !node.props.enter));
+  f.settlements[0]("session:root:3", returned.viewport.props["data-tools-required"]);
   assert.ok(rowTools(f.flush()).children.every(node => node.props.enter));
   f.dispose();
 });
 
-test("initial tool paint stays gated through partial snapshots and releases together", () => {
+test("initial tool paint waits for complete snapshots and measured slots", () => {
   const f = harness("ChatToolsRow");
   for (const mask of [0, 1, 3]) {
     const row = rowTools(f.render({ ...state("root", 1), initialToolsReady: mask }));
     assert.equal(row.viewport.props["data-tools-enter"], "false");
+    assert.equal(row.viewport.props["data-tools-required"], undefined);
     assert.ok(row.children.every(node => !node.props.enter));
   }
   const ready = rowTools(f.render({ ...state("root", 1), initialToolsReady: 7 }));
-  assert.ok(ready.children.every(node => node.props.enter));
+  assert.ok(ready.children.every(node => !node.props.enter));
+  f.settlements[0]("session:root:1", ready.viewport.props["data-tools-required"]);
+  assert.ok(rowTools(f.flush()).children.every(node => node.props.enter));
   const child = rowTools(f.render({ ...state("child", 2), parentConversationId: "root", initialToolsReady: 0 }));
   assert.equal(child.viewport.props["data-tools-family"], "session:root");
   assert.ok(child.children.every(node => !node.props.enter));
@@ -173,10 +184,40 @@ test("initial tool paint stays gated through partial snapshots and releases toge
   f.dispose();
 });
 
+test("initial tool paint stays gated in either loading order including empty results", () => {
+  for (const order of [[2, 3, 7], [1, 5, 7]]) for (const emptyTodo of [false, true])
+    for (const emptyAgents of [false, true]) for (const grouped of [false, true]) {
+      const f = harness("ChatToolsRow");
+      const complete = { ...state("root", 1, emptyTodo ? [] : todo("root")),
+        subagents: emptyAgents ? [] : [{ id: "child", parentConversationId: "root" }],
+        display: { subagentCapsuleDisplayMode: grouped ? "grouped" : "individual" } };
+      for (const mask of [0, ...order]) {
+        const row = rowTools(f.render({ ...complete, initialToolsReady: mask }));
+        assert.equal(row.viewport.props["data-tools-enter"], "false");
+        assert.ok(row.children.every(node => !node.props.enter));
+        if (mask !== 7) assert.equal(row.viewport.props["data-tools-required"], undefined);
+        else {
+          assert.deepEqual(JSON.parse(row.viewport.props["data-tools-required"]), [
+            ...(emptyTodo ? [] : [["todo", "session:root:1"]]),
+            ...(emptyAgents ? [] : [[grouped ? "subagents:session:root" : "subagent:child", "session:root"]]),
+          ]);
+          f.settlements[0]("session:root:1", row.viewport.props["data-tools-required"]);
+          assert.ok(rowTools(f.flush()).children.every(node => node.props.enter));
+        }
+      }
+      const child = rowTools(f.render({ ...state("child", 2), parentConversationId: "root", initialToolsReady: 0 }));
+      assert.equal(child.viewport.props["data-tools-family"], "session:root");
+      assert.ok(child.children.every(node => !node.props.enter));
+      f.dispose();
+    }
+});
+
 test("ChatToolsRow closes the gate for every replacement and rejects obsolete settlement", () => {
   const f = harness("ChatToolsRow");
   const initial = rowTools(f.render(state("root", 1)));
-  assert.ok(initial.children.every(node => node.props.enter));
+  assert.ok(initial.children.every(node => !node.props.enter));
+  f.settlements[0]("session:root:1", initial.viewport.props["data-tools-required"]);
+  assert.ok(rowTools(f.flush()).children.every(node => node.props.enter));
   const middle = rowTools(f.render(state("middle", 2)));
   assert.equal(middle.viewport.props["data-tools-enter"], "false");
   assert.ok(middle.children.every(node => !node.props.enter));
@@ -184,10 +225,12 @@ test("ChatToolsRow closes the gate for every replacement and rejects obsolete se
   assert.equal(f.settlements.length, 2);
   assert.equal(reattached.viewport.props["data-tools-enter"], "false");
   assert.ok(reattached.children.every(node => !node.props.enter));
-  f.render({ ...state("latest", 3), display: { reduceMotion: true } });
-  f.settlements[1]("session:middle:2");
+  const latest = rowTools(f.render({ ...state("latest", 3), display: { reduceMotion: true } }));
+  f.settlements[1]("session:middle:2", reattached.viewport.props["data-tools-required"]);
   assert.ok(rowTools(f.flush()).children.every(node => !node.props.enter));
-  f.settlements[1]("session:latest:3");
+  f.settlements[1]("session:latest:3", reattached.viewport.props["data-tools-required"]);
+  assert.ok(rowTools(f.flush()).children.every(node => !node.props.enter));
+  f.settlements[1]("session:latest:3", latest.viewport.props["data-tools-required"]);
   assert.ok(rowTools(f.flush()).children.every(node => node.props.enter));
   assert.equal(f.settlements.length, 2);
   f.dispose();

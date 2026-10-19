@@ -66,8 +66,8 @@ class ConversationToolsRowTest {
                     ConversationToolsRow(
                         "parent", listOf(ConversationTodoItem("Task")), agents, {}, { height = it },
                         modifier = Modifier.width(900.dp), hasInteraction = true,
-                    ) { modifier, report, _, _, _ ->
-                        SideEffect { report(expectedHeight) }
+                    ) { modifier, report, _, _, _, reportTransition ->
+                        SideEffect { report(expectedHeight); reportTransition("parent", true) }
                         Box(modifier.width(200.dp).height(120.dp)) { Text("Interaction") }
                     }
                 }
@@ -94,8 +94,8 @@ class ConversationToolsRowTest {
         compose.setContent {
             MaterialTheme {
                 ConversationToolsRow("parent", emptyList(), agents, {}, {},
-                    modifier = Modifier.width(320.dp), hasInteraction = true) { modifier, report, _, _, _ ->
-                    SideEffect { composed++; report(48f) }
+                    modifier = Modifier.width(320.dp), hasInteraction = true) { modifier, report, _, _, _, reportTransition ->
+                    SideEffect { composed++; report(48f); reportTransition("parent", true) }
                     Text("Interaction", modifier.width(180.dp).height(48.dp))
                 }
             }
@@ -114,7 +114,8 @@ class ConversationToolsRowTest {
             slotWidth = with(LocalDensity.current) { 188.dp.toPx() }
             MaterialTheme {
                 ConversationToolsRow("parent", emptyList(), agents, {}, {},
-                    modifier = Modifier.width(320.dp), hasInteraction = interaction) { modifier, report, _, _, _ ->
+                    modifier = Modifier.width(320.dp), hasInteraction = interaction) { modifier, report, _, _, _, _ ->
+                    // This width-only fixture has no content fade; let the slot own its width tween.
                     SideEffect { report(if (interaction) 56f else 0f) }
                     if (interaction) Box(modifier.width(180.dp).height(56.dp)) { Text("Interaction") }
                 }
@@ -145,8 +146,8 @@ class ConversationToolsRowTest {
         compose.setContent {
             MaterialTheme {
                 ConversationToolsRow("parent", emptyList(), agents, {}, {},
-                    modifier = Modifier.width(320.dp), hasInteraction = interaction) { modifier, report, _, _, _ ->
-                    SideEffect { report(if (interaction) 56f else 0f) }
+                    modifier = Modifier.width(320.dp), hasInteraction = interaction) { modifier, report, _, _, _, reportTransition ->
+                    SideEffect { report(if (interaction) 56f else 0f); reportTransition("parent", interaction) }
                     if (interaction) Box(modifier.width(500.dp).height(56.dp)) { Text("Interaction") }
                 }
             }
@@ -183,8 +184,8 @@ class ConversationToolsRowTest {
             CompositionLocalProvider(LocalAgoraMotionPolicy provides AgoraMotionPolicy(true)) {
                 MaterialTheme {
                     ConversationToolsRow("parent", emptyList(), agents, {}, {},
-                        modifier = Modifier.width(320.dp), hasInteraction = interaction) { modifier, report, _, _, _ ->
-                        SideEffect { report(if (interaction) 56f else 0f) }
+                        modifier = Modifier.width(320.dp), hasInteraction = interaction) { modifier, report, _, _, _, reportTransition ->
+                        SideEffect { report(if (interaction) 56f else 0f); reportTransition("parent", interaction) }
                         if (interaction) Box(modifier.width(180.dp).height(56.dp)) { Text("Interaction") }
                     }
                 }
@@ -212,8 +213,8 @@ class ConversationToolsRowTest {
                     "parent", if (kind == "todo") listOf(ConversationTodoItem("Task")) else emptyList(),
                     if (kind == "subagent") agents else emptyList(), {}, { height = it },
                     hasInteraction = kind == "interaction",
-                ) { modifier, report, reportInset, _, _ ->
-                    ProductionInteraction(kind == "interaction", modifier, report, reportInset)
+                ) { modifier, report, reportInset, ready, animateEntry, reportTransition ->
+                    ProductionInteraction(kind == "interaction", modifier, report, reportInset, ready, animateEntry, reportTransition)
                 }
             }
         }
@@ -245,7 +246,9 @@ class ConversationToolsRowTest {
                     "parent", if (visible) listOf(ConversationTodoItem("Task")) else emptyList(),
                     if (visible) agents else emptyList(), {}, { height = it; reports += it },
                     hasInteraction = visible,
-                ) { modifier, report, reportInset, _, _ -> ProductionInteraction(visible, modifier, report, reportInset) }
+                ) { modifier, report, reportInset, ready, animateEntry, reportTransition ->
+                    ProductionInteraction(visible, modifier, report, reportInset, ready, animateEntry, reportTransition)
+                }
             }
         }
         compose.waitForIdle()
@@ -282,8 +285,8 @@ class ConversationToolsRowTest {
                     ConversationToolsRow(
                         "parent", listOf(ConversationTodoItem("Task")), agents, {},
                         { reportedHeight = it; reports += it }, hasInteraction = true,
-                    ) { modifier, report, _, _, _ ->
-                        SideEffect { compositions++ }
+                    ) { modifier, report, _, _, _, reportTransition ->
+                        SideEffect { compositions++; reportTransition("parent", true) }
                         Box(modifier.width(160.dp).height(120.dp).layout { measurable, constraints ->
                             measures++
                             val placeable = measurable.measure(constraints)
@@ -380,8 +383,8 @@ class ConversationToolsRowTest {
                     "parent", if (kind == "todo") listOf(ConversationTodoItem("Task")) else emptyList(),
                     if (kind == "subagent") agents else emptyList(), {}, { height = it },
                     hasInteraction = kind == "interaction", onMessageInsetChanged = { inset = it },
-                ) { modifier, report, reportInset, _, _ ->
-                    ProductionInteraction(kind == "interaction", modifier, report, reportInset)
+                ) { modifier, report, reportInset, ready, animateEntry, reportTransition ->
+                    ProductionInteraction(kind == "interaction", modifier, report, reportInset, ready, animateEntry, reportTransition)
                 }
             }
         }
@@ -422,8 +425,8 @@ class ConversationToolsRowTest {
                     "parent", if (kind == "todo") listOf(ConversationTodoItem("Task")) else emptyList(),
                     if (kind == "subagent") agents else emptyList(), {}, { height = it },
                     hasInteraction = kind == "interaction", onMessageInsetChanged = { inset = it },
-                ) { modifier, report, reportInset, _, _ ->
-                    ProductionInteraction(kind == "interaction", modifier, report, reportInset)
+                ) { modifier, report, reportInset, ready, animateEntry, reportTransition ->
+                    ProductionInteraction(kind == "interaction", modifier, report, reportInset, ready, animateEntry, reportTransition)
                 }
             }
         }
@@ -467,8 +470,8 @@ class ConversationToolsRowTest {
                         "parent", if (kind == "todo") listOf(ConversationTodoItem("Task")) else emptyList(),
                         if (kind == "subagent") agents else emptyList(), {}, { height = it },
                         hasInteraction = kind == "interaction", onMessageInsetChanged = { inset = it },
-                    ) { modifier, report, reportInset, _, _ ->
-                        ProductionInteraction(kind == "interaction", modifier, report, reportInset)
+                    ) { modifier, report, reportInset, ready, animateEntry, reportTransition ->
+                        ProductionInteraction(kind == "interaction", modifier, report, reportInset, ready, animateEntry, reportTransition)
                     }
                 }
             }
@@ -507,8 +510,8 @@ class ConversationToolsRowTest {
                 ConversationToolsRow(
                     "parent", listOf(ConversationTodoItem("Task")), agents, {}, { height = it },
                     hasInteraction = visible, onMessageInsetChanged = { inset = it },
-                ) { modifier, report, reportInset, _, _ ->
-                    ProductionInteraction(visible, modifier, report, reportInset, minimized = false)
+                ) { modifier, report, reportInset, ready, animateEntry, reportTransition ->
+                    ProductionInteraction(visible, modifier, report, reportInset, ready, animateEntry, reportTransition, minimized = false)
                 }
             }
         }
@@ -606,6 +609,9 @@ class ConversationToolsRowTest {
         modifier: Modifier,
         report: (Float) -> Unit,
         reportInset: (Float) -> Unit,
+        ready: Boolean,
+        animateEntry: Boolean,
+        reportTransition: (String?, Boolean) -> Unit,
         minimized: Boolean = true,
     ) {
         val waiting = remember {
@@ -622,6 +628,7 @@ class ConversationToolsRowTest {
             onMinimizedChange = { _, _ -> }, drafts = remember { QuestionDrafts() },
             pageIn = emptyMap(), onPageChange = { _, _ -> }, onCardGone = {}, modifier = modifier,
             inSharedRow = true, onMessageInsetChanged = reportInset,
+            appearanceReady = ready, animateEntry = animateEntry, onTransitionChanged = reportTransition,
         )
     }
 

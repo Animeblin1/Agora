@@ -243,10 +243,10 @@ older missing fields restore an effectively empty candidate list and no recommen
 empty set under REPLACE keeps it empty. Existing children and their model IDs are never rewritten by
 these global preferences.
 
-`subagentCapsuleDisplayMode` is a secret-free presentation string: `individual` (default) or
-`grouped`. Unknown or invalid values normalize to `individual`, following existing display-mode
-preferences. Export writes the resolved value. MERGE leaves an absent field unchanged; REPLACE
-clears its key before restoring, so old archives without it resolve to `individual`. This setting
+`subagentCapsuleDisplayMode` is a secret-free presentation string: `individual` or `grouped` (default).
+Unknown, invalid or absent values normalize to `grouped`; an explicitly saved `individual` remains
+unchanged. Export writes the resolved value. MERGE leaves an absent field unchanged; REPLACE clears
+its key before restoring, so old archives without it resolve to `grouped`. This setting
 never changes child ownership, order, generation state, tool access, or the model list.
 
 Only remote Embedding configurations are portable. They are stripped of API keys and local file

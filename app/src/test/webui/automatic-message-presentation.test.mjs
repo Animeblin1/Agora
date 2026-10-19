@@ -103,6 +103,7 @@ const mountedText = f => f.find(node => node.type === "div" && node.props.class 
 test("completion timeline has compact metadata only, without a hidden body or expansion action", () => {
   const f = bubble({ message: message({ source: receipt() }), search: { query: "hidden", matches: [], index: 0 },
     matches: [{ key: "body:0", start: 90, endExclusive: 96 }] });
+  assert.equal(f.find(node => node.props.class === "user-bubble subagent-result-bubble").type, "div");
   const result = f.component("SubagentResult");
   assert.ok(result);
   assert.equal(nodes(f.tree).some(node => node.ref && node.props.class === "user-text"), false);
@@ -188,6 +189,7 @@ test("Subagent instructions stay visible and searchable; ask_user keeps its exis
   const f = bubble({ message: message({ text: { markdown: "Task instruction" }, source: { kind: "subagent", subagentResult: null } }),
     matches, search: { query: "Task", matches, index: 0 } });
   assert.equal(f.component("SubagentResult"), undefined);
+  assert.ok(f.find(node => node.props.class === "user-bubble"));
   assert.equal(mountedText(f).textContent, "Task instruction");
   assert.equal(f.highlights.length, 1);
   assert.equal(f.highlights[0].matches, matches);

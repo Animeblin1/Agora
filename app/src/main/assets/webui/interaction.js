@@ -215,6 +215,7 @@ export function InteractionBar({ state, enter = true }) {
   if (!shown || !current) return null;
   const value = current.kind === "question" ? draft(current) : null;
   return html`<div class="interaction-host tools-item" ref=${host} data-tools-key="interaction" data-owner=${shown.owner}
+    data-tools-expanded=${visible && !memory.folded ? "true" : null}
     data-tools-exiting=${!visible && admitted.current === shown.owner ? "true" : null}>
     <section class=${`interaction-card${memory.folded ? " folded" : ""}`} ref=${card}
       inert=${!visible} aria-hidden=${!visible ? "true" : null} aria-label=${t.interactionTitle}>
