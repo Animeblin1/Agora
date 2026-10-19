@@ -22,6 +22,24 @@ import com.newoether.agora.viewmodel.ChatViewModel
 @Composable
 fun SettingsInteractionPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val askUserEnabled by viewModel.settings.askUserEnabled.collectAsState()
+    val timeoutMinutes by viewModel.settings.askUserTimeoutMinutes.collectAsState()
+    SettingsInteractionContent(
+        askUserEnabled = askUserEnabled,
+        timeoutMinutes = timeoutMinutes,
+        onEnabledChange = viewModel.settings::setAskUserEnabled,
+        onTimeoutChange = viewModel.settings::setAskUserTimeoutMinutes,
+        onBack = onBack,
+    )
+}
+
+@Composable
+internal fun SettingsInteractionContent(
+    askUserEnabled: Boolean,
+    timeoutMinutes: Int,
+    onEnabledChange: (Boolean) -> Unit,
+    onTimeoutChange: (Int) -> Unit,
+    onBack: () -> Unit,
+) {
     val scrollState = rememberSettingsScrollState()
     CollapsingSettingsScaffold(
         title = stringResource(R.string.settings_interaction),
@@ -48,12 +66,18 @@ fun SettingsInteractionPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                             trailingContent = {
                                 Switch(
                                     checked = askUserEnabled,
-                                    onCheckedChange = viewModel.settings::setAskUserEnabled,
+                                    onCheckedChange = onEnabledChange,
                                 )
                             },
                             modifier = Modifier.clickable {
-                                viewModel.settings.setAskUserEnabled(!askUserEnabled)
+                                onEnabledChange(!askUserEnabled)
                             },
+                        )
+                    }
+                    add {
+                        InteractionTimeoutSlider(
+                            value = timeoutMinutes,
+                            onValueChange = onTimeoutChange,
                         )
                     }
                 },

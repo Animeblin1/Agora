@@ -579,6 +579,21 @@ and drawer queries never read or enumerate Todo payloads. Native and browser cap
 projections described in application-ui.md. Required checks cover replacement/clear, stale Run/pass,
 Stop-before-write, unrelated-owner isolation, selected-only observation and archive compatibility.
 
+### 8.13a Ask User waiting
+
+`AskUserController` remains the exact-request waiter and answer owner. Blocking calls use one
+configured timeout for the whole question set, captured in `GenerationContext` at admission.
+`AskUserToolProvider` delegates that wait to the controller. The default is five minutes; Settings
+provides 1, 2, 5, 10, 15, 30 and 60 minute presets. The generic tool execution deadline does not
+shorten this budget. Expiry returns already submitted answers in question order and marks all
+remaining questions unanswered, removes those exact requests/waiters, and ignores late answers.
+It never invents approval or a selected option. The controller serializes answer claim/completion
+with the expiry snapshot and exact-request removal in one bounded decision; no suspending wait
+holds that lock. Stop/cancellation propagates normally and cleans
+all questions in the call without delivering a tool result or queued message. Non-blocking calls
+return immediately and retain their existing deferred-answer delivery without this timer. Settings
+changes affect future captured contexts only; no global timer, request state owner or restart is added.
+
 ## 8.14 Isolated Subagents
 Subagents are ordinary conversations with indexed `parentConversationId` ownership, reachable through
 parent-family navigation and using the canonical generation, tools, Stop and branch pipelines.

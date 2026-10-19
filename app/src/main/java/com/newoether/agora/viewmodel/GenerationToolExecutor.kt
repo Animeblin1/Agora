@@ -257,10 +257,11 @@ internal class GenerationToolExecutor private constructor(
 internal fun toolExecutionTimeoutMs(
     toolName: String,
     defaultTimeoutMs: Long,
-): Long = if (toolName == "generate_image") {
-    Constants.IMAGE_GENERATION_TIMEOUT_MS
-} else {
-    defaultTimeoutMs
+): Long = when (toolName) {
+    "generate_image" -> Constants.IMAGE_GENERATION_TIMEOUT_MS
+    // Ask User owns one configured deadline for its whole question set.
+    "ask_user" -> Long.MAX_VALUE
+    else -> defaultTimeoutMs
 }
 
 internal fun appendBoundedToolOutput(

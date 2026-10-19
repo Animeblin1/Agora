@@ -39,6 +39,21 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class GenerationRequestBuilderProviderDisplayTest {
     @Test
+    fun askUserTimeoutIsFrozenForTheAdmittedContextAndChangesForTheNextRun() = runTest {
+        val fixture = RequestBuilderFixture(Constants.PROVIDER_OPENAI, false)
+        val timeoutMinutes = MutableStateFlow(1)
+        every { fixture.settings.askUserTimeoutMinutes } returns timeoutMinutes
+        val first = fixture.builder.captureAdmissionSnapshot("conversation", "run", fixture.modelId)
+        assertEquals(1, first.context.askUserTimeoutMinutes)
+
+        timeoutMinutes.value = 60
+        val next = fixture.builder.captureAdmissionSnapshot("conversation", "next-run", fixture.modelId)
+
+        assertEquals(60, next.context.askUserTimeoutMinutes)
+        assertEquals(1, first.context.askUserTimeoutMinutes)
+    }
+
+    @Test
     fun globalTodoAndSubagentPermissionsMatchAdmissionAndProjectionIndependently() = runTest {
         val fixture = RequestBuilderFixture(Constants.PROVIDER_OPENAI, false)
         val todoEnabled = MutableStateFlow(true)
@@ -365,6 +380,7 @@ class GenerationRequestBuilderProviderDisplayTest {
         every { settings.webSearchEnabled } returns MutableStateFlow(true)
         every { settings.shellEnabled } returns MutableStateFlow(true)
         every { settings.askUserEnabled } returns MutableStateFlow(true)
+        every { settings.askUserTimeoutMinutes } returns MutableStateFlow(5)
         every { settings.localLowContextModeEnabled } returns MutableStateFlow(true)
         val builder = GenerationRequestBuilder(
             settings = settings,
@@ -691,6 +707,7 @@ internal class RequestBuilderFixture(
         every { settings.webSearchEnabled } returns MutableStateFlow(true)
         every { settings.shellEnabled } returns MutableStateFlow(true)
         every { settings.askUserEnabled } returns MutableStateFlow(true)
+        every { settings.askUserTimeoutMinutes } returns MutableStateFlow(5)
         every { settings.todoEnabled } returns MutableStateFlow(true)
         every { settings.subagentToolsEnabled } returns MutableStateFlow(true)
         every { settings.localLowContextModeEnabled } returns MutableStateFlow(false)

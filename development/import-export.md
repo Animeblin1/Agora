@@ -183,6 +183,7 @@ The following JSON field names are the complete current portable allowlist.
 | Provider and reasoning | `codeExecutionEnabled`, `googleSearchEnabled`, `thinkingEnabled`, `thinkingLevel`, `thinkingBudgetEnabled`, `thinkingBudgetTokens`, `openAiServiceTierEnabled`, `openAiServiceTier`, `openAiResponsesApiEnabled`, `anthropicCacheEnabled`, `anthropicCacheTtl`, `providerBaseUrls` |
 | Title generation | `titleGenerationEnabled`, `titleGenerationModel`, `titleGenerationPrompt`, `titleGenerationNotificationsEnabled` |
 | Tool access | `accessPastConversations`, `accessSavedMemories`, `accessActiveMemory`, `accessSkills`, `todoEnabled`, `subagentToolsEnabled`, `subagentMaxTotal`, `subagentMaxConcurrent`, `subagentEnabledModels`, `subagentRecommendedModel`, `subagentCapsuleDisplayMode` |
+| Interaction | `askUserEnabled`, `askUserTimeoutMinutes` |
 | Search and embedding | `ragSearchEnabled`, `modelSearchMethod`, `manualSearchMethod`, `remoteEmbeddingModels`, `activeRemoteEmbeddingModelId`, `searchContextWindow`, `searchMatchLimit`, `ragThreshold`, `autoCacheEnabled`, `showUncachedNotification` |
 | Language, Web Search, and image generation | `appLanguage`, `webSearchEnabled`, `webSearchProvider`, `webSearchNumResults`, `webSearchBaseUrl`, `imageGenEnabled`, `imageGenModel`, `imageGenSize`, `autoUpdateCheck` |
 | Image transcription | `imageTranscriptionEnabled`, `imageTranscriptionEnabledModels`, `imageTranscriptionModel`, `imageTranscriptionBatchSize`, `imageTranscriptionPrompt` |
@@ -216,6 +217,12 @@ its portable key before restore, so older archives resolve to false without rede
 `accessSkillsModify` has no independent archive field. Settings `REPLACE` clears its explicit
 device value so the restored setting follows the portable `accessSkills` compatibility fallback;
 `MERGE` leaves an existing explicit modify value unchanged.
+
+`askUserEnabled` defaults to true. `askUserTimeoutMinutes` is a secret-free integer selected from
+1, 2, 5, 10, 15, 30 and 60 minutes, default 5. Stored reads, saves and imported integers outside
+these presets normalize to 5. MERGE preserves either absent field. REPLACE clears both keys before
+restoring present fields, so older archives restore enabled/five-minute defaults. Export writes the
+effective values. These preferences never restore pending questions or restart an admitted wait.
 
 `todoEnabled` and `subagentToolsEnabled` are default-true portable booleans. MERGE preserves each
 local preference when its field is absent. REPLACE clears both keys before restoring present fields,

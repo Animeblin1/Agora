@@ -74,6 +74,8 @@ internal fun clearPortableSettings(prefs: MutablePreferences) {
     prefs.remove(PROXY_USERNAME)
     prefs.remove(PROXY_BYPASS)
     prefs.remove(SHELL_CONFIRM_ENABLED)
+    prefs.remove(ASK_USER_ENABLED)
+    prefs.remove(ASK_USER_TIMEOUT_MINUTES)
     prefs.remove(TODO_ENABLED)
     prefs.remove(SUBAGENT_TOOLS_ENABLED)
     prefs.remove(SUBAGENT_MAX_TOTAL)

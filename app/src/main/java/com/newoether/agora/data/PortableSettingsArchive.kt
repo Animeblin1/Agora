@@ -121,6 +121,7 @@ internal object PortableSettingsArchive {
         put("shellEnabled", JsonPrimitive(sm.shellEnabled.first()))
         put("shellConfirmEnabled", JsonPrimitive(sm.shellConfirmEnabled.first()))
         put("askUserEnabled", JsonPrimitive(sm.askUserEnabled.first()))
+        put("askUserTimeoutMinutes", JsonPrimitive(sm.askUserTimeoutMinutes.first()))
         put("todoEnabled", JsonPrimitive(sm.todoEnabled.first()))
         put("subagentToolsEnabled", JsonPrimitive(sm.subagentToolsEnabled.first()))
         val subagentMaxTotal = sm.subagentMaxTotal.first()
@@ -419,6 +420,7 @@ internal object PortableSettingsArchive {
         obj.boolean("shellEnabled")?.let { sm.saveShellEnabled(it) }
         obj.boolean("shellConfirmEnabled")?.let { sm.saveShellConfirmEnabled(it) }
         obj.boolean("askUserEnabled")?.let { sm.saveAskUserEnabled(it) }
+        obj.int("askUserTimeoutMinutes")?.let { sm.saveAskUserTimeoutMinutes(it) }
         obj.boolean("todoEnabled")?.let { sm.saveTodoEnabled(it) }
         obj.boolean("subagentToolsEnabled")?.let { sm.saveSubagentToolsEnabled(it) }
         val subagentMaxTotal = obj.int("subagentMaxTotal")

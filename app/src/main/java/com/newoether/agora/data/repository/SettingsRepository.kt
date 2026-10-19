@@ -183,6 +183,7 @@ class SettingsRepository(
     val proxyBypass: StateFlow<String> = publication.hot(settingsManager.proxyBypass, com.newoether.agora.data.SettingsManager.DEFAULT_PROXY_BYPASS)
     val shellConfirmEnabled: StateFlow<Boolean> = publication.hot(settingsManager.shellConfirmEnabled, true)
     val askUserEnabled: StateFlow<Boolean> = publication.hot(settingsManager.askUserEnabled, true)
+    val askUserTimeoutMinutes: StateFlow<Int> = publication.hot(settingsManager.askUserTimeoutMinutes, com.newoether.agora.data.DEFAULT_ASK_USER_TIMEOUT_MINUTES)
     val todoEnabled: StateFlow<Boolean> = publication.hot(settingsManager.todoEnabled, true)
     val subagentToolsEnabled: StateFlow<Boolean> = publication.hot(settingsManager.subagentToolsEnabled, true)
     val subagentMaxTotal: StateFlow<Int> = publication.hot(settingsManager.subagentMaxTotal, DEFAULT_SUBAGENT_MAX_TOTAL)
@@ -509,7 +510,7 @@ class SettingsRepository(
     fun removeImageTranscriptionModel(model: String) = scope.launch { settingsManager.saveImageTranscriptionEnabledModels(imageTranscriptionEnabledModels.value - model) }
 
     // Shell devices
-    fun removeShellDevice(deviceId: String) = scope.launch { settingsManager.saveShellDevices(shellDevices.value.filter { it.id != deviceId }) }
+    fun removeShellDevice(deviceId: String) = scope.launch { settingsManager.shellDeviceStore.remove(deviceId) }
     fun removeMcpServer(serverId: String) =
         scope.launch { settingsManager.saveMcpServers(mcpServers.value.filter { it.id != serverId }) }
 
@@ -699,15 +700,16 @@ class SettingsRepository(
 
     fun setShellConfirmEnabled(enabled: Boolean) = scope.launch { settingsManager.saveShellConfirmEnabled(enabled) }
     fun setAskUserEnabled(enabled: Boolean) = scope.launch { settingsManager.saveAskUserEnabled(enabled) }
+    fun setAskUserTimeoutMinutes(minutes: Int) = scope.launch { settingsManager.saveAskUserTimeoutMinutes(minutes) }
     fun setTodoEnabled(enabled: Boolean) = scope.launch { settingsManager.saveTodoEnabled(enabled) }
     fun setSubagentMaxTotal(value: Int) = scope.launch { settingsManager.saveSubagentMaxTotal(value) }
     fun setSubagentMaxConcurrent(value: Int) = scope.launch { settingsManager.saveSubagentMaxConcurrent(value) }
     fun setSubagentToolsEnabled(enabled: Boolean) = scope.launch { settingsManager.saveSubagentToolsEnabled(enabled) }
     fun setSubagentCapsuleDisplayMode(mode: String) = scope.launch { settingsManager.saveSubagentCapsuleDisplayMode(mode) }
-    fun addShellDevice(device: ShellDeviceConfig) = scope.launch { settingsManager.saveShellDevices(shellDevices.value + device) }
-    fun updateShellDevice(device: ShellDeviceConfig) = scope.launch {
-        settingsManager.saveShellDevices(shellDevices.value.map { if (it.id == device.id) device else it })
-    }
+    fun addShellDevice(device: ShellDeviceConfig, onResult: (Boolean) -> Unit = {}) =
+        scope.launch { onResult(settingsManager.shellDeviceStore.add(device)) }
+    fun updateShellDevice(device: ShellDeviceConfig, onResult: (Boolean) -> Unit = {}) =
+        scope.launch { onResult(settingsManager.shellDeviceStore.update(device)) }
     fun addMcpServer(server: McpServerConfig) =
         scope.launch { settingsManager.saveMcpServers(mcpServers.value + server) }
     fun updateMcpServer(server: McpServerConfig) = scope.launch {
