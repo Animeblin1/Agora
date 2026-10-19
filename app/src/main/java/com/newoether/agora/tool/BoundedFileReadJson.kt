@@ -14,6 +14,35 @@ internal const val FILE_READ_MAX_LINE_SCAN_READS = 16
 /** Line mode cuts single lines at this many chars so one long line cannot stall paging. */
 internal const val FILE_READ_MAX_LINE_CHARS = 16_000
 
+/** Parsed file_read paging arguments; [lineMode] is set only by a non-default start_line/max_lines. */
+internal data class FileReadArgs(
+    val offset: Long,
+    val limit: Long,
+    val lineMode: Boolean,
+    val startLine: Int,
+    val maxLines: Int,
+)
+
+/**
+ * Parses file_read paging arguments. Models that fill every schema field (structured output)
+ * send null or 0 for parameters they mean to leave out, so blank, null and 0 all mean "not set"
+ * for limit, start_line and max_lines. Returns the error message for invalid input.
+ */
+internal fun parseFileReadArgs(args: Map<String, kotlinx.serialization.json.JsonElement>): Pair<FileReadArgs?, String?> {
+    val offset = arg(args, "offset").toLongOrNull() ?: 0L
+    val limit = arg(args, "limit").toLongOrNull() ?: 0L
+    val rawStartLine = arg(args, "start_line").takeUnless { it == "0" }.orEmpty()
+    val rawMaxLines = arg(args, "max_lines").takeUnless { it == "0" }.orEmpty()
+    val startLine = if (rawStartLine.isBlank()) 1 else rawStartLine.toIntOrNull()
+        ?: return null to "start_line must be an integer"
+    if (startLine < 1) return null to "start_line must be at least 1"
+    val maxLines = if (rawMaxLines.isBlank()) FILE_READ_DEFAULT_LINES else rawMaxLines.toIntOrNull()
+        ?: return null to "max_lines must be an integer"
+    if (maxLines < 1) return null to "max_lines must be at least 1"
+    val lineMode = rawStartLine.isNotBlank() || rawMaxLines.isNotBlank()
+    return FileReadArgs(offset, limit, lineMode, startLine, maxLines) to null
+}
+
 internal fun boundedFileReadJson(
     server: String,
     path: String,

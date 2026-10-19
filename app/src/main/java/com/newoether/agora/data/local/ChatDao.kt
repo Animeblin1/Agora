@@ -40,8 +40,8 @@ interface ChatDao :
     ChatTodoDao,
     ChatSubagentDao,
     NewChatPersistDao {
-    // Task executions and subagents remain reachable only through their owning surfaces.
-    @Query("SELECT id, title, systemPromptId, modelId, taskId, origin, graduated, hasUnreadGeneration, isPinned, selectedBranchesJson, parentConversationId FROM conversations WHERE taskId IS NULL AND parentConversationId IS NULL ORDER BY lastUpdated DESC")
+    // Navigation never reads branch payloads; selected-owner observation owns them.
+    @Query("SELECT id, title, systemPromptId, modelId, taskId, origin, graduated, hasUnreadGeneration, isPinned, NULL AS selectedBranchesJson, parentConversationId FROM conversations WHERE taskId IS NULL AND parentConversationId IS NULL ORDER BY lastUpdated DESC")
     fun getAllConversations(): Flow<List<ChatConversation>>
     @Query("SELECT id, title, hasUnreadGeneration, isPinned FROM conversations WHERE taskId IS NULL AND parentConversationId IS NULL ORDER BY isPinned DESC, lastUpdated DESC, id LIMIT :limit")
     fun observeDrawerConversations(limit: Int): Flow<List<DrawerConversationRow>>

@@ -257,22 +257,35 @@ class ChatViewModel(
     val conversations: StateFlow<List<ChatConversation>?> = convRepo.getAllConversations()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val currentConversationId: StateFlow<String?> get() = selectionController.currentConversationId
-    val currentSubagents = currentConversationId.flatMapLatest { id ->
-        if (id == null) flowOf(id to emptyList<com.newoether.agora.model.SubagentSummary>())
-        else convRepo.observeParentConversationId(id).flatMapLatest { parent ->
-            convRepo.observeSubagents(parent ?: id).map { id to it }
-        }.onStart { emit(id to emptyList()) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), null to emptyList())
+    internal val currentSubagentFamily = observeSelectedSubagentFamily(
+        selectedConversationId = currentConversationId,
+        observeParent = convRepo::observeParentConversationId,
+        observeSubagents = convRepo::observeSubagents,
+    ).stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SubagentFamilySnapshot(),
+    )
+    val currentSubagents = combine(currentConversationId, currentSubagentFamily) { id, family ->
+        id to family.forSelection(id)?.agents.orEmpty()
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(0, replayExpirationMillis = 0),
+        null to emptyList(),
+    )
 
     private val subagentDeliveryOnOpen = viewModelScope.launch {
         currentConversationId.collect { id -> id?.let(chatRuntime.onConversationOpened) }
     }
 
-    val currentConversationTodo = currentConversationId.flatMapLatest { id ->
-        if (id == null) flowOf(id to emptyList<com.newoether.agora.model.ConversationTodoItem>())
-        else convRepo.observeConversationTodo(id).map { id to it }
-            .onStart { emit(id to emptyList()) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), null to emptyList())
+    val currentConversationTodo = observeSelectedConversationTodo(
+        currentConversationId, convRepo::observeConversationTodo,
+    ).stateIn(viewModelScope, SharingStarted.Eagerly, null to emptyList())
+    private val currentInteractions = combine(
+        currentConversationId, askUser.requests, shellConfirmation.pendingShellCommand,
+    ) { id, questions, shell ->
+        id to com.newoether.agora.ui.chat.interaction.userInteractions(id, questions, shell)
+    }
     val selectedConversationGenerationSnapshot: StateFlow<ConversationGenerationSnapshot>
         get() = selectionController.selectedConversationGenerationSnapshot
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -368,16 +381,21 @@ class ChatViewModel(
         override fun showShareText(text: String) {
             _conversationShareText.tryEmit(text)
         }
-        override fun settleDeletedConversation(conversationId: String) =
-            selectionController.settleDeletedSelectedConversation(conversationId)
+        override fun settleDeletedConversation(conversationId: String, parentConversationId: String?) =
+            selectionController.settleDeletedSelectedConversation(conversationId, parentConversationId)
         override fun isSubmissionFrozen(conversationId: String): Boolean =
             conversationComposerSubmission.isFrozen(conversationId)
         override fun onGenerationActivityChanged(conversationId: String, active: Boolean) =
             if (active) conversationUi.markActive(conversationId) else conversationUi.markIdle(conversationId)
     }
     val allMessages: StateFlow<List<ChatMessage>> = conversationUi.allMessages
-    val loadedMessagesConversationId: StateFlow<String?> =
-        conversationUi.loadedMessagesConversationId
+    val loadedMessagesConversationId: StateFlow<String?> = observeConversationContentReadiness(
+        selectedConversationId = currentConversationId,
+        loadedMessagesConversationId = conversationUi.loadedMessagesConversationId,
+        todo = currentConversationTodo,
+        family = currentSubagentFamily,
+        interactions = currentInteractions,
+    ).stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val providerModelSync = ProviderModelSyncController(
         providers = providerRegistry,

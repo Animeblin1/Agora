@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CallSplit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
@@ -44,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,8 +64,99 @@ import com.newoether.agora.ui.motion.rememberIdentityClipWidth
 import com.newoether.agora.ui.theme.ChatType
 import com.newoether.agora.ui.components.AgoraDropdownMenu
 import com.newoether.agora.ui.components.AgoraDropdownMenuItem
+import com.newoether.agora.data.replaceCustomProviderIdsForDisplay
+import com.newoether.agora.ui.common.LocalAgoraHaptics
+import com.newoether.agora.viewmodel.ChatViewModel
 
 private const val TITLE_CAPSULE_MAX_WIDTH_DP = 260
+
+@Composable
+internal fun ChatTopBar(
+    viewModel: ChatViewModel,
+    dialogState: ChatAppDialogState,
+    conversationInteraction: ConversationInteractionProjection,
+    conversations: List<ChatConversation>,
+    totalTokens: Int,
+    contextTokenBudget: Int,
+    systemPromptEnabled: Boolean,
+    onNavigateBack: (() -> Unit)?,
+    onOpenDrawer: () -> Unit,
+    onForkConversation: () -> Unit,
+    onNewChat: () -> Unit,
+) {
+    val currentConversationId by viewModel.currentConversationId.collectAsState()
+    val currentConversation by viewModel.currentConversation.collectAsState()
+    val loadedOwnerId by viewModel.loadedMessagesConversationId.collectAsState()
+    val isNewChatMode by viewModel.isNewChatMode.collectAsState()
+    val isSwitching by viewModel.isSwitching.collectAsState()
+    val isTransitioningToNewChat by viewModel.isTransitioningToNewChat.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val submittingOwnerIds by viewModel.conversationComposerSubmission.activeOwnerIds.collectAsState()
+    val customProviders by viewModel.settings.customProviders.collectAsState()
+    val focusManager = LocalFocusManager.current
+    val haptics = LocalAgoraHaptics.current
+    val metadataEnabled = !isNewChatMode && currentConversationId != null &&
+        currentConversation?.id == currentConversationId && loadedOwnerId == currentConversationId &&
+        !isSwitching && !isTransitioningToNewChat && !conversationInteraction.shareSelectionActive
+
+    // Recheck the source owner at dispatch; dialog state retains it after later navigation.
+    fun currentTarget(conversationId: String): ChatConversation? {
+        if (viewModel.isNewChatMode.value || viewModel.isSwitching.value ||
+            viewModel.isTransitioningToNewChat.value || conversationInteraction.shareSelectionActive ||
+            viewModel.currentConversationId.value != conversationId ||
+            viewModel.loadedMessagesConversationId.value != conversationId
+        ) return null
+        return viewModel.currentConversation.value?.takeIf { it.id == conversationId }
+    }
+
+    ChatTopBar(
+        isNewChatMode = isNewChatMode,
+        conversations = conversations,
+        currentConversationId = currentConversationId,
+        currentConversationTitle = currentConversation?.title?.let {
+            replaceCustomProviderIdsForDisplay(it, customProviders)
+        },
+        totalTokens = totalTokens,
+        contextTokenBudget = contextTokenBudget,
+        searchActive = conversationInteraction.searchActive,
+        searchQuery = conversationInteraction.searchQuery,
+        searchMatchIndex = conversationInteraction.searchMatchIndex,
+        searchMatchCount = conversationInteraction.searchMatches.size,
+        conversationActionsEnabled = !isNewChatMode && currentConversationId != null &&
+            !isLoading && !conversationInteraction.shareSelectionActive,
+        conversationMetadataActionsEnabled = metadataEnabled,
+        conversationDeleteEnabled = currentConversationId !in submittingOwnerIds,
+        systemPromptEnabled = systemPromptEnabled,
+        onNavigateBack = onNavigateBack,
+        onOpenDrawer = onOpenDrawer,
+        onSearchQueryChange = conversationInteraction::updateSearchQuery,
+        onSearchPrevious = { if (conversationInteraction.previousSearchMatch()) haptics.selection() },
+        onSearchNext = { if (conversationInteraction.nextSearchMatch()) haptics.selection() },
+        onSearchDismiss = {
+            conversationInteraction.dismissSearch()
+            focusManager.clearFocus()
+        },
+        onSearchClick = conversationInteraction::activateSearch,
+        onSystemPromptClick = dialogState::showPrompt,
+        onForkConversation = onForkConversation,
+        onShareConversation = {
+            conversationInteraction.dismissSearch()
+            focusManager.clearFocus()
+            conversationInteraction.activateShareSelection()
+        },
+        onRenameConversation = { conversationId ->
+            currentTarget(conversationId)?.let { conversation ->
+                dialogState.requestRename(conversationId, conversation.title)
+            }
+        },
+        onDeleteConversation = { conversationId ->
+            if (currentTarget(conversationId) != null && !viewModel.isConversationDeleteLocked(conversationId)) {
+                dialogState.requestDelete(conversationId)
+            }
+        },
+        onNewChat = onNewChat,
+    )
+}
 
 /**
  * The chat screen's top bar: a title capsule (drawer menu + brand/conversation
@@ -85,6 +179,8 @@ internal fun ChatTopBar(
     searchMatchIndex: Int = -1,
     searchMatchCount: Int = 0,
     conversationActionsEnabled: Boolean = false,
+    conversationMetadataActionsEnabled: Boolean = false,
+    conversationDeleteEnabled: Boolean = conversationMetadataActionsEnabled,
     systemPromptEnabled: Boolean = true,
     onNavigateBack: (() -> Unit)? = null,
     onOpenDrawer: () -> Unit,
@@ -96,13 +192,31 @@ internal fun ChatTopBar(
     onSystemPromptClick: () -> Unit,
     onForkConversation: () -> Unit = {},
     onShareConversation: () -> Unit = {},
+    onRenameConversation: (String) -> Unit = {},
+    onDeleteConversation: (String) -> Unit = {},
     onNewChat: () -> Unit,
     trailingActions: (@Composable RowScope.() -> Unit)? = null,
     newChatEnabled: Boolean = true,
     newChatDescription: String? = null,
     moreMenuContent: (@Composable ColumnScope.(dismiss: () -> Unit) -> Unit)? = null,
 ) {
-    var moreMenuOpen by remember { mutableStateOf(false) }
+    var moreMenuOpen by remember(
+        if (moreMenuContent == null) currentConversationId else null,
+        moreMenuContent == null && isNewChatMode,
+    ) { mutableStateOf(false) }
+    var moreMenuConversationId by remember { mutableStateOf<String?>(null) }
+    var moreMenuRequest by remember { mutableStateOf<Any?>(null) }
+    val menuRequest = moreMenuRequest
+    val menuConversationId = moreMenuConversationId
+    val latestConversationId by rememberUpdatedState(if (isNewChatMode) null else currentConversationId)
+    val hasConversationTarget = !isNewChatMode && currentConversationId != null &&
+        menuConversationId == currentConversationId
+    val renameEnabled = hasConversationTarget && conversationMetadataActionsEnabled
+    val deleteEnabled = hasConversationTarget && conversationMetadataActionsEnabled && conversationDeleteEnabled
+    val latestRenameEnabled by rememberUpdatedState(renameEnabled)
+    val latestMenuOpen by rememberUpdatedState(moreMenuOpen)
+    val latestDeleteEnabled by rememberUpdatedState(deleteEnabled)
+    val deleteColor = MaterialTheme.colorScheme.error.copy(alpha = if (deleteEnabled) 1f else 0.5f)
     val allowSpatialTransitions = LocalAgoraMotionPolicy.current.allowSpatialTransitions
     val searchFocusRequester = remember { FocusRequester() }
     LaunchedEffect(searchActive) {
@@ -447,6 +561,8 @@ internal fun ChatTopBar(
                         Box {
                             IconButton(
                                 onClick = {
+                                    moreMenuConversationId = currentConversationId
+                                    moreMenuRequest = Any()
                                     moreMenuOpen = true
                                 },
                                 modifier = Modifier.size(44.dp),
@@ -459,7 +575,10 @@ internal fun ChatTopBar(
                             }
                             AgoraDropdownMenu(
                                 expanded = moreMenuOpen,
-                                onDismissRequest = { moreMenuOpen = false },
+                                onDismissRequest = {
+                                    moreMenuOpen = false
+                                    moreMenuRequest = null
+                                },
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                                 tonalElevation = 16.dp,
                             ) {
@@ -504,6 +623,36 @@ internal fun ChatTopBar(
                                     onClick = {
                                         moreMenuOpen = false
                                         onShareConversation()
+                                    },
+                                )
+                                AgoraDropdownMenuItem(
+                                    text = { Text(stringResource(R.string.rename)) },
+                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                    enabled = renameEnabled,
+                                    onClick = {
+                                        if (latestMenuOpen && menuRequest != null && menuRequest === moreMenuRequest &&
+                                            latestRenameEnabled && menuConversationId == latestConversationId
+                                        ) {
+                                            moreMenuOpen = false
+                                            moreMenuRequest = null
+                                            menuConversationId?.let(onRenameConversation)
+                                        }
+                                    },
+                                )
+                                AgoraDropdownMenuItem(
+                                    text = { Text(stringResource(R.string.delete), color = deleteColor) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Delete, contentDescription = null, tint = deleteColor)
+                                    },
+                                    enabled = deleteEnabled,
+                                    onClick = {
+                                        if (latestMenuOpen && menuRequest != null && menuRequest === moreMenuRequest &&
+                                            latestDeleteEnabled && menuConversationId == latestConversationId
+                                        ) {
+                                            moreMenuOpen = false
+                                            moreMenuRequest = null
+                                            menuConversationId?.let(onDeleteConversation)
+                                        }
                                     },
                                 )
                                 }

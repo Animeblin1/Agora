@@ -212,6 +212,39 @@ class ConversationGenerationState(
         nextToken
     }
 
+    /** Retained by this lifecycle owner until both durable settlement and installed Job cleanup. */
+    private val generationAdmissionReleases = mutableMapOf<Long, Pair<Job, () -> Unit>>()
+
+    internal suspend fun acquireGenerationAdmission(
+        uiToken: Long,
+        coordinator: com.newoether.agora.automation.ConversationExecutionCoordinator,
+    ): Boolean {
+        val release = coordinator.acquireGenerationAdmission(conversationId)
+        val retained = synchronized(genLock) {
+            if (!runState.isLaunchableOwner(uiToken)) {
+                false
+            } else {
+                val job = checkNotNull(resources.currentGenerationJob())
+                check(uiToken !in generationAdmissionReleases)
+                generationAdmissionReleases[uiToken] = job to release
+                true
+            }
+        }
+        if (!retained) release()
+        return retained
+    }
+
+    private fun releaseSettledGenerationAdmissions() = synchronized(genLock) {
+        generationAdmissionReleases.entries.removeAll { (token, admission) ->
+            if (runState.identityOrNull()?.ownerToken == token || !admission.first.isCompleted) {
+                false
+            } else {
+                admission.second()
+                true
+            }
+        }
+    }
+
     /**
      * Installs the generation Job before it can execute. This closes the launch-assignment race:
      * Stop either sees and cancels this exact Job, or marks the pre-launch slot STOPPING and this
@@ -308,6 +341,7 @@ class ConversationGenerationState(
                 ConversationCommand.CoroutineSettled(commandIdentity)
             },
         )
+        releaseSettledGenerationAdmissions()
         if (!transition.accepted) return@withContext false
         when (
             transition.effects.filterIsInstance<RunEffect.ReleaseSlot>().singleOrNull()?.reason
@@ -389,6 +423,7 @@ class ConversationGenerationState(
     @Volatile var onStreamCommit: ((String, ChatMessage) -> Unit)? = null
     /** Fired after any normal or STOPPED terminal release so pending guidance can claim a fresh Run. */
     @Volatile var onQueueDrainRequested: ((ConversationGenerationState) -> Unit)? = null
+    internal var onQueuedSendDismissed: (suspend (QueuedSend) -> Unit)? = null
 
     /** Builds the token-gated callbacks for one generation, writing ONLY to this conversation's
      *  private state. The ChatViewModel mirror pipes private→global when this conversation is
@@ -541,6 +576,23 @@ class ConversationGenerationState(
     internal fun removeQueuedSend(id: String): QueuedSend? = guidanceLeases.remove(id)
     internal fun discardQueuedSend(send: QueuedSend) = guidanceLeases.discard(send)
 
+    /** Called under queueMutationMutex; persist dismissal before releasing visible ownership. */
+    internal suspend fun dismissQueuedSend(id: String) {
+        val send = queuedSends.value.firstOrNull { it.id == id } ?: return
+        onQueuedSendDismissed?.invoke(send)
+        removeQueuedSend(id)?.let(::discardQueuedSend)
+    }
+
+    internal fun containsSubagentResult(childId: String, resultId: String): Boolean =
+        guidanceLeases.containsSubagentResult(childId, resultId)
+
+    internal fun removeSubagentResults(receipts: Map<String, String>) {
+        guidanceLeases.removeSubagentResults(receipts).forEach(::discardQueuedSend)
+    }
+
+    internal fun retireSubagentResults(lease: GuidanceBatchLease, receipts: Set<Pair<String, String>>): GuidanceBatchLease? =
+        guidanceLeases.retireSubagentResults(lease, receipts)
+
     /** Transfer the pending batch to one explicit in-flight owner before leaving memory-only state. */
     internal fun claimQueuedSends(): GuidanceBatchLease? = guidanceLeases.claim()
 
@@ -648,6 +700,7 @@ class ConversationGenerationState(
 
     private fun notifyReleasedLocked() {
         check(runState is RunState.Idle)
+        releaseSettledGenerationAdmissions()
         onRegistryIdle(conversationId)
         onIdle?.invoke(conversationId)
     }

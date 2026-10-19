@@ -1,6 +1,7 @@
 package com.newoether.agora.webui
 
 import android.content.res.Resources
+import com.newoether.agora.model.subagentResultDisplay
 import com.newoether.agora.R
 import com.newoether.agora.data.local.DrawerConversationRow
 import com.newoether.agora.api.util.ContextTokenEstimator
@@ -51,6 +52,7 @@ internal data class WebDisplayContext(
     /** The phone's model aliases and provider-name visibility, for MessageInfoDialog's model line. */
     val modelAliases: Map<String, String> = emptyMap(),
     val modelProviderNames: Map<String, Boolean> = emptyMap(),
+    val subagentCapsuleDisplayMode: String = "individual",
 ) {
     /** Settings plus the live timer templates; the browser formats the running seconds. */
     fun toEvent() = WebSyncEvent.Display(
@@ -60,6 +62,7 @@ internal data class WebDisplayContext(
         autoWrapCodeBlocks = autoWrapCodeBlocks,
         blurEffectsEnabled = blurEffectsEnabled,
         reduceMotion = reduceMotion,
+        subagentCapsuleDisplayMode = subagentCapsuleDisplayMode,
         liveThinking = WebLiveTimerStrings(
             seconds = resources.getString(R.string.thinking_for_seconds_ellipsis),
             minutes = resources.getString(R.string.thinking_for_minutes_ellipsis),
@@ -430,9 +433,13 @@ internal fun ChatMessage.toWeb(presentation: WebPresentation?, modelDisplay: Str
     text = WebText(text),
     presentation = presentation,
     compact = isContextCompact(),
-    // The kind name is already the wire spelling: task, loop, ask_user.
+    // The kind name is already the wire spelling: task, loop, ask_user, subagent.
     source = source?.let {
-        WebMessageSource(it.kind.name.lowercase(), it.askUser.map { item -> WebAskUserItem(item.question, item.answer) })
+        WebMessageSource(
+            kind = it.kind.name.lowercase(),
+            askUser = it.askUser.map { item -> WebAskUserItem(item.question, item.answer) },
+            subagentResult = it.subagentResultDisplay(text),
+        )
     },
     usage = tokenUsage?.let {
         val view = tokenUsagePresentation(it)

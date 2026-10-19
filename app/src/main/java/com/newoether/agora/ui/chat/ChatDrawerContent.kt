@@ -434,7 +434,7 @@ internal fun ChatDrawerContent(
                                         isSelected = isSelected,
                                         hasUnreadGeneration = conversation.hasUnreadGeneration,
                                     )
-                                    val menuEnabled = !isSwitching && !isGenerating
+                                    val menuEnabled = !isSwitching
                                     val deleteEnabled = menuEnabled &&
                                         conversation.id !in submittingConversationIds
                                     val unreadDescription =

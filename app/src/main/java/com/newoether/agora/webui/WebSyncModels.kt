@@ -103,6 +103,18 @@ internal sealed interface WebSyncEvent {
     @Serializable @SerialName("streaming")
     data class Streaming(val conversationId: String, val message: WebMessage?, val seq: Long = 0L) : WebSyncEvent
 
+    /**
+     * The next frame of the in-flight message [messageId] as a [webJsonPatch] against the frame
+     * this connection sent last. A new message, or the end of streaming, is a full [Streaming].
+     */
+    @Serializable @SerialName("streaming_patch")
+    data class StreamingPatch(
+        val conversationId: String,
+        val messageId: String,
+        val patch: JsonObject,
+        val seq: Long = 0L,
+    ) : WebSyncEvent
+
     @Serializable @SerialName("deleted")
     data class Deleted(val conversationId: String, val seq: Long = 0L) : WebSyncEvent
 
@@ -115,6 +127,7 @@ internal sealed interface WebSyncEvent {
     data class ConversationDelete(val conversationId: String, val actionId: Long, val success: Boolean) : WebSyncEvent
 
     /** The phone's display settings and live-timer strings; sent first and on each change. */
+    @OptIn(ExperimentalSerializationApi::class)
     @Serializable @SerialName("display")
     data class Display(
         val toolCallDisplayMode: String,
@@ -124,6 +137,7 @@ internal sealed interface WebSyncEvent {
         val blurEffectsEnabled: Boolean,
         val reduceMotion: Boolean,
         val liveThinking: WebLiveTimerStrings,
+        @EncodeDefault val subagentCapsuleDisplayMode: String = "individual",
     ) : WebSyncEvent
 
     @Serializable @SerialName("load_failed")
@@ -235,9 +249,13 @@ internal data class WebMessage(
     val loadTokens: Int = 0,
 )
 
-/** The origin of a message the app sent by itself: a task run, a loop cycle or ask_user answers. */
+/** The origin of an automatic input, including optional compact Subagent completion display. */
 @Serializable
-internal data class WebMessageSource(val kind: String, val askUser: List<WebAskUserItem> = emptyList())
+internal data class WebMessageSource(
+    val kind: String,
+    val askUser: List<WebAskUserItem> = emptyList(),
+    val subagentResult: com.newoether.agora.model.MessageSource.SubagentResult? = null,
+)
 
 /** One asked question. A null [answer] renders the localized unanswered label, as on the phone. */
 @Serializable

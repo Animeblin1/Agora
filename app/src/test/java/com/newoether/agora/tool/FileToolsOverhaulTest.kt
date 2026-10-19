@@ -187,4 +187,48 @@ class FileToolsOverhaulTest {
         val json = Json.parseToJsonElement(raw).jsonObject
         assertEquals("7", json.getValue("next_offset").jsonPrimitive.content)
     }
+
+    private fun readArgs(json: String) = parseFileReadArgs(parseToolArgs(json))
+
+    @Test
+    fun `arg reads JSON null as blank instead of the string null`() {
+        val args = parseToolArgs("""{"a":null,"b":"x","c":7}""")
+        assertEquals("", arg(args, "a"))
+        assertEquals("x", arg(args, "b"))
+        assertEquals("7", arg(args, "c"))
+        assertEquals("", arg(args, "missing"))
+    }
+
+    @Test
+    fun `file_read treats null paging fields as unset byte mode`() {
+        val (parsed, error) = readArgs(
+            """{"path":"/a","offset":null,"limit":null,"start_line":null,"max_lines":null}""",
+        )
+        assertNull(error)
+        assertEquals(FileReadArgs(0L, 0L, false, 1, FILE_READ_DEFAULT_LINES), parsed)
+    }
+
+    @Test
+    fun `file_read treats zero paging fields as unset byte mode`() {
+        val (parsed, error) = readArgs(
+            """{"path":"/a","offset":0,"limit":0,"start_line":0,"max_lines":0}""",
+        )
+        assertNull(error)
+        assertEquals(FileReadArgs(0L, 0L, false, 1, FILE_READ_DEFAULT_LINES), parsed)
+    }
+
+    @Test
+    fun `file_read zero max_lines keeps line mode from start_line`() {
+        val (parsed, error) = readArgs("""{"path":"/a","offset":null,"limit":0,"start_line":40,"max_lines":0}""")
+        assertNull(error)
+        assertEquals(FileReadArgs(0L, 0L, true, 40, FILE_READ_DEFAULT_LINES), parsed)
+    }
+
+    @Test
+    fun `file_read still rejects negative and non integer line fields`() {
+        assertEquals("start_line must be at least 1", readArgs("""{"start_line":-3}""").second)
+        assertEquals("max_lines must be at least 1", readArgs("""{"max_lines":-1}""").second)
+        assertEquals("start_line must be an integer", readArgs("""{"start_line":"abc"}""").second)
+        assertNull(readArgs("""{"start_line":-3}""").first)
+    }
 }

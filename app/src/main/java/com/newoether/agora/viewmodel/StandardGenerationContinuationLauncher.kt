@@ -91,6 +91,7 @@ internal class StandardGenerationContinuationLauncher(
                 }
 
             try {
+                if (!state.acquireGenerationAdmission(uiToken, executionCoordinator)) return@generation
                 val persistId = state.nextPersistId()
                 val launchAtBoundary: suspend () -> Unit = boundary@{
                     if (!state.isCurrentToken(uiToken)) return@boundary

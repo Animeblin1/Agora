@@ -1,4 +1,5 @@
 package com.newoether.agora.tool
+import com.newoether.agora.util.Constants
 import com.newoether.agora.util.SHELL_FILE_EDIT_MAX_OPERATIONS
 import com.newoether.agora.util.ShellFileEdit
 import com.newoether.agora.util.ShellFileEditResult
@@ -26,8 +27,11 @@ internal fun jsonError(type: String, message: String, server: String? = null, co
         if (command != null) put("command", command)
     }.toString()
 }
+/** String value of [key]; missing, non-primitive and JSON null all read as "" (not "null"). */
 internal fun arg(args: Map<String, JsonElement>, key: String): String {
-    return (args[key] as? JsonPrimitive)?.content ?: ""
+    val value = args[key]
+    if (value == null || value is JsonNull) return ""
+    return (value as? JsonPrimitive)?.content ?: ""
 }
 internal fun boolArg(args: Map<String, JsonElement>, key: String): Boolean =
     (args[key] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() == true
@@ -54,30 +58,55 @@ internal fun fileEditSuccessJson(server: String, path: String, result: ShellFile
         if (result.snippetsTruncated) put("snippets_truncated", true)
     }.toString()
 
-/** file_grep tool JSON; context arrays are omitted when empty. */
-internal fun fileGrepJson(pattern: String, grep: ShellGrepResult, contextRequested: Boolean): String =
-    buildJsonObject {
-        put("type", "file_grep"); put("pattern", pattern)
-        putJsonArray("matches") {
-            grep.matches.forEach { m ->
-                add(buildJsonObject {
-                    put("path", m.path); put("line", m.line); put("content", m.content)
-                    if (m.before.isNotEmpty()) {
-                        putJsonArray("before") { m.before.forEach { add(JsonPrimitive(it)) } }
-                    }
-                    if (m.after.isNotEmpty()) {
-                        putJsonArray("after") { m.after.forEach { add(JsonPrimitive(it)) } }
-                    }
-                })
+/**
+ * file_grep tool JSON; context arrays are omitted when empty.
+ *
+ * The result is stored and shown as JSON, and the generation pipeline clips stored results at
+ * [maxLength]. A clipped envelope no longer parses, so the card and the detail sheet lose the match
+ * list. Whole matches are dropped from the end instead, and `truncated` is set, so the JSON always
+ * stays complete and within [maxLength].
+ */
+internal fun fileGrepJson(
+    pattern: String,
+    grep: ShellGrepResult,
+    contextRequested: Boolean,
+    maxLength: Int = Constants.MAX_TOOL_RESULT_LENGTH,
+): String {
+    val matches = grep.matches.map { m ->
+        buildJsonObject {
+            put("path", m.path); put("line", m.line); put("content", m.content)
+            if (m.before.isNotEmpty()) {
+                putJsonArray("before") { m.before.forEach { add(JsonPrimitive(it)) } }
+            }
+            if (m.after.isNotEmpty()) {
+                putJsonArray("after") { m.after.forEach { add(JsonPrimitive(it)) } }
             }
         }
-        put("truncated", grep.truncated)
+    }
+    fun envelope(kept: List<JsonObject>, truncated: Boolean): String = buildJsonObject {
+        put("type", "file_grep"); put("pattern", pattern)
+        put("matches", JsonArray(kept))
+        put("truncated", truncated)
         if (grep.skippedLargeFiles > 0) put("skipped_large_files", grep.skippedLargeFiles)
         if (contextRequested && !grep.contextSupported) {
             put("context_supported", false)
             put("warning", "this Conch server ignores context; upgrade Conch for context lines")
         }
     }.toString()
+
+    val full = envelope(matches, grep.truncated)
+    if (full.length <= maxLength) return full
+    // Fixed part measured exactly as emitted below (truncated=true, no matches).
+    var remaining = maxLength - envelope(emptyList(), truncated = true).length
+    var keep = 0
+    for (match in matches) {
+        val cost = match.toString().length + if (keep > 0) 1 else 0
+        if (cost > remaining) break
+        remaining -= cost
+        keep++
+    }
+    return envelope(matches.subList(0, keep), truncated = true)
+}
 
 /**
  * file_edit: exactly one replacement from old_string / new_string / replace_all. `edits` is not

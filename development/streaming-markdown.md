@@ -306,7 +306,12 @@ editor, and dropdown-menu typography are unchanged.
 A non-editing user bubble owns its action dropdown through long press. The separate action row below
 the bubble is absent; the branch selector remains independently visible. The existing Material menu
 style contains Copy, Edit, Select Text, Info, and Delete in that order and retains current availability
-rules. Selecting Edit enters that user message's existing inline editor and requests focus on its
+rules. For Task, Loop, Ask User and Subagent source-tagged user messages, Edit stays visible and
+disabled; native and WebUI use the same source rule and cannot reopen a stale editor for those rows.
+Subagent completion bodies are omitted from the timeline and remain fully readable through this
+existing Select Text sheet, with Copy retaining the same original text; their compact name/status
+and gray failure detail presentation is owned by application-ui.md section35.
+Selecting Edit on an ordinary unmarked user message enters its existing inline editor and requests focus on its
 TextField once the edit branch is composed, so it is immediately ready for typing. This focus request
 does not select text, redefine cursor placement, force the IME through a second owner, or alter
 composer/search focus policy. Select Text reuses the existing custom Thinking detail-sheet shell with

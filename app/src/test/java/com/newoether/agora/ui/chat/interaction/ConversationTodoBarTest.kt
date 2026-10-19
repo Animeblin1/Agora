@@ -30,6 +30,9 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.newoether.agora.model.ConversationTodoItem
 import com.newoether.agora.ui.motion.AgoraMotionPolicy
 import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
@@ -43,6 +46,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
@@ -227,6 +231,70 @@ class ConversationTodoBarTest {
 
     @Test
     fun iconsAlignWithFirstLineAtLargeFontScale() = assertFirstLineAlignment(1.8f)
+
+    @Test
+    fun longListKeepsScrollableBottomSpaceAtNormalFontScale() = assertLastItemHasBottomSpace(1f, 0)
+
+    @Test
+    fun longListKeepsBottomSpaceAboveThreeButtonNavigation() = assertLastItemHasBottomSpace(1f, 48)
+
+    @Test
+    fun largeTextKeepsLastItemReachableAboveThreeButtonNavigation() = assertLastItemHasBottomSpace(1.8f, 48)
+
+    private fun assertLastItemHasBottomSpace(fontScale: Float, navigationBarHeightDp: Int) {
+        val tasks = List(40) { index ->
+            ConversationTodoItem("Task $index: first line\nSecond line")
+        }
+        var density = 1f
+        compose.setContent {
+            val currentDensity = LocalDensity.current
+            density = currentDensity.density
+            CompositionLocalProvider(
+                LocalDensity provides Density(density, fontScale),
+                LocalAgoraMotionPolicy provides AgoraMotionPolicy(true),
+            ) {
+                MaterialTheme(typography = Typography) { ConversationTodoBar("c", tasks, {}) }
+            }
+        }
+        compose.onNodeWithText("Todo").performClick()
+        compose.onNode(isDialog()).performTouchInput {
+            swipe(Offset(centerX, height - 40f), Offset(centerX, height * 0.3f), 500)
+        }
+        dispatchNavigationBars(0)
+        val list = compose.onNode(hasScrollAction())
+        val beforeInsets = list.fetchSemanticsNode().boundsInRoot
+        val navigationBarHeightPx = (navigationBarHeightDp * density).toInt()
+        dispatchNavigationBars(navigationBarHeightPx)
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        assertEquals("Navigation bars reserve space in the real dialog list",
+            navigationBarHeightPx.toFloat(), beforeInsets.bottom - viewport.bottom, 1f)
+        assertEquals("Insets preserve the filled content area's top", beforeInsets.top, viewport.top, 1f)
+        list.performScrollToIndex(tasks.lastIndex)
+        list.performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy ->
+            scrollBy(0f, viewport.height * tasks.size)
+        }
+        val lastText = compose.onNodeWithText(tasks.last().content, useUnmergedTree = true)
+        val layout = lastText.textLayout()
+        val bounds = lastText.fetchSemanticsNode().boundsInRoot
+        assertEquals("The complete final text remains visible", layout.size.height.toFloat(), bounds.height, 1f)
+        assertTrue("The final multiline row fits in the viewport", bounds.top >= viewport.top)
+        assertEquals("32dp scrollable padding follows the row's existing 12dp padding",
+            44f * density, viewport.bottom - bounds.bottom, 2f)
+        assertEquals("Bottom space also protects the navigation bar",
+            navigationBarHeightPx + 44f * density, beforeInsets.bottom - bounds.bottom, 2f)
+    }
+
+    private fun dispatchNavigationBars(bottomPx: Int) {
+        compose.runOnIdle {
+            val navigationBars = WindowInsetsCompat.Type.navigationBars()
+            val insets = WindowInsetsCompat.Builder()
+                .setInsets(navigationBars, Insets.of(0, 0, 0, bottomPx))
+                .setVisible(navigationBars, bottomPx > 0)
+                .build()
+            val decor = requireNotNull(ShadowDialog.getLatestDialog().window).decorView
+            ViewCompat.dispatchApplyWindowInsets(decor, insets)
+        }
+    }
 
     private fun assertFirstLineAlignment(fontScale: Float) {
         val tasks = listOf(

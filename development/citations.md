@@ -292,7 +292,9 @@ Changes touching citations must prove:
    complete ordered bottom-sheet contents, transparent rows with pill-clipped ripple, safe
    click/detail behavior, selection fallback, Copy output, and accessibility labels.
 7. Citation-title global search uses stable primary-key keyset pages and a bounded newest-first
-   top-K accumulator. It preserves limit/title-only semantics, handles equal timestamps without
+   top-K accumulator. The SQL drives from messages with its id seek before joining conversations;
+   query-plan tests prevent a per-page eligible-corpus scan and temporary ORDER BY sort. It preserves
+   limit/title-only semantics, handles equal timestamps without
    gaps or duplicates, and never loads or decodes the whole citation corpus at once. A no-match
    query may scan all bounded pages; a future title index requires a separately reviewed migration.
 8. Complete scoped diff review, `git diff --check`, focused tests, the project full build, and

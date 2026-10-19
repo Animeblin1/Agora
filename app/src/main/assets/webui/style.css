@@ -1212,6 +1212,15 @@ input, textarea { user-select: text; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.detail-sheet-header-trailing {
+  flex: none;
+  margin-inline: 12px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
 .detail-sheet-icon {
   display: grid;
   place-items: center;
@@ -1474,25 +1483,32 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 :dir(rtl) .branch-previous svg { transform: none; }
 .user-row > .branch-selector { align-self: flex-end; margin-top: 4px; }
 .message-actions > .branch-selector { margin-left: 8px; }
-/* Native bottom FAB: interaction lift is published by the existing card appearance owner. */
-.scroll-bottom-slot { position: absolute; bottom: calc(var(--chat-bottom-inset) + var(--chat-interaction-lift, 0px) + var(--chat-todo-lift, 0px) + var(--chat-subagent-lift, 0px) + 8px); left: 0; right: 0; width: 48px; height: 48px; margin: 0 auto; display: grid; place-items: center; z-index: 1; }
+/* The shell's single combined measurement includes the shared tools row. */
+.scroll-bottom-slot { position: absolute; bottom: calc(var(--chat-bottom-inset) - var(--chat-tools-message-inset, 0px) + var(--chat-tools-lift, 0px) + 8px); left: 0; right: 0; width: 48px; height: 48px; margin: 0 auto; display: grid; place-items: center; z-index: 1; }
 .scroll-bottom-button { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--tonal-4); color: var(--md-on-surface); opacity: 0; transform: scale(.6); cursor: pointer; }
 .scroll-bottom-button svg { width: 24px; height: 24px; fill: currentColor; }
 /* ChatComposerSurface: 12 dp above, 8 dp around, content at most 840 dp. */
-/* ChatUserInteractionBar: the card floats in the bottom-bar layer, aligned to the composer's top
-   edge, and never takes part in the chat body's layout. 840 dp box with the phone's 12 dp inset. */
-.interaction-host {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% - 12px + var(--chat-todo-lift, 0px) + var(--chat-subagent-lift, 0px));
-  /* InteractionDeck: widthIn(max = 840) then padding(horizontal = 12), so the card is inset 12 dp
-     on each side and at most 816 dp wide. */
-  width: min(calc(100% - 24px), 816px);
-  margin: 0 auto;
-  pointer-events: none;
+/* The shared track is the only horizontal scroll owner, outside the timeline's layout. */
+.tools-row { position: absolute; bottom: calc(100% - 12px); left: 0; right: 0; width: min(calc(100% - 8px), 832px); margin: 0 auto; pointer-events: none; }
+.tools-scroll { overflow-x: auto; overflow-y: hidden; padding: 0 12px; height: 0; box-sizing: border-box; scrollbar-width: none; overflow-anchor: none; overscroll-behavior-x: contain; pointer-events: auto; }
+.tools-scroll::-webkit-scrollbar { display: none; }
+@property --tools-edge-left { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --tools-edge-right { syntax: "<number>"; inherits: false; initial-value: 0; }
+.tools-scroll {
+  mask-mode: alpha;
+  mask-image: linear-gradient(to right,
+    rgb(0 0 0 / calc(1 - var(--tools-edge-left))) 0,
+    black min(40px, 50%), black calc(100% - min(40px, 50%)),
+    rgb(0 0 0 / calc(1 - var(--tools-edge-right))) 100%);
+  transition: --tools-edge-left 200ms cubic-bezier(.4, 0, .2, 1), --tools-edge-right 200ms cubic-bezier(.4, 0, .2, 1);
 }
-.interaction-card { position: absolute; bottom: 8px; width: 100%; box-sizing: border-box; border-radius: 24px; overflow: hidden; background: var(--md-surface-container-high); color: var(--md-on-surface); transform-origin: 50% 100%; box-shadow: 0 2px 8px #0003; pointer-events: auto; }
+.tools-track { position: relative; display: flex; align-items: flex-end; gap: 8px; width: max-content; min-width: 100%; height: 100%; box-sizing: border-box; padding: 8px 0; justify-content: center; }
+.tools-item { position: relative; display: flex; align-items: flex-end; flex: none; width: max-content; height: 0; }
+.tools-item[inert] { pointer-events: none; }
+.tools-item-visual { flex: none; transform-origin: 50% 100%; }
+.tools-scroll-range { position: absolute; inset-inline-start: 0; bottom: 0; height: 1px; pointer-events: none; }
+.interaction-host { max-width: var(--tools-viewport-width, 816px); }
+.interaction-card { position: relative; flex: none; width: var(--tools-viewport-width, 816px); box-sizing: border-box; border-radius: 24px; overflow: hidden; background: var(--md-surface-container-high); color: var(--md-on-surface); transform-origin: 50% 100%; box-shadow: var(--shadow-4); pointer-events: auto; }
 .interaction-full { position: relative; padding: 14px 16px; box-sizing: border-box; }
 /* CapsuleLabel: 18 dp primary icon, titleSmall bold onSurface, 10 dp, 18 dp onSurfaceVariant expand icon. */
 .interaction-capsule { position: absolute; top: 0; left: 0; height: 48px; width: max-content; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 0; border-radius: 24px; background: transparent; color: var(--md-on-surface); font: inherit; font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: 0.1px; opacity: 0; }
@@ -1541,23 +1557,30 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .interaction-actions button:disabled { cursor: default; color: color-mix(in srgb, var(--md-on-surface) 38%, transparent); }
 .interaction-actions .filled-button:disabled { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent); }
 .interaction-action-space { flex: 1; }
-.todo-host { position: absolute; bottom: calc(100% - 12px + var(--chat-subagent-lift, 0px)); left: 12px; right: 12px; display: flex; justify-content: center; padding-bottom: 8px; pointer-events: none; }
-.todo-host > .detail-sheet-layer { pointer-events: auto; }
+.tools-track > .detail-sheet-layer { pointer-events: auto; }
 .todo-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: 816px; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); box-shadow: var(--shadow-4); font: inherit; cursor: pointer; pointer-events: auto; transform-origin: 50% 100%; }
 .todo-capsule:disabled { pointer-events: none; }
 .todo-capsule > svg { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--md-primary); }
 .todo-capsule strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: 0; }
 .todo-capsule > span { flex: none; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--md-on-surface-variant); }
-.subagent-host { position: absolute; bottom: calc(100% - 12px); left: 0; right: 0; padding: 0 16px 8px; pointer-events: none; }
-.subagent-row { display: flex; gap: 8px; width: max-content; max-width: 100%; margin: 0 auto; overflow-x: auto; scrollbar-width: none; pointer-events: auto; transform-origin: 50% 100%; }
-.subagent-host[inert] .subagent-row { pointer-events: none; }
-.subagent-row::-webkit-scrollbar { display: none; }
-.subagent-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: 240px; flex: none; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); font: inherit; cursor: pointer; }
+.subagent-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: min(240px, var(--tools-viewport-width, 816px)); flex: none; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); transition: background-color 250ms linear, color 250ms linear; box-shadow: var(--shadow-4); font: inherit; cursor: pointer; }
 .subagent-capsule[aria-current="page"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
-.subagent-capsule > svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
-.subagent-capsule > .circular-progress { flex: none; }
-.subagent-capsule > span:not(.circular-progress) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 500; }
-.todo-list { padding: 4px 24px 24px; }
+.subagent-status { position: relative; width: 18px; height: 18px; flex: none; }
+.subagent-status > span { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
+.subagent-status svg { width: 18px; height: 18px; fill: currentColor; }
+.subagent-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.subagent-text > small { font-size: 10px; line-height: 12px; font-weight: 500; color: var(--md-on-surface-variant); transition: color 250ms linear; }
+.subagent-title { display: grid; max-width: 100%; font-size: 14px; line-height: 20px; font-weight: 700; }
+.subagent-title > span { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0; }
+.subagent-choices { padding: 4px 24px calc(32px + env(safe-area-inset-bottom)); }
+.subagent-choice { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 0; border-radius: 16px; background: transparent; color: var(--md-on-surface); font: inherit; text-align: start; cursor: pointer; }
+.subagent-choice[aria-current="page"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.subagent-choice-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.subagent-choice-text > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 500; }
+.subagent-choice-text > small { font-size: 12px; line-height: 16px; color: var(--md-on-surface-variant); }
+.subagent-choice[aria-current="page"] .subagent-choice-text > small { color: inherit; }
+.subagent-capsule[aria-current="page"] .subagent-text > small { color: inherit; }
+.todo-list { padding: 4px 24px calc(32px + env(safe-area-inset-bottom)); }
 .todo-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; font-size: 14px; line-height: 20px; font-weight: 400; }
 .todo-status { width: 20px; height: 20px; flex: none; color: var(--md-on-surface-variant); }
 .todo-status svg { width: 20px; height: 20px; fill: currentColor; }
@@ -1570,7 +1593,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   padding: 12px 8px calc(8px + env(safe-area-inset-bottom));
 }
 .composer-host:not(.composer-expanded) { pointer-events: none; }
-.composer-host:not(.composer-expanded) > :is(.composer, .interaction-host) { pointer-events: auto; }
+.composer-host:not(.composer-expanded) > .composer { pointer-events: auto; }
 /* Input content, queue status and controls have separate size ownership. */
 .composer-input-clip { flex: none; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-start; border-radius: 20px 20px 0 0; background: var(--tonal-2); }
 .composer-input-content { flex: none; width: 100%; }
@@ -2119,11 +2142,17 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   pointer-events: none; opacity: 0; transition: opacity 200ms linear;
 }
 .scrollbar-overlay.scrollable:is(.hover, .dragging) { opacity: 1; pointer-events: auto; touch-action: none; }
-.chat:has(.conversation-loading-cover) > .scrollbar-overlay { visibility: hidden; }
+.chat:has(.conversation-loading-cover) > .scrollbar-overlay,
+.chat:has(.conversation-loading-cover) .tools-scrollbar { visibility: hidden; }
 .scrollbar-overlay > span {
   position: absolute; left: calc(6px - var(--scrollbar-size) / 2); width: var(--scrollbar-size);
   border-radius: 999px; background: color-mix(in srgb, var(--md-outline) 42%, transparent);
   transition: width 150ms cubic-bezier(.2, 0, 0, 1), left 150ms cubic-bezier(.2, 0, 0, 1), background-color 150ms linear;
+}
+.scrollbar-overlay.scrollbar-horizontal { width: 0; height: 12px; }
+.scrollbar-overlay.scrollbar-horizontal > span {
+  top: calc(6px - var(--scrollbar-size) / 2); left: 0; width: 0; height: var(--scrollbar-size);
+  transition: height 150ms cubic-bezier(.2, 0, 0, 1), top 150ms cubic-bezier(.2, 0, 0, 1), background-color 150ms linear;
 }
 :is(.scrollbar-overlay.hover, .scrollbar-overlay.dragging) { --scrollbar-size: 7px; }
 .scrollbar-overlay.hover > span {
@@ -2135,7 +2164,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
   .scrollbar-overlay > span::after { content: ""; position: absolute; inset: -8px -10px -8px -18px; }
   * { scrollbar-width: none; }
   *::-webkit-scrollbar { display: none; width: 0; height: 0; }
-  .scrollbar-overlay.drawer-scrollbar { display: none; }
+  .scrollbar-overlay.drawer-scrollbar, .scrollbar-overlay.tools-scrollbar { display: none; }
 }
 .shell[data-reduce-motion="true"] .scrollbar-overlay > span { transition: none; }
 /* Native scrollbar visibility must not resize the content under the floating owner. */
@@ -2156,6 +2185,13 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .ask-user-answer { display: block; }
 .ask-user-answer + .ask-user-question { margin-top: 24.2px; }
 .ask-user-answer.unanswered { color: color-mix(in srgb, currentColor 60%, transparent); }
+/* Completion receipts keep the existing bubble and match the native compact text tiers. */
+.subagent-result { display: flex; flex-direction: column; gap: 4px; }
+.subagent-result-name {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.subagent-result-name { font-size: 14px; line-height: 20px; font-weight: 500; }
+.subagent-result-status { color: var(--md-on-surface-variant); font-size: 12px; line-height: 16px; font-weight: 500; }
 /* AssistantMessageContent's action Box: 44 dp with 12 dp of top padding and 2 dp between icons. */
 .message-action-slot { position: relative; min-height: 44px; }
 .message-information { opacity: 1; transition: opacity 320ms linear; }

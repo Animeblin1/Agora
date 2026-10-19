@@ -3,12 +3,13 @@ package com.newoether.agora.ui.chat.interaction
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -31,7 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,54 +51,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.model.ConversationTodoItem
 import com.newoether.agora.ui.components.SmoothBottomSheet
 import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
 import com.newoether.agora.ui.theme.ChatType
-import com.newoether.agora.viewmodel.ChatViewModel
+import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 
 private val TodoFirstLineCenter = HorizontalAlignmentLine { first, second -> minOf(first, second) }
-
-/** Keeps both selected-owner tools above the composer without adding another scroll owner. */
-@Composable
-internal fun BoxScope.ChatConversationToolsOverlay(
-    viewModel: ChatViewModel,
-    conversationId: String?,
-    autoWrapCodeBlocks: Boolean,
-    bottomBarHeight: Dp,
-    onHeightChanged: (Float) -> Unit,
-) {
-    val todo by viewModel.currentConversationTodo.collectAsState()
-    val items = todo.second.takeIf { todo.first == conversationId }.orEmpty()
-    val subagents by viewModel.currentSubagents.collectAsState()
-    val agents = subagents.second.takeIf { subagents.first == conversationId }.orEmpty()
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var subagentHeight by remember { mutableStateOf(0f) }
-    var todoHeight by remember { mutableStateOf(0f) }
-    var interactionHeight by remember { mutableStateOf(0f) }
-    val density = LocalDensity.current
-    SideEffect { onHeightChanged(todoHeight + interactionHeight + subagentHeight) }
-    ChatUserInteractionBar(
-        viewModel, conversationId, autoWrapCodeBlocks,
-        bottomBarHeight + with(density) { (todoHeight + subagentHeight).toDp() },
-        onHeightChanged = { interactionHeight = it },
-    )
-    ConversationTodoBar(
-        conversationId, items, onHeightChanged = { todoHeight = it },
-        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarHeight + with(density) { subagentHeight.toDp() }),
-    )
-    ConversationSubagentsBar(
-        conversationId, agents,
-        onSelect = { id -> scope.launch { viewModel.selectConversation(id) } },
-        onHeightChanged = { subagentHeight = it },
-        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarHeight),
-    )
-}
 
 /** Read-only progress; only the outgoing capsule retains an invalidated owner's payload. */
 @Composable
@@ -107,6 +69,11 @@ internal fun ConversationTodoBar(
     items: List<ConversationTodoItem>,
     onHeightChanged: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    inSharedRow: Boolean = false,
+    onPresenceChanged: (Boolean) -> Unit = {},
+    onMessageInsetChanged: (Float) -> Unit = {},
+    appearanceReady: Boolean = true,
+    onTransitionChanged: (String?, Boolean) -> Unit = { _, _ -> },
 ) {
     val desired = (conversationId to items).takeIf { conversationId != null && items.isNotEmpty() }
     var shown by remember { mutableStateOf(desired) }
@@ -114,6 +81,15 @@ internal fun ConversationTodoBar(
     val motion = LocalAgoraMotionPolicy.current
     val latestDesired by rememberUpdatedState(desired)
     val latestHeightChanged by rememberUpdatedState(onHeightChanged)
+    val latestMessageInsetChanged by rememberUpdatedState(onMessageInsetChanged)
+    val clearance = with(LocalDensity.current) { 8.dp.toPx() }
+    val latestPresenceChanged by rememberUpdatedState(onPresenceChanged)
+    val latestAppearanceReady by rememberUpdatedState(appearanceReady)
+    val latestTransitionChanged by rememberUpdatedState(onTransitionChanged)
+    LaunchedEffect(Unit) {
+        snapshotFlow { shown?.first to (shown != null && progress.value > 0f) }
+            .collect { (owner, visible) -> latestTransitionChanged(owner, visible) }
+    }
     var measuredHeight by remember { mutableFloatStateOf(0f) }
     var opened by remember(conversationId) { mutableStateOf(false) }
     val active = desired != null && shown?.first == conversationId
@@ -127,31 +103,39 @@ internal fun ConversationTodoBar(
         val target = latestDesired
         if (target != null) {
             shown = target
+            snapshotFlow { latestAppearanceReady }.first { it }
             progress.animateTo(1f, tween(180))
         }
     }
     SideEffect {
         if (active) shown = desired
+        latestPresenceChanged(shown != null)
     }
-    LaunchedEffect(motion.allowSpatialTransitions, active) {
+    LaunchedEffect(motion.allowSpatialTransitions, active, clearance) {
         snapshotFlow {
-            if (shown == null) 0f else measuredHeight *
-                if (motion.allowSpatialTransitions) progress.value else if (active) 1f else 0f
-        }.collect { latestHeightChanged(it) }
+            val height = if (shown == null) 0f else measuredHeight
+            val fraction = if (motion.allowSpatialTransitions) progress.value else if (active) 1f else 0f
+            height * fraction to if (height > 0f) (height + clearance) * fraction else 0f
+        }.collect { (height, inset) ->
+            latestHeightChanged(height)
+            latestMessageInsetChanged(inset)
+        }
     }
-    DisposableEffect(Unit) { onDispose { latestHeightChanged(0f) } }
+    DisposableEffect(Unit) {
+        onDispose { latestHeightChanged(0f); latestMessageInsetChanged(0f); latestPresenceChanged(false) }
+    }
     val title = stringResource(R.string.todo_title)
     val completed = displayedItems.count { it.status == "completed" }
     val count = stringResource(R.string.todo_progress, completed, displayedItems.size)
     if (shown != null) {
         Column(
-            modifier.fillMaxWidth().padding(horizontal = 12.dp)
+            modifier.then(if (inSharedRow) Modifier else Modifier.fillMaxWidth().padding(horizontal = 12.dp))
                 .onSizeChanged { measuredHeight = it.height.toFloat() }
                 .padding(bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Surface(
-                onClick = { if (active) opened = true }, enabled = active,
+                onClick = { if (active && appearanceReady) opened = true }, enabled = active && appearanceReady,
                 shape = RoundedCornerShape(24.dp), shadowElevation = 4.dp,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.widthIn(max = 840.dp).height(48.dp).graphicsLayer {
@@ -203,7 +187,11 @@ internal fun ConversationTodoBar(
                 )
             },
         ) {
-            LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = list,
+                modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                contentPadding = PaddingValues(bottom = 32.dp),
+            ) {
                 itemsIndexed(items) { _, item ->
                     val status = when (item.status) {
                         "completed" -> R.string.todo_completed

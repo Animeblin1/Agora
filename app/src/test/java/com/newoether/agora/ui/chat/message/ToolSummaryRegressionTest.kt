@@ -225,6 +225,7 @@ class ToolSummaryRegressionTest {
             "list_shells", "execute_shell_command", "list_shell_jobs", "get_shell_job", "wait_for_job", "stop_shell_job",
             "file_read", "file_write", "file_edit", "file_multi_edit", "file_glob", "file_grep", "view_image", "generate_image",
             "create_task", "list_tasks", "delete_task", "start_loop", "stop_loop", "ask_user", "mcp_test", "unknown",
+            "read_todo", "update_todo", "spawn_agent", "send_agent_message", "wait_agents", "list_agents", "stop_agent",
         )
         assertEquals(ToolKind.entries.toSet(), names.map(ToolPresentationResolver::kindForToolName).toSet())
         for (name in names) {

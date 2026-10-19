@@ -251,20 +251,20 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
     <div class="scrollbar-overlay drawer-scrollbar" ref=${bar} aria-hidden="true"><span></span></div>
     ${menu && html`<${MoreMenu} expanded=${menuOpen} reduceMotion=${reduceMotion} anchor=${{ current: menu.anchor }}
       onClose=${() => setMenuOpen(false)} onExited=${() => setMenu(null)}>
-      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected || switching || menu.conversation.generating}
+      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected || switching}
         onClick=${() => { sync.pin(menu.conversation.id, !menu.conversation.isPinned); setMenuOpen(false); }}>
         ${icon(ICON_PIN)}<span>${menu.conversation.isPinned ? t.unpin : t.pin}</span>
       </button>
       <button class="dropdown-item" role="menuitem" type="button"
-        disabled=${!connected || switching || menu.conversation.generating}
+        disabled=${!connected || switching}
         onClick=${() => { sync.generateTitle(menu.conversation.id); setMenuOpen(false); }}>
         ${icon(ICON_REFRESH)}<span>${t.generateTitle}</span>
       </button>
-      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected || switching || menu.conversation.generating}
+      <button class="dropdown-item" role="menuitem" type="button" disabled=${!connected || switching}
         onClick=${() => { onRequestRename({ conversationId: menu.conversation.id, title: menu.conversation.title, anchor: menu.anchor }); setMenuOpen(false); }}>
         ${icon(ICON_EDIT)}<span>${t.rename}</span>
       </button>
-      <button class="dropdown-item destructive" role="menuitem" type="button" disabled=${!connected || switching || menu.conversation.generating}
+      <button class="dropdown-item destructive" role="menuitem" type="button" disabled=${!connected || switching}
         onClick=${() => { onRequestDelete({ conversationId: menu.conversation.id, title: menu.conversation.title, anchor: menu.anchor }); setMenuOpen(false); }}>
         ${icon(ICON_DELETE)}<span>${t.delete}</span>
       </button>
@@ -275,9 +275,14 @@ function DrawerContent({ conversations, openId, onSelect, connected, loading, ha
  * ChatTopBar: title capsule (menu + brand, or the conversation title at conversationTitleSolo)
  * and actions capsule (new chat + more).
  */
-function TopBar({ title, subtitle, conversationId, parentConversationId, drawerOpen, onToggleDrawer, menuButton, reduceMotion, onSignedOut, connected, onFork, onShare, pageBusy, onSystemPrompt, promptEnabled, search, generating }) {
+function TopBar({ title, storedTitle, subtitle, conversationId, parentConversationId, drawerOpen, onToggleDrawer, menuButton, reduceMotion, onSignedOut, connected, onFork, onShare, pageBusy, onSystemPrompt, promptEnabled, search, generating, conversationActionsEnabled, onRequestRename, onRequestDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [retainedMenu, setRetainedMenu] = useState(false);
+  const [retainedMenu, setRetainedMenu] = useState(null);
+  const activeMenu = useRef(null);
+  const menuTarget = sync.interactionTarget();
+  const conversationMenuEnabled = connected && !search && !!menuTarget && conversationActionsEnabled && retainedMenu?.conversationId === conversationId &&
+    retainedMenu?.connectionId === menuTarget?.connectionId && retainedMenu?.seq === menuTarget?.seq;
+  activeMenu.current = { request: retainedMenu, open: menuOpen, enabled: conversationMenuEnabled };
   const moreButton = useRef(null);
   const bar = useRef(null);
   const searchTransition = useRef({ active: !!search, animation: null, outgoing: null });
@@ -407,16 +412,26 @@ function TopBar({ title, subtitle, conversationId, parentConversationId, drawerO
     }
   }, [titleIdentity, !!search]);
   useLayoutEffect(() => () => {
+    activeMenu.current.open = false;
     titleClip.current.animation?.cancel();
     titleFade.current.animations.forEach((animation) => animation.cancel());
   }, []);
   async function signOut() {
-    setMenuOpen(false);
+    closeMenu();
     await postJson("/api/logout", {}).catch(() => null);
     onSignedOut();
   }
   function closeMenu() {
+    activeMenu.current.open = false;
     setMenuOpen(false);
+  }
+  function requestConversationAction(request, onRequest) {
+    const current = activeMenu.current, target = sync.interactionTarget();
+    if (!request || !current.open || !current.enabled || current.request !== request ||
+        request.connectionId !== target?.connectionId || request.seq !== target?.seq ||
+        request.conversationId !== target?.conversationId) return;
+    closeMenu();
+    onRequest(request);
   }
   return html`
     <header class="top-bar" ref=${bar}>
@@ -456,7 +471,11 @@ function TopBar({ title, subtitle, conversationId, parentConversationId, drawerO
         <div class="menu-anchor">
           <button class="bar-button" type="button" ref=${moreButton} aria-label=${t.options}
             aria-haspopup="menu" aria-expanded=${menuOpen ? "true" : "false"}
-            onClick=${() => { setRetainedMenu(true); setMenuOpen(!menuOpen); }}>
+            onClick=${() => {
+              if (menuOpen) { closeMenu(); return; }
+              setRetainedMenu({ ...sync.interactionTarget(), conversationId, title: storedTitle ?? "", anchor: moreButton.current });
+              setMenuOpen(true);
+            }}>
             ${icon(ICON_MORE_VERT)}
           </button>
         </div>
@@ -468,7 +487,14 @@ function TopBar({ title, subtitle, conversationId, parentConversationId, drawerO
       promptEnabled=${promptEnabled} onSystemPrompt=${() => { closeMenu(); onSystemPrompt(); }}
       onSearch=${() => { closeMenu(); sync.conversationSearch(""); }}
       onFork=${() => { closeMenu(); onFork(); }} onShare=${() => { closeMenu(); onShare(); }}
-      onExited=${(ownedFocus) => { setRetainedMenu(false); if (ownedFocus) moreButton.current?.focus(); }} />`}`;
+      conversationActionsEnabled=${menuOpen && conversationMenuEnabled}
+      onRename=${() => requestConversationAction(retainedMenu, onRequestRename)}
+      onDelete=${() => requestConversationAction(retainedMenu, onRequestDelete)}
+      onExited=${(ownedFocus) => {
+        if (activeMenu.current.request !== retainedMenu || activeMenu.current.open) return;
+        setRetainedMenu(null);
+        if (ownedFocus) moreButton.current?.focus();
+      }} />`}`;
 }
 
 
@@ -649,8 +675,11 @@ export function Shell({ onSignedOut }) {
   const [drawerPinned, setDrawerPinned] = useState(readDrawerPinned);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pageDialog, setPageDialog] = useState(null);
-  // The drawer row menu's own dialogs, held here as on the phone they outlive the drawer itself.
+  // Drawer and current-conversation actions share the same retained dialogs.
   const [rowDialog, setRowDialog] = useState(null);
+  const conversationActionsEnabled = state.connected && !!state.openId && state.openStatus === "ready" &&
+    !state.switching && !state.pendingAction && !state.pageAction && !state.conversationDelete &&
+    !["SUBMITTING", "ACCEPTED_PENDING_CLEAR"].includes(state.composer?.phase);
   const deleteResult = state.conversationDeleteResult;
   useEffect(() => {
     if (pageDialog && (pageDialog.connectionId !== state.connectionId ||
@@ -691,6 +720,7 @@ export function Shell({ onSignedOut }) {
   useLayoutEffect(() => {
     const chat = shell.current.querySelector(".chat");
     const composer = chat.querySelector(".composer-host");
+    const tools = composer.querySelector(".tools-scroll");
     const capsules = [...chat.querySelectorAll(".top-bar > .capsule")];
     const measure = () => {
       const bounds = chat.getBoundingClientRect();
@@ -698,14 +728,19 @@ export function Shell({ onSignedOut }) {
       // An empty capsule row would measure to -Infinity, which is not a length and would leave every
       // inset unset, so it falls back to a small positive inset instead of poisoning the pair.
       const top = Math.max(...bottoms, bounds.top + 8) - bounds.top + 8;
-      const bottom = bounds.bottom - composer.getBoundingClientRect().top;
+      const toolsInset = Number.parseFloat(chat.style.getPropertyValue("--chat-tools-message-inset")) || 0;
+      const bottom = bounds.bottom - composer.getBoundingClientRect().top + toolsInset;
       chat.style.setProperty("--chat-top-inset", `${top}px`);
       chat.style.setProperty("--chat-bottom-inset", `${bottom}px`);
     };
     const geometry = new ResizeObserver(measure);
-    [chat, composer, ...capsules].forEach((node) => geometry.observe(node, { box: "border-box" }));
+    [chat, composer, tools, ...capsules].filter(Boolean).forEach((node) => geometry.observe(node, { box: "border-box" }));
     measure();
-    return () => geometry.disconnect();
+    tools?.addEventListener("toolsresize", measure);
+    return () => {
+      geometry.disconnect();
+      tools?.removeEventListener("toolsresize", measure);
+    };
   }, []);
   // One interpolated progress drives drawer, scrim and desktop inset; freeze its actual value on takeover.
   function freezeDrawer() {
@@ -828,8 +863,9 @@ export function Shell({ onSignedOut }) {
   }, [sideBySide, reduceMotion]);
   // ChatTopBar falls back to the brand while the title is blank.
   const drawerConversationId = state.parentConversationId || state.openId;
-  const openTitle = (state.subagents.find(c => c.id === state.openId) ||
-    state.conversations.find(c => c.id === state.openId))?.title?.trim() || null;
+  const openConversation = state.subagents.find(c => c.id === state.openId) ||
+    state.conversations.find(c => c.id === state.openId);
+  const openTitle = openConversation?.title?.trim() || null;
   // ChatTopBar stacks the token subtitle under a conversation title and hides it with the brand
   // title, or while there is nothing in the window yet (`contextAvailable = totalTokens > 0`). The
   // figure is the composer ring's own: this connection's projection, kept while the next one prices.
@@ -895,8 +931,11 @@ export function Shell({ onSignedOut }) {
       </aside>
       <div class="scrim" aria-hidden="true" onClick=${() => settleDrawer(false)}></div>
       <main class=${`chat ${composerExpanded ? "chat-composer-expanded" : ""}`} inert=${modalOpen}>
-        <${TopBar} title=${openTitle} subtitle=${contextSubtitle} conversationId=${state.openId} parentConversationId=${state.parentConversationId} drawerOpen=${drawerOpen} menuButton=${menuButton} reduceMotion=${reduceMotion} onSignedOut=${onSignedOut} connected=${state.connected}
+        <${TopBar} title=${openTitle} storedTitle=${openConversation?.title ?? ""} subtitle=${contextSubtitle} conversationId=${state.openId} parentConversationId=${state.parentConversationId} drawerOpen=${drawerOpen} menuButton=${menuButton} reduceMotion=${reduceMotion} onSignedOut=${onSignedOut} connected=${state.connected}
           generating=${!!state.generating}
+          conversationActionsEnabled=${conversationActionsEnabled}
+          onRequestRename=${(request) => setRowDialog({ ...request, type: "rename" })}
+          onRequestDelete=${(request) => setRowDialog({ ...request, type: "delete" })}
           search=${state.conversationSearch}
           onSystemPrompt=${() => openPageAction("system_prompt")}
           promptEnabled=${state.connected && !!state.composer?.systemPrompt && !state.composer?.controls?.lowContextModeEnabled && !state.pendingAction}

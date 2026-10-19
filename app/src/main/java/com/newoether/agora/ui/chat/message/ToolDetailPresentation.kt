@@ -188,7 +188,11 @@ private fun Resources.completedToolDetailBody(presentation: ToolPresentation): T
             if (paths.isEmpty()) ToolDetailBody.Muted(getString(R.string.tool_found_no_files))
             else ToolDetailBody.Paths(paths)
         }
-        ToolKind.FILE_GREP -> {
+        // Results saved before file_grep JSON was size-bounded can be clipped and no longer parse.
+        // Their match list survives only in the model-facing text; show that, not "No matches".
+        ToolKind.FILE_GREP -> if (result == null && !presentation.rawResult.isNullOrBlank()) {
+            ToolDetailBody.JsonContent(listOf(presentation.rawResult))
+        } else {
             val groups = grepGroups(
                 matches = result?.get("matches") as? JsonArray,
                 base = base,

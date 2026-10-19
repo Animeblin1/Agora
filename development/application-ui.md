@@ -302,7 +302,18 @@ Conversation search exposes a separate in-flight state from the moment a nonblan
 The drawer's first-list state is not a second conversation authority or a new search architecture; Room remains the durable source and the existing search methods remain authoritative.
 
 Drawer long press offers a push-pin `Pin` action, replaced by `Unpin` for a pinned conversation, then
-`Generate Title`, `Rename` and `Delete` in that order.
+`Generate Title`, `Rename` and `Delete` in that order. Active generation alone never disables
+these metadata/lifecycle actions. Switching/loading and actual Send-submission exclusion remain
+separate guards. Manual title generation freezes the selected branch's currently available USER
+and ASSISTANT content, including a matching live partial answer; either role may be absent. Empty
+input makes no Provider call. Repeated requests and late results must not overwrite a newer rename,
+newer title decision or deleted conversation, nor interrupt ordinary generation. Delete retains the
+existing confirmation and waits for canonical generation/Loop/owned-child cleanup before durable deletion.
+The ordinary current-conversation top-right menu also offers `Rename` and `Delete`, after `Share`,
+on native and WebUI, reusing these same dialogs and lifecycle actions. Their target and stored title
+are captured when requested, including for a child absent from the drawer. Active generation alone
+does not disable them; no target, switching/loading, actual Send submission and existing modal
+exclusions still apply. Remote's custom menu is unchanged.
 Below the existing search, navigation and New Chat controls, the same scrolling list shows a `Pinned`
 heading and pinned rows before ordinary conversations. Empty Pinned is hidden; ordinary rows have a
 `Conversations` heading only when both groups exist. Rows occur once and retain recent-updated-first
@@ -324,9 +335,9 @@ Every ordinary-list reorder preserves the numeric `firstVisibleItemIndex` and `f
 
 A New Chat first Send is the sole automatic-top exception. Only after the accepted conversation and first message graph are durable and that conversation is published, the bounded `firstMessageCommitted` event waits until the same still-selected conversation occupies item `0` in the measured ordinary list. It then uses the existing Drawer `LazyListState` and the canonical `animateToAbsoluteTop` feedback controller with `SendFeedbackScrollSpec`, matching Send's scroll-to-bottom startup envelope, adaptive long-distance motion, ease-out, and user-input cancellation. Reduced Motion directly calls `scrollToItem(0)`. A later explicit conversation selection rejects the stale event. No other reorder, title change, insertion, delay, retry, fallback, or second scroll owner may reveal item `0`.
 
-After durable deletion and runtime cleanup of the conversation that was selected when deletion was admitted, the canonical selection owner enters New Chat unless a newer explicit selection targets another conversation. A pending or completed newer conversation selection remains authoritative. Deleting a nonselected conversation or a deletion that fails before cleanup does not change the visible page.
+After durable deletion and runtime cleanup of the selected conversation, the canonical selection owner opens its surviving parent when the deleted conversation was a Subagent; ordinary roots and children with no surviving parent enter New Chat. A pending or completed newer explicit selection remains authoritative, including New Chat. The parent identity is read at deletion admission before the child disappears, and parent availability is rechecked by the existing selection path. Deleting a nonselected conversation or a deletion that fails before cleanup does not change the visible page.
 
-Deletion is issued by one client (the phone UI or, later, a WebUI session). Every other client that still shows the conversation when it is durably deleted first shows the localized notice `This conversation was deleted on another device.` through its ordinary snackbar and then enters New Chat through the same canonical selection path. The issuing client shows no such notice. Deletion is rejected while any client is submitting into that conversation.
+Deletion is issued by one client (the phone UI or a WebUI session). Every other client that still shows the conversation when it is durably deleted first shows the localized notice `This conversation was deleted on another device.` through its ordinary snackbar and then follows the same surviving-parent-or-New-Chat selection rule. The issuing client shows no such notice. Deletion is rejected while any client is submitting into that conversation.
 The fork confirmation blocks like the delete confirmation: after Fork is tapped its button shows a progress indicator, Cancel, back and outside taps are disabled, and the dialog stays until the result. On success the dialog closes and the issuing client opens the fork; on failure the dialog closes and the failure snackbar is shown.
 
 Conversation deletion from both the Drawer and Task execution history, message-subtree deletion and
@@ -348,12 +359,13 @@ opens that confirmation, never as per-row message composition work. The confirma
 copied topology after failed or rejected admission; reopening through a new delete action captures
 the then-current topology. Ordinary message rendering performs no deletion graph traversal.
 
-Conversation deletion attempts immediate admission through the existing conversation execution
-coordinator after the selected-page cover is visible. If generation already owns or awaits that
-conversation, deletion reports failure and releases its own cover without waiting for generation
-to finish or stopping it. Successful admission validates the captured topology under that same
-ownership before storage mutation. Cancellation still delivers the completion callback and clears
-only the cancelled request's cover, including cancellation during the cover fade.
+Conversation deletion shows the selected-page cover, validates submission and captured topology,
+then stops Loop and awaits canonical generation persistence and coroutine settlement outside the
+execution lock. It next attempts immediate admission through the existing execution coordinator;
+a new owner or live Run rejects deletion and releases only its own cover. Successful admission
+revalidates submission/topology and reads the parent identity before storage mutation. Cancellation
+still delivers the completion callback and clears only the cancelled request's cover, including
+during the cover fade. No second Stop or selection pipeline is introduced.
 
 ## 17. Model alias display fallback
 
@@ -862,8 +874,18 @@ measured from the font, so the question-to-answer gap, the blank line between gr
 edges stay what a single `15 sp` / `24.2 sp` text gives. Search highlights map onto each block by its
 offset in the stored text; the localized unanswered label is never highlighted. Copy and Select Text use exactly the
 displayed text. Typed messages, blocking answers, Compact summaries and messages from before this
-feature have no label. Editing and resending a labeled message produces an ordinary unlabeled message.
-`ui/chat/message/MessageSourcePresentation.kt` owns the label and the ask_user text.
+feature have no label. All user messages carrying Task, Loop, Ask User or Subagent source metadata
+are read-only: their existing long-press Edit item remains visible but disabled, and canonical edit
+admission rejects them. Ordinary unmarked typed messages retain the existing edit behavior.
+Subagent completion receipts use a compact bubble showing only the child name and localized status.
+Every state, including failed and stopped, hides the result body, failure detail and error code.
+They show no inline result preview or expand action; the existing Select Text sheet exposes the
+complete original result, and Copy keeps that
+same complete text. Full UUID and protocol status wrappers do not occupy the timeline body.
+Subagent instructions without completion receipts retain their ordinary visible task text.
+The existing MessageSource carries optional structured result display metadata; legacy completion
+rows retain a safe compact display without inferring success or failure from generated prose.
+`ui/chat/message/MessageSourcePresentation.kt` owns the label and automatic-source presentation.
 ## 36. WebUI settings
 Settings > Network has a WebUI page (`ui/settings/SettingsWebUiPage.kt`). In order it holds the
 enable switch, the Set/Change Password action below it, the port (default `8686`, accepted range
@@ -991,13 +1013,13 @@ edge removes only that edge's fade. Empty or fully visible lists have neither fa
 viewport changes refresh those weights without changing layout, hit testing, focus or scroll offset.
 The floating scrollbar remains outside the mask, and Reduced Motion retains this opacity feedback.
 Each drawer conversation row's browser menu offers `Pin`/`Unpin`, `Generate Title`, `Rename` and
-`Delete` in Compose order. Generate Title uses the Refresh icon and is unavailable while selection
-is loading or that row is generating. It routes directly to
+`Delete` in Compose order. Active generation alone does not disable these actions. Generate Title
+uses the Refresh icon and remains unavailable while selection is loading or disconnected. It routes directly to
 `MessageGenerationController.generateTitle(conversationId, session)`; that existing owner reads title
 preferences, calls the model, persists the result and reports notices to the originating browser.
 Pin, Rename and Delete use `ConversationLifecycleController`, never the repository, so a browser delete
 is the same cross-client transaction as the phone's: refused while a send is admitted, and every client
-still showing the conversation settles to New Chat. Rename mirrors `ChatRenameDialog` - the field opens
+still showing the conversation follows the surviving-parent-or-New-Chat selection rule. Rename mirrors `ChatRenameDialog` - the field opens
 on the stored title and an untouched Save writes nothing - and delete mirrors `ChatDeleteConfirmDialog`:
 `CONFIRM`, then `PENDING` with a progress action that cannot be dismissed, then `FAILED` offering
 Retry. Only the connection that asked receives that conversation's `conversation_delete` answer, keyed
@@ -1136,6 +1158,11 @@ only while its original entry remains selected, carrying any later input to that
 Reconnection never automatically replays Send or Stop. An interrupted unconfirmed submission keeps
 the input and asks the reader to check the conversation before sending again.
 Runtime accepted-input scroll requests carry the exact open sequence and committed message ID.
+The newest ordinary USER or Context Compact is the semantic tail anchor, regardless of Compact's
+legacy participant or status. Anchor selection reads the same live-streaming-over-cached body as the
+rendered row, so a running Compact reserves the ordinary USER tail minimum before its watched body
+arrives. Both use the shared 140px target, measured composer/tools bottom clearance and existing
+MessageList spacer and scroll owner; terminal settlement never switches to a different inset rule.
 The WebUI Compact row menu contains Recompact and Delete. Recompact is a direct action, not a
 configuration dialog: it sends the exact selected Compact ID and uses the existing session editor
 capture and `compactManual` owner with the configured Compact model (or current model), prompt,
@@ -1569,11 +1596,13 @@ top-bar title or action capsules; the Compose top bar raises itself to `zIndex(1
 `1` occlusion layer for the same reason.
 ## 38. Conversation Todo Capsule
 An opened Agora-owned conversation may have one database-backed Todo list shared across branches.
-Native and WebUI show its content-width, horizontally centered, 48dp/px capsule below the User
-Interaction Bar and above the measured Composer, with an 8dp/px trailing gap. Empty lists and New Chat
+Native and WebUI show its content-width, 48dp/px capsule in the shared horizontal tools row above
+Composer, after User Interaction and before Subagents, with 8dp/px gaps. Empty lists and New Chat
 show no capsule. The capsule displays a checklist icon, localized Todo title and completed/total
 count. Tapping opens a read-only list through the existing SmoothBottomSheet/DetailSheet; ordered
 rows show selectable literal content and accessible pending/in-progress/completed status icons.
+Both surfaces use RadioButtonUnchecked for pending, Schedule for in-progress and the filled
+CheckCircle for completed at 20dp/px; a standalone checkmark does not represent completed Todo status.
 There are no checkbox toggles, edits or browser mutation commands: only the model's ordinary
 `update_todo` tool changes the list. Closing a sheet does not modify it.
 Typography follows the existing interaction and detail surfaces rather than inherited defaults:
@@ -1582,11 +1611,16 @@ sheet title uses `ChatType.detailTitle` (22sp/28sp Bold). The native sheet count
 `labelMedium`; its centered header uses the existing 24dp horizontal/12dp vertical title insets
 and inset divider. Literal rows retain `bodyMedium` Normal. WebUI matches its established
 Interaction Bar metrics (14px/20px Bold title, 12px/16px Medium count), reuses the shared
-DetailSheet title, and keeps 14px/20px Normal rows. Every text tier uses the effective App font.
+DetailSheet title, and keeps 14px/20px Normal rows. The sheet header shows the Todo title separately
+from its right-aligned completed/total count, using the same 12px/16px Medium count styling as Compose.
+Every text tier uses the effective App font.
 The native list fills the sheet's remaining content viewport, including blank space below short
-lists, so body drags reach SmoothBottomSheet's existing nested-scroll owner. Blank-body dragging
-expands, collapses and dismisses the sheet with both normal and Reduced Motion. The visible gaps
-from Interaction Bar to Todo and from Todo to Composer remain equal at 8dp/px on both surfaces.
+lists, so body drags reach SmoothBottomSheet's existing nested-scroll owner. The list protects the
+navigation-bar inset and keeps 32dp of scrollable bottom content padding, matching the existing
+segment-detail sheet, so the final multiline item can scroll fully above system navigation.
+Blank-body dragging
+expands, collapses and dismisses the sheet with both normal and Reduced Motion. The shared tools
+row retains 8dp/px gaps between items and above Composer on both surfaces.
 The capsule enters and exits with a `180ms` opacity transition and subtle `0.96..1` scale from its
 bottom center. Changing conversation retains only the outgoing capsule until its fade completes,
 then enters the latest selected owner's capsule; rapid changes do not queue obsolete owners.
@@ -1599,15 +1633,24 @@ alignment, and literal text remains selectable without fixed pixel offsets.
 The selected owner's narrow Room observation drives both surfaces. Changing owner, clearing the list
 or disconnecting closes the sheet and clears old presentation. Browser events carry the current
 conversation and selection sequence; stale events are ignored. Startup and drawer loading do not
-observe Todo or scan conversation owners. Todo height lifts the existing Interaction Bar and scroll
-button and enters the existing combined bottom-inset measurement, without adding another scroll
-owner. Shared shell focus, selection, motion and Reduced Motion behavior stay canonical.
+observe Todo or scan conversation owners. The shared tools row's maximum item height lifts the
+existing scroll button and enters the existing combined bottom-inset measurement, without adding
+another timeline scroll owner. Shared shell focus, selection, motion and Reduced Motion behavior stay canonical.
 
 ## 39. Subagent Navigation
-Ordinary conversations may own one level of isolated child conversations. Native and WebUI place a
-horizontally centered, scrollable row below Todo and above Composer, using 48dp/px capsules, 8dp/px
-gaps and the established titleSmall typography. Each capsule shows its name and ordinary runtime
-status; tapping opens the child through canonical selection. Children are excluded from the native
+Ordinary conversations may own one level of isolated child conversations. Native and WebUI place
+individual 48dp/px Subagent capsules after Todo in the shared horizontal tools row, with 8dp/px
+gaps and the established titleSmall typography. Subagents keep ascending durable creation-time order;
+new children append after existing children, and message/title/status updates never reorder them.
+Equal creation times use the stable child ID as a deterministic tie-breaker. Native, WebUI and
+list_agents consume the same parent-scoped ordering. Each capsule has a 4dp-equivalent shadow, a small
+localized Subagent label above its name, and ordinary runtime status. Idle, successfully completed
+and SUBAGENT message-source markers use the same AccountTree branch icon, not a completion check;
+running uses the existing progress indicator, failed uses ErrorOutline and stopped uses PauseCircleOutline
+on native and WebUI. Durable status and accessible completion labels do
+not change. Selecting or deselecting a capsule crossfades its background and content colors over 250ms
+without replacing its keyed content, moving geometry or replaying entrance/status animation.
+Tapping opens the child through canonical selection. Children are excluded from the native
 and browser conversation lists and drawer search results, but remain ordinary stored conversations
 reachable through their parent's capsules. A child shows its siblings with its own capsule selected.
 Its top-left control and native Back return to the parent. Drawer dragging remains available and
@@ -1615,13 +1658,110 @@ wide pinned drawers retain their state. The drawer highlights the parent while a
 selecting that highlighted parent is a navigation no-op, preserving the current child and its state.
 The normal narrow-drawer close behavior still applies. Other roots and New Chat keep their ordinary
 selection behavior. New Chat and empty/disconnected selections show no capsule row.
-The row follows Todo's 180ms fade and bottom-center 0.96..1 scale, retaining only the outgoing
-owner's inert capsules before entering the latest selection. Rapid selection replaces intermediate
-owners; same-owner name/status updates do not replay entrance. Reduced Motion fixes scale at one
-and snaps the height lift while retaining fades. Height returns exactly to zero after clear/disposal.
+The row follows Todo's 180ms fade and bottom-center 0.96..1 scale when its parent family changes,
+retaining only the outgoing family's inert capsules before entering the latest selection. Navigation
+between a parent and its children or between siblings keeps the same keyed capsules visible and updates
+only selection; a selected-conversation change must not synthesize an empty family list. Rapid selection
+replaces intermediate unrelated owners; same-family name/status updates do not replay entrance. Each
+fixed-size status icon slot crossfades over 250ms, including progress transitions. Reduced Motion fixes
+scale at one and snaps the height lift while retaining fades. Height returns exactly to zero after
+clear/disposal. Compact and automatic continuation must not transiently report completed while the
+same admitted Subagent task is still working; status follows its canonical work lifecycle, not animation.
+Settings > Subagents offers Capsule display: Individual (default) or Grouped, applied immediately
+on native and WebUI. This presentation preference does not change delegation admission or family data.
+Individual retains one capsule per child. Grouped hides at zero, keeps the existing direct child capsule
+at one, and uses one localized count capsule (`2 Subagents`, etc.) for two or more. Any working child
+shows the existing progress indicator; when none works, the aggregate uses AccountTree regardless of
+individual terminal states. A selected child activates the aggregate; the parent does not.
+The grouped entry keeps one stable family key across single/count changes. Its title/count and status
+crossfade over250ms, including adding/removing a child, single-to-count transitions and interrupted
+updates, without replaying entrance or briefly losing the surface. Selection colors retain the same
+250ms transition. Natural width changes use the existing shared-row geometry owner; no second width,
+scroll or lifecycle authority is introduced. Reduced Motion retains opacity fades and snaps spatial
+changes. Individual title changes also crossfade in place with the existing status slot.
+At two or more, tapping the grouped capsule opens the shared SmoothBottomSheet with the existing
+Todo-style header and scrollable32dp bottom/navigation inset. Rows show each child's name and status
+in the same creation order; the current child has selected colors/semantics. Selecting a row invokes
+ordinary conversation selection and dismisses the sheet; it never starts or restarts an agent. The
+sheet closes if the family/connection becomes invalid, mode changes, or fewer than two children
+remain. Inert outgoing capsules cannot open it or navigate. Native and WebUI share these semantics.
 Only selected-parent narrow Room projections are observed. Browser events require matching owner
-and selection sequence. Row height feeds the existing interaction/Todo/FAB lift and combined bottom
-measurement, with no new scroll owner. Tests cover list/search exclusion without deleting children,
+and selection sequence. The shared row's maximum item height feeds the existing FAB lift and combined
+bottom measurement. When any User Interaction, Todo or Subagent item is present, the message-list
+trailing inset includes the measured shared row height plus an additional 8dp/px of clear space
+above it. The extra clearance follows the same item appearance/exit progress as the measured height:
+normal motion takes each item's height plus 8dp/px times its current progress, then uses the maximum
+across the shared row. Removing the final item smoothly returns the entire message inset to zero;
+neither a nonempty flag nor a positive-height check may hard-drop the last 8dp/px. If another item
+remains, its space is preserved. Interrupted exits retarget from current progress without a second
+height animator or scroll owner. Reduced Motion snaps spatial height and clearance together while
+retaining allowed opacity fades. With all three empty, the ordinary inset returns unchanged. This
+gap is between the last message and the tools, not between the tools and Composer, and uses the existing single list/inset
+owner on native and WebUI. The shared horizontal viewport uses the drawer's draw-only edge mask:
+40dp/px at each physical side, capped at half its width, with 200ms FastOutSlowIn opacity feedback.
+An edge fades only while more content exists beyond it; empty and fully visible rows have no mask.
+RTL maps the same scroll owner's logical bounds to physical sides. Reduced Motion retains these
+opacity changes. Neither masking nor its updates change geometry, hit regions, scroll offsets or
+anchor ownership. WebUI reuses the shared floating scrollbar on the horizontal axis, outside the
+mask: it reserves no layout gutter and appears only for mouse hover or active dragging when the
+row overflows. Its input interrupts the existing shared-row scroll motion through the same owner.
+One horizontal scrolling owner covers User Interaction, Todo and all Subagents,
+in that order; Subagents do not create a nested horizontal scroller. Items bottom-align and content
+centers when it fits; expanded interaction retains its editor at viewport width. Within the same
+selected conversation, stable keys, animated insertion/removal placement and scroll-range adjustment
+preserve the visible reading anchor. Conversation replacement is a strict three-step boundary:
+(1) outgoing Interaction/Todo and unrelated-family Subagent content completely finish their existing
+inert exit, keeping their layout positions and the shared viewport fixed until no outgoing paint remains;
+(2) while incoming content stays invisible, slots and the shared track finish adopting the latest
+destination's natural widths and positions directly, without preserving the previous conversation's
+anchor, tweening old placement into the new layout, or retaining a shrinking ghost range;
+(3) only after that destination layout has been measured and placed may incoming content begin its
+existing entrance. These steps cannot overlap. Rapid switches skip intermediate
+owners. Parent/child/sibling navigation within one proven family still retains the keyed Subagent
+list and its selection/status continuity; that exception does not retain outgoing Todo/Interaction
+geometry. Within a proven family, selecting a child is a minimal diff rather than a whole-row
+replacement: preserve a visible retained Subagent's screen anchor through selection and animated
+removal of offscreen leading items. If an outgoing Todo/Interaction is still visible ahead of
+that anchor, fade it while retained capsules smoothly move left as its occupied space closes;
+these animations may run together. Keep the existing keyed capsules and make only the natural
+minimum geometry change. Do not reset the shared scroller to logical start merely because a sibling
+or parent/child was selected. Apply the same rule in both directions: entering a child and returning
+to its parent preserve the visible retained Subagent's screen position whenever the shared scroller
+is away from logical start. Reinserted parent Todo/Interaction reserves its space outside that anchor
+without seeking the logical start. A user drag cancels only the current geometry change;
+returning to a previously seen parent layout must restore anchor compensation, including
+at maximum scroll and with Reduced Motion. Browser DOM insertion/removal must compensate retained
+placement before that paint, preserve the old scroll range through the existing tween and adopt
+actual rounded scroll offsets without a second jump or restarted placement wave. At logical start, ordinary insertion/removal may naturally move
+retained capsules. Reopening an already pending parent request is navigation, not a newly arrived
+Interaction reveal; genuinely new requests and explicit expansion retain the existing reveal rule.
+The selected conversation's existing loading cover releases only after its stable initial message
+projection and first owner-matching Todo, Subagent and AskUser/Shell projections are all ready.
+A confirmed empty projection is ready; an unobserved initial placeholder is not. Capture these
+initial tool states under the same selection/connection fences before revealing the new page,
+so capsules cannot leak a partial initial list or arrive late merely because their first load lagged.
+Retained same-family Subagents keep their keyed navigation continuity. Subsequent live tool arrivals
+and mutations keep ordinary entry/removal/reveal behavior; opening does not wait for running agents
+to finish or for future requests. Reuse the existing loading and projection owners without a timer.
+Request drafts, folded/page state, same-owner insertion/removal motion, the sole scroller,
+and current height/inset ownership are unchanged. Todo/Subagent capsules retain their natural settled content width,
+rounded outline and text layout throughout insertion/removal; animated occupied width must not
+squeeze, reflow, truncate or rectangularly crop a capsule. Full interaction editors retain their
+natural constraints and bounded paint/hit region. During fold/unfold, the existing rounded card
+owns content clipping and size interpolation; the shared slot follows its measured frame width
+without a second lagging width tween or rectangular crop. The rounded edge must remain intact
+through expansion and collapse, with adjacent capsules laid out outside the same occupied width.
+No content may overlap adjacent capsules; resting
+shadows remain visible. An overflowing track at its logical start has only the normal 12dp/px outer
+inset, without hidden-slot space or centering gaps. First render does not seek a Subagent. A newly
+arrived visible User Interaction request (including a new question in an existing card), or an explicit
+interaction expand event, moves this same shared scroller to its logical start using a 350ms
+FastOutSlowIn curve. This reveal takes priority over geometry-anchor preservation, without unfolding
+a minimized card or switching its current request page. Request removal, ordinary recomposition and
+other owners' requests do not retrigger it. User input cancels programmatic travel; Reduced Motion
+snaps to the start. Shell confirmation remains the first page followed by questions in request order;
+request-kind-prefixed identity, drafts and exact independent actions prevent one kind from resolving
+the other. Reduced Motion snaps spatial changes and retains permitted fades. Tests cover list/search exclusion without deleting children,
 narrow/wide horizontal overflow, interrupted motion, click/return, parent highlight/reselection,
 drawer drag/pinning, stale events, clear/disconnect and native measurement release. Phone UI
 acceptance remains manual.

@@ -89,6 +89,7 @@ internal class GenerationToolExecutor private constructor(
             sandboxFactory: SandboxManagerFactory?,
             additionalProviders: List<ToolProvider>,
             confirmShellCommand: suspend (server: String, summary: String, conversationId: String?) -> Boolean,
+            generatingConversationIds: () -> Set<String> = { emptySet() },
         ): GenerationToolExecutor {
             val imageGenProvider = ImageGenToolProvider(app)
             val shellProvider = ShellToolProvider(
@@ -103,7 +104,7 @@ internal class GenerationToolExecutor private constructor(
                     MemoryToolProvider(memoryManager),
                     SkillToolProvider(skillManager),
                     WebSearchToolProvider(),
-                    RagToolProvider(conversations),
+                    RagToolProvider(conversations, generatingConversationIds),
                     imageGenProvider,
                     shellProvider,
                 ) + additionalProviders,

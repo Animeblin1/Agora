@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -76,7 +75,7 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                 }
             }
         } else {
-            val scrollState = rememberScrollState()
+            val scrollState = rememberSettingsScrollState()
             CollapsingSettingsScaffold(
                 title = stringResource(R.string.shell_title),
                 onBack = onBack,

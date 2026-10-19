@@ -57,4 +57,10 @@ the actual backend result. Noninteger values still fail validation.
 
 ## Localization
 
+Todo and Subagent tools use explicit built-in kinds and localized action titles, never the unknown-tool
+English fallback. Their summaries describe the tool action, not a child's generation state: spawn
+starts a child, send queues a message, and wait completes its waiting action without claiming every
+child finished. Raw protocol names, keys, arguments and results remain unchanged. Native and WebUI
+message cards consume the same app-locale resources; browser chrome retains its existing en/zh scope.
+
 Every locale contains the same summary keys and placeholder types. Languages may reorder indexed placeholders. Running text uses `…`. Terminal text has no final period. A change to lifecycle semantics must update every locale and the presentation contract tests in the same change.

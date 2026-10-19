@@ -37,7 +37,6 @@ import com.newoether.agora.R
 import com.newoether.agora.TopLevelPresentation
 import com.newoether.agora.api.DebugProvider
 import com.newoether.agora.data.forDisplay
-import com.newoether.agora.data.replaceCustomProviderIdsForDisplay
 import com.newoether.agora.util.gradientBlur
 import com.newoether.agora.ui.chat.bottombar.CHAT_BOTTOM_BAR_OUTER_SHAPE
 import com.newoether.agora.ui.chat.bottombar.ChatBottomBar
@@ -205,9 +204,11 @@ fun ChatApp(
     }
     var bottomBarHeightPx by rememberSaveable { mutableFloatStateOf(0f) }
     val bottomBarHeight = with(density) { bottomBarHeightPx.toDp() }
-    // Measured by the interaction bar so the scroll-to-bottom button clears it as well.
+    // Shared tools report their lift and message clearance from the same appearance progress.
     var interactionBarHeightPx by remember { mutableFloatStateOf(0f) }
+    var messageToolsInsetPx by remember { mutableFloatStateOf(0f) }
     val interactionBarHeight = with(density) { interactionBarHeightPx.toDp() }
+    val messageToolsInset = with(density) { messageToolsInsetPx.toDp() }
     var drawerProgress by remember { mutableFloatStateOf(0f) }
     // Bottom offset to clear the Settings button in the drawer.
     var settingsButtonTopDp by remember { mutableFloatStateOf(80f) }
@@ -411,21 +412,12 @@ fun ChatApp(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     ChatTopBar(
-                        isNewChatMode = isNewChatMode,
+                        viewModel = viewModel,
+                        dialogState = dialogState,
+                        conversationInteraction = conversationInteraction,
                         conversations = displayConversations,
-                        currentConversationId = currentConversationId,
-                        currentConversationTitle = currentConversation?.title?.let {
-                            replaceCustomProviderIdsForDisplay(it, customProviders)
-                        },
                         totalTokens = contextUsage.estimatedTokenCount,
                         contextTokenBudget = contextUsage.tokenBudget,
-                        searchActive = conversationSearchActive,
-                        searchQuery = conversationSearchQuery,
-                        searchMatchIndex = conversationSearchMatchIndex,
-                        searchMatchCount = conversationSearchMatches.size,
-                        conversationActionsEnabled =
-                            !isNewChatMode && currentConversationId != null && !isLoading &&
-                                !shareSelectionActive,
                         systemPromptEnabled = !conversationControls.lowContextModeEnabled,
                         onNavigateBack = onNavigateBack,
                         onOpenDrawer = {
@@ -433,33 +425,7 @@ fun ChatApp(
                                 scope.launch { drawerState.toggle(motionPolicy) }
                             }
                         },
-                        onSearchQueryChange = { query ->
-                            conversationInteraction.updateSearchQuery(query)
-                        },
-                        onSearchPrevious = {
-                            if (conversationInteraction.previousSearchMatch()) {
-                                haptics.selection()
-                            }
-                        },
-                        onSearchNext = {
-                            if (conversationInteraction.nextSearchMatch()) {
-                                haptics.selection()
-                            }
-                        },
-                        onSearchDismiss = {
-                            conversationInteraction.dismissSearch()
-                            focusManager.clearFocus()
-                        },
-                        onSearchClick = {
-                            conversationInteraction.activateSearch()
-                        },
-                        onSystemPromptClick = dialogState::showPrompt,
                         onForkConversation = { pendingForkRequest = ForkConversationRequest(messageId = null) },
-                        onShareConversation = {
-                            conversationInteraction.dismissSearch()
-                            focusManager.clearFocus()
-                            conversationInteraction.activateShareSelection()
-                        },
                         onNewChat = {
                             if (!isNewChatMode) {
                                 isExpanded = false
@@ -546,7 +512,7 @@ fun ChatApp(
                                 contextRetainedMessageIds = contextProjection.retainedMessageIds.orEmpty(),
                                 modelAliases = StableModelAliases(modelAliases, modelProviderNames),
                                 customProviders = customProviders,
-                                bottomBarHeight = bottomBarHeight + shareSelectionBarSpace,
+                                bottomBarHeight = bottomBarHeight + shareSelectionBarSpace + messageToolsInset,
                                 viewportHeight = viewportHeightPx,
                                 messageHeights = messageHeights,
                                 observeMessage = messageHydration.observeMessage,
@@ -616,7 +582,7 @@ fun ChatApp(
                                     start = 8.dp,
                                     end = 8.dp,
                                     top = 140.dp,
-                                    bottom = bottomBarHeight + shareSelectionBarSpace + 8.dp
+                                    bottom = bottomBarHeight + shareSelectionBarSpace + messageToolsInset + 8.dp
                                 )
                             )
                             }
@@ -669,6 +635,7 @@ fun ChatApp(
                 autoWrapCodeBlocks = autoWrapCodeBlocks,
                 bottomBarHeight = bottomBarHeight,
                 onHeightChanged = { interactionBarHeightPx = it },
+                onMessageInsetChanged = { messageToolsInsetPx = it },
             )
 
             com.newoether.agora.ui.chat.bottombar.ChatComposerSurface(

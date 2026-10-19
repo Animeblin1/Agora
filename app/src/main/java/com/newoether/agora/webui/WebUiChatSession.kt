@@ -365,7 +365,7 @@ internal class WebUiChatSession(
         dispatchWebUiRowCommand(this, command, path, conversationId, modelId,
             generation, conversations, registry, executionCoordinator, ownerMutex,
             isCurrent = { !closed && (target.value == opened || command.type == "delete" &&
-                target.value == OpenTarget(null, opened.browserSeq, movedByServer = true)) },
+                target.value.browserSeq == opened.browserSeq && target.value.movedByServer) },
             editorCommand = ::editorCommand, reply = reply)
     }
 
@@ -777,10 +777,13 @@ internal class WebUiChatSession(
     // WebUiSync delivers identified share results directly to the browser.
     override fun showShareText(text: String) = Unit
 
-    override fun settleDeletedConversation(conversationId: String) {
+    override fun settleDeletedConversation(conversationId: String, parentConversationId: String?) {
+        val expected = target.value
         scope.launch {
             ownerMutex.withLock {
-                if (target.value.conversationId == conversationId) moveByServer(null)
+                if (closed || target.value != expected || expected.conversationId != conversationId) return@withLock
+                val destination = parentConversationId?.takeIf { conversations.getConversation(it) != null }
+                moveByServer(destination)
             }
         }
     }

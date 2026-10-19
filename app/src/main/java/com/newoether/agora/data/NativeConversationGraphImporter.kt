@@ -172,12 +172,16 @@ internal class NativeConversationGraphImporter(
             mutableSetOf()
         }.apply { addAll(tasks.map { it.id }) }
 
+        val earliestRunTimes = rawRuns.groupingBy { it.conversationId }
+            .fold(Long.MAX_VALUE) { earliest, run -> minOf(earliest, run.startedAt) }
         val conversations = rawConversations.map { conversation ->
             sanitizeImportedConversation(
                 ChatEntity(
                     id = conversation.id,
                     title = conversation.title,
                     lastUpdated = conversation.lastUpdated,
+                    createdAt = conversation.createdAt ?: minOf(conversation.lastUpdated,
+                        earliestRunTimes[conversation.id] ?: conversation.lastUpdated),
                     isPinned = conversation.isPinned,
                     parentConversationId = conversation.parentConversationId,
                     subagentResultJson = conversation.subagentResultJson,

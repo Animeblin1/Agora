@@ -1,5 +1,6 @@
 package com.newoether.agora.data.repository
 
+import com.newoether.agora.data.DEFAULT_SUBAGENT_MAX_TOTAL
 import com.newoether.agora.data.local.ChatEntity
 import com.newoether.agora.data.local.ConversationSettingsTransferEntity
 import com.newoether.agora.model.MessageSource
@@ -7,12 +8,18 @@ import com.newoether.agora.model.RunEffectIdentity
 import com.newoether.agora.model.SubagentCompletion
 import com.newoether.agora.model.SubagentSummary
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 suspend fun ConversationRepository.pendingSubagentResults(parentId: String) =
     chatDao.pendingSubagentResults(parentId)
 
 fun ConversationRepository.observeSubagents(parentId: String): Flow<List<SubagentSummary>> =
-    chatDao.observeSubagents(parentId)
+    chatDao.observeSubagents(parentId).combine(subagentJobs) { children, jobs ->
+        children.map { child ->
+            if (child.id in jobs) child.copy(status = "running") else child
+        }
+    }.distinctUntilChanged()
 fun ConversationRepository.observeParentConversationId(id: String): Flow<String?> =
     chatDao.observeParentConversationId(id)
 suspend fun ConversationRepository.getSubagentIds(parentId: String): List<String> =
@@ -24,15 +31,28 @@ suspend fun ConversationRepository.requireSubagentToolOwner(identity: RunEffectI
     }
 }
 
-/** Child creation and parent authorization share one Room transaction. */
+/** Child creation, capacity and parent authorization share one Room transaction. */
 suspend fun ConversationRepository.createSubagent(
     identity: RunEffectIdentity, child: ChatEntity, settingsJson: String?,
+    maxSubagents: Int = DEFAULT_SUBAGENT_MAX_TOTAL,
 ) = withProviderContextSnapshot {
     requireSubagentToolOwner(identity)
     require(child.parentConversationId == identity.conversationId)
+    require(maxSubagents > 0) { "Subagent count limit must be positive" }
+    check(chatDao.countSubagents(identity.conversationId) < maxSubagents) {
+        "The parent conversation has reached its Subagent count limit ($maxSubagents)"
+    }
     check(chatDao.getConversation(child.id) == null)
     chatDao.upsertConversation(child)
     chatDao.upsertConversationSettingsTransfer(ConversationSettingsTransferEntity(child.id, settingsJson))
+}
+
+/** Tool-demanded diagnostics do not widen the ordinary payload-free capsule observation. */
+internal suspend fun ConversationRepository.subagentFailureDetail(parentId: String, childId: String): SubagentCompletion? {
+    val cached = runCatching { SubagentCompletion.decode(chatDao.getSubagentCompletionJson(childId, parentId)) }
+        .getOrNull()?.takeIf { it.status == "failed" } ?: return null
+    if (!cached.errorText.isNullOrBlank()) return cached
+    return cached.modelMessageId?.let { subagentTerminalCompletion(childId, it) }?.takeIf { it.status == "failed" }
 }
 
 suspend fun ConversationRepository.recordSubagentCompletion(
@@ -53,22 +73,68 @@ suspend fun ConversationRepository.consumeSubagentCompletions(
     }
 }
 
-internal suspend fun ConversationRepository.persistSubagentTerminal(childId: String, at: Long) {
+/** User dismissal consumes only still-current receipts, never a replacement result. */
+suspend fun ConversationRepository.dismissSubagentResults(parentId: String, receipts: Map<String, String>) =
+    withProviderContextSnapshot {
+        receipts.forEach { (id, resultId) ->
+            chatDao.acknowledgeSubagentResult(id, parentId, resultId, System.currentTimeMillis())
+        }
+    }
+
+/** Revalidate claimed notifications before normal admission; committed waits win over the queue. */
+internal suspend fun ConversationRepository.consumedSubagentResults(
+    parentId: String, receipts: Set<Pair<String, String>>,
+): Set<Pair<String, String>> = withProviderContextSnapshot {
+    receipts.filter { (id, resultId) ->
+        val child = chatDao.getConversation(id)
+        child == null || child.parentConversationId != parentId || child.subagentResultId != resultId ||
+            child.subagentDeliveredResultId == resultId
+    }.toSet()
+}
+
+internal suspend fun ConversationRepository.persistSubagentTerminal(
+    childId: String, at: Long, terminalMessageId: String? = null,
+) {
+    val messageId = terminalMessageId ?: return
     val parentId = chatDao.getConversation(childId)?.parentConversationId ?: return
-    val message = chatDao.getLastMessageForConversation(childId) ?: return
-    if (message.participant != com.newoether.agora.model.Participant.MODEL) return
+    // The delegation worker owns completion across Compact and ordinary Run handoffs.
+    if (subagentJobs.value[childId] != null) return
+    val completion = subagentTerminalCompletion(childId, messageId) ?: return
+    chatDao.setSubagentResult(childId, parentId, SubagentCompletion.encode(completion), completion.id, completion.status, at)
+}
+
+/** Read-only exact terminal projection, shared with selected-family validation. */
+internal suspend fun ConversationRepository.subagentTerminalCompletion(
+    childId: String, terminalMessageId: String,
+): SubagentCompletion? {
+    if (terminalMessageId.startsWith(com.newoether.agora.util.Constants.COMPACT_MSG_PREFIX)) return null
+    val message = chatDao.getMessage(terminalMessageId) ?: return null
+    if (message.conversationId != childId || message.participant != com.newoether.agora.model.Participant.MODEL) return null
+    val run = chatDao.getRun(message.runId) ?: return null
+    if (run.conversationId != childId || !run.status.isTerminal || run.legacyAmbiguous ||
+        run.endReason == com.newoether.agora.model.RunEndReason.CONTINUATION_PENDING) return null
     val status = when (message.status) {
         com.newoether.agora.model.MessageStatus.SUCCESS -> "completed"
-        com.newoether.agora.model.MessageStatus.STOPPED -> "stopped"
+        com.newoether.agora.model.MessageStatus.STOPPED ->
+            if (run.endReason == com.newoether.agora.model.RunEndReason.PROCESS_RECOVERED) "failed" else "stopped"
         com.newoether.agora.model.MessageStatus.ERROR -> "failed"
-        else -> return
+        else -> return null
     }
-    val completion = SubagentCompletion(message.id, status, message.text, message.id)
-    chatDao.setSubagentResult(childId, parentId, SubagentCompletion.encode(completion), completion.id, status, at)
+    val segments = message.toolCallJson?.let { raw ->
+        runCatching { kotlinx.serialization.json.Json.decodeFromString<List<com.newoether.agora.model.MessageSegment>>(raw) }
+            .getOrNull()
+    }.orEmpty()
+    val failure = com.newoether.agora.model.terminalErrorSegment(
+        message.status, message.participant, message.text, segments,
+    )
+    return SubagentCompletion(message.id, status, message.text, message.id,
+        errorText = if (status == "failed") generationErrorFormatter(failure?.content.orEmpty()) else null,
+        errorCode = failure?.errorCode)
 }
 
 internal suspend fun ConversationRepository.commitSubagentWaitReceipts(
     messages: List<com.newoether.agora.data.local.MessageEntity>,
+    receipts: MutableMap<String, String>,
 ) {
     messages.forEach { message ->
         val raw = message.toolCallJson ?: return@forEach
@@ -79,8 +145,8 @@ internal suspend fun ConversationRepository.commitSubagentWaitReceipts(
         val root = runCatching {
             kotlinx.serialization.json.Json.parseToJsonElement(checkNotNull(call.toolResult)) as? kotlinx.serialization.json.JsonObject
         }.getOrNull() ?: return@forEach
-        val receipts = root["subagent_receipts"] as? kotlinx.serialization.json.JsonObject ?: return@forEach
-        receipts.forEach { (id, value) ->
+        val returned = root["subagent_receipts"] as? kotlinx.serialization.json.JsonObject ?: return@forEach
+        returned.forEach { (id, value) ->
             val resultId = (value as? kotlinx.serialization.json.JsonPrimitive)?.content ?: error("Invalid result receipt")
             // Duplicate wait calls in one tool batch are idempotent; replacement still fails closed.
             val child = checkNotNull(chatDao.getConversation(id))
@@ -88,7 +154,19 @@ internal suspend fun ConversationRepository.commitSubagentWaitReceipts(
             if (child.subagentDeliveredResultId != resultId) {
                 check(chatDao.acknowledgeSubagentResult(id, message.conversationId, resultId, System.currentTimeMillis()) == 1)
             }
+            receipts[id] = resultId
         }
+    }
+}
+
+/** The durable wait result is authoritative even when process notification fails or is cancelled. */
+internal suspend fun ConversationRepository.notifySubagentWaitCommitted(parentId: String, receipts: Map<String, String>) {
+    try {
+        onSubagentWaitCommitted?.invoke(parentId, receipts)
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        com.newoether.agora.util.DebugLog.w("Subagents", "Committed wait queue notification failed", error)
     }
 }
 

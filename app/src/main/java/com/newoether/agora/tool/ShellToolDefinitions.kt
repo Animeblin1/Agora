@@ -137,9 +137,9 @@ internal object ShellToolDefinitions {
                         "path" to ToolProperty("string", "Absolute path to the file."),
                         "server" to fileServerProperty,
                         "offset" to ToolProperty("integer", "Byte offset (optional). In line mode, line 1 is the line starting at this offset."),
-                        "limit" to ToolProperty("integer", "Byte mode: max bytes to read (optional, default and maximum 1MB)."),
-                        "start_line" to ToolProperty("integer", "Line mode: first line to return, 1-based (optional)."),
-                        "max_lines" to ToolProperty("integer", "Line mode: max lines to return (optional, default $FILE_READ_DEFAULT_LINES, maximum $FILE_READ_MAX_LINES).")
+                        "limit" to ToolProperty("integer", "Byte mode: max bytes to read (optional, default and maximum 1MB; 0 or null means default)."),
+                        "start_line" to ToolProperty("integer", "Line mode: first line to return, 1-based (optional; 0 or null means not set)."),
+                        "max_lines" to ToolProperty("integer", "Line mode: max lines to return (optional, default $FILE_READ_DEFAULT_LINES, maximum $FILE_READ_MAX_LINES; 0 or null means not set).")
                     ),
                     required = listOf("path") + fileRequired
                 )

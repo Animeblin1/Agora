@@ -14,21 +14,25 @@ import kotlinx.serialization.json.*
 class SubagentToolProvider(private val manager: SubagentManager) : ToolProvider {
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
         if (!ctx.subagentToolsEnabled) return emptyList()
+        val models = ctx.subagentModelIds.orEmpty()
+        val recommendation = ctx.subagentRecommendedModel?.takeIf { it in models }?.let {
+            " Recommended model ID: ${Json.encodeToString(it)} (hint only; model_id is still required and may select any available ID)."
+        }.orEmpty()
         return listOf(
-            definition("spawn_agent", "Start an isolated subagent asynchronously. It receives only task, never this conversation's history. Enabled model IDs: ${Json.encodeToString(ctx.enabledModelIds)}", mapOf(
+            definition("spawn_agent", "Start an isolated subagent asynchronously. It receives only task, never this conversation's history. Available model IDs: ${Json.encodeToString(models)}$recommendation", mapOf(
                 "name" to ToolProperty("string", "Short subagent name."),
-                "model_id" to ToolProperty("string", "One exact enabled model ID."),
+                "model_id" to ToolProperty("string", "One exact available model ID; required even when a recommendation is present."),
                 "task" to ToolProperty("string", "Complete task and all necessary context."),
             ), listOf("name", "model_id", "task")),
-            definition("send_agent_message", "Send a new task to an idle subagent belonging to this conversation.", mapOf(
+            definition("send_agent_message", "Queue a follow-up for an idle or busy subagent belonging to this conversation. Returns a queued item receipt; does not interrupt its active Provider or tool pass.", mapOf(
                 "agent_id" to ToolProperty("string", "Subagent conversation ID."),
                 "message" to ToolProperty("string", "Complete follow-up instruction."),
             ), listOf("agent_id", "message")),
-            definition("wait_agents", "Wait for selected subagents and return their undelivered terminal results. Returned results are not automatically notified again.", mapOf(
+            definition("wait_agents", "Wait for selected subagents and return their undelivered terminal results. Returned results are not automatically notified again. Failed results include their persisted error detail separately from generated text when available.", mapOf(
                 "agent_ids" to ToolProperty("array", "Subagent IDs; omit to wait for all.", items = ToolProperty("string", "Subagent ID")),
                 "timeout_ms" to ToolProperty("integer", "Wait budget, 1 to 300000 milliseconds; default 300000."),
             )),
-            definition("list_agents", "List this conversation's subagents and their current status.", emptyMap()),
+            definition("list_agents", "List this conversation's subagents and their current status, including available errorText/errorCode for failed agents.", emptyMap()),
             definition("stop_agent", "Cancel a subagent's live generation and await durable Stop settlement.", mapOf(
                 "agent_id" to ToolProperty("string", "Subagent conversation ID."),
             ), listOf("agent_id")),
@@ -46,13 +50,24 @@ class SubagentToolProvider(private val manager: SubagentManager) : ToolProvider 
         fun string(key: String) = (args[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
             ?.takeIf(String::isNotBlank) ?: error("$key is required")
         val result = when (name) {
-            "spawn_agent" -> buildJsonObject {
-                put("agent_id", manager.spawn(string("name"), string("model_id"), string("task"), ctx))
-                put("status", "started")
-            }.toString()
+            "spawn_agent" -> {
+                val modelId = string("model_id")
+                require(modelId in ctx.subagentModelIds.orEmpty()) {
+                    "model_id must be an available model ID from this request"
+                }
+                buildJsonObject {
+                    put("agent_id", manager.spawn(string("name"), modelId, string("task"), ctx))
+                    put("status", "started")
+                }.toString()
+            }
             "send_agent_message" -> {
-                manager.send(string("agent_id"), string("message"), ctx)
-                "Message sent"
+                val id = string("agent_id")
+                val queuedId = manager.send(id, string("message"), ctx)
+                buildJsonObject {
+                    put("agent_id", id)
+                    put("status", "queued")
+                    put("queued_item_id", queuedId)
+                }.toString()
             }
             "wait_agents" -> {
                 val ids = (args["agent_ids"] as? JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
@@ -67,6 +82,8 @@ class SubagentToolProvider(private val manager: SubagentManager) : ToolProvider 
                             put("agent_id", id)
                             put("status", result.status)
                             put("text", result.text)
+                            result.errorText?.let { put("error", it) }
+                            result.errorCode?.let { put("error_code", it) }
                         }) }
                     }
                 }.toString()

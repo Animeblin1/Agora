@@ -81,6 +81,7 @@ internal fun MorphingInteractionCard(
     kind: InteractionKind,
     minimized: Boolean,
     onMinimizedChange: (Boolean) -> Unit,
+    inSharedRow: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val motion = LocalAgoraMotionPolicy.current
@@ -98,7 +99,7 @@ internal fun MorphingInteractionCard(
     val capsuleAlpha = (progress * 2f - 1f).coerceIn(0f, 1f)
     val expandLabel = stringResource(R.string.interaction_expand)
 
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
+    Box(modifier = if (inSharedRow) Modifier else Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
         Box(
             modifier = Modifier
                 .shadow(4.dp, shape, clip = false)

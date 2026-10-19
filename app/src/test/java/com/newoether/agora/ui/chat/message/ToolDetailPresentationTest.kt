@@ -61,6 +61,9 @@ class ToolDetailPresentationTest {
         )
         assertEquals(ToolDetailBody.Muted(resources.getString(R.string.tool_found_no_files)), body(segment("file_glob", "{}")))
         assertEquals(ToolDetailBody.Muted(resources.getString(R.string.tool_found_no_matches)), body(segment("file_grep", "{\"matches\":[null,1]}")))
+        // A legacy clipped envelope does not parse; the model-facing match text is shown, not "No matches".
+        val clipped = segment("file_grep", "a.py:1:hit").copy(toolStructuredResult = """{"type":"file_grep","matches":[{"path":"a.py","li""")
+        assertEquals(ToolDetailBody.JsonContent(listOf("a.py:1:hit")), body(clipped))
         val unknown = resources.getString(R.string.file_path_unknown)
         val grep = body(segment("file_grep", """{"matches":[{"content":"first"},{"path":"$unknown","line":3,"content":"second"},{"path":"","content":"third"}]}""")) as ToolDetailBody.Grep
         assertEquals(2, grep.groups.size)

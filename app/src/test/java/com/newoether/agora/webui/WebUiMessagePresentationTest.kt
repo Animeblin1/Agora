@@ -9,6 +9,7 @@ import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.model.Participant
 import com.newoether.agora.model.ThinkingSegmentDisplayModes
 import com.newoether.agora.model.ToolCallDisplayModes
+import com.newoether.agora.ui.chat.message.toolSummary
 import com.newoether.agora.util.appLanguageResources
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map
@@ -27,6 +28,24 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], application = Application::class)
 class WebUiMessagePresentationTest {
     private val context: Application get() = ApplicationProvider.getApplicationContext()
+
+    private fun repositoryForConversationOpen() =
+        io.mockk.mockk<com.newoether.agora.data.repository.ConversationRepository>(relaxed = true) {
+            io.mockk.every { subagentJobs } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+            io.mockk.every { chatDao } returns io.mockk.mockk {
+                io.mockk.every { observeConversationTodo(any()) } returns kotlinx.coroutines.flow.flowOf(null)
+                io.mockk.every { observeParentConversationId(any()) } returns kotlinx.coroutines.flow.flowOf(null)
+                io.mockk.every { observeSubagents(any()) } returns kotlinx.coroutines.flow.flowOf(emptyList())
+                io.mockk.coEvery { getSubagentFamilyRootId(any()) } answers { firstArg<String>() }
+                io.mockk.coEvery { getSubagentIds(any()) } returns emptyList()
+                io.mockk.coEvery { getLiveRun(any()) } returns null
+                io.mockk.coEvery { getValidatedSubagentStatus(any()) } returns null
+            }
+            io.mockk.coEvery { recoverConversationRuntime(any(), any()) } returns 0
+            io.mockk.coEvery { withProviderContextSnapshot<Unit>(any()) } coAnswers {
+                firstArg<suspend () -> Unit>().invoke()
+            }
+        }
 
     private fun display(
         language: String = "en",
@@ -48,6 +67,47 @@ class WebUiMessagePresentationTest {
             status = status,
             segments = segments.toList(),
         )
+
+    @Test
+    fun completionSourceProjectsCompactMetadataAndKeepsTheFullOriginalResult() {
+        val raw = "Worker (child) [failed]\nFull original result\nError: Connection closed"
+        val result = com.newoether.agora.model.MessageSource.SubagentResult(
+            "Worker", "failed", "Connection closed", "connection_closed")
+        val source = com.newoether.agora.model.MessageSource(
+            com.newoether.agora.model.MessageSource.Kind.SUBAGENT,
+            subagentResults = mapOf("child" to "result"), subagentResult = result)
+        val message = ChatMessage(id = "receipt", text = raw, participant = Participant.USER, source = source)
+        val wire = message.toWeb(null)
+        assertEquals(raw, wire.text.markdown)
+        assertEquals(result, wire.source?.subagentResult)
+        val encoded = WebUiSync.json.encodeToString(WebMessage.serializer(), wire)
+        assertEquals(wire, WebUiSync.json.decodeFromString(WebMessage.serializer(), encoded))
+        assertEquals(com.newoether.agora.model.MessageSource.SubagentResult("Worker", "failed"),
+            message.copy(source = source.copy(subagentResult = null)).toWeb(null).source?.subagentResult)
+        assertNull(message.copy(source = com.newoether.agora.model.MessageSource(
+            com.newoether.agora.model.MessageSource.Kind.SUBAGENT)).toWeb(null).source?.subagentResult)
+    }
+
+    @Test
+    fun todoAndSubagentCardsUseTheAppLocaleInBothDisplayModes() {
+        val names = listOf("read_todo", "update_todo", "spawn_agent", "send_agent_message", "wait_agents", "list_agents", "stop_agent")
+        val titles = listOf("读取待办清单", "更新待办清单", "启动子代理", "向子代理发送消息", "等待子代理", "列出子代理", "停止子代理")
+        for (mode in listOf(ToolCallDisplayModes.GROUPED_TIMELINE, ToolCallDisplayModes.COMPACT)) {
+            names.forEachIndexed { index, name ->
+                val segment = MessageSegment(type = "tool", toolName = name, toolArgs = "{\"agent_id\":\"CaseSensitive\"}")
+                val projected = webPresentation(model(MessageStatus.SENDING, segment), true, display(language = "zh", toolMode = mode))!!
+                val item = projected.compact?.items?.single()
+                    ?: (projected.blocks.single() as WebTimelineBlock.Group).group.items.single()
+                assertEquals(titles[index], item.title)
+                assertEquals(com.newoether.agora.ui.chat.message.ToolPresentationResolver.kindForToolName(name).name, item.toolDetail!!.kind)
+                assertEquals(display(language = "zh").resources.toolSummary(segment), item.summary)
+                assertEquals(item.summary, (item.toolDetail.body as WebToolBody.Active).text)
+                val encoded = WebUiSync.json.encodeToString(WebPresentation.serializer(), projected)
+                assertEquals(projected, WebUiSync.json.decodeFromString(WebPresentation.serializer(), encoded))
+                assertEquals("{\"agent_id\":\"CaseSensitive\"}", segment.toolArgs)
+            }
+        }
+    }
 
     @Test
     fun citationWireUsesCanonicalGroupsAndPreservesOriginalSearchOffsetsAndCopy() {
@@ -298,7 +358,7 @@ class WebUiMessagePresentationTest {
         val topology = kotlinx.coroutines.flow.MutableStateFlow(listOf(com.newoether.agora.data.local.MessageContextTopology(
             id = "m", conversationId = "c", parentId = null, status = MessageStatus.SENDING,
             participant = Participant.MODEL, timestamp = 1, modelName = null, runId = "run", runSequence = 1, consumedAtPass = null)))
-        val repository = io.mockk.mockk<com.newoether.agora.data.repository.ConversationRepository>(relaxed = true)
+        val repository = repositoryForConversationOpen()
         io.mockk.every { repository.observeConversation("c") } returns kotlinx.coroutines.flow.flowOf(com.newoether.agora.model.ChatConversation("c", "Test"))
         io.mockk.every { repository.observeMessageTopology("c") } returns topology
         io.mockk.every { repository.observeDrawerConversations(any()) } returns kotlinx.coroutines.flow.flowOf(emptyList())
@@ -339,7 +399,9 @@ class WebUiMessagePresentationTest {
             topology.value = topology.value.map { it.copy(tokenCount = index + 1) }
             runCurrent()
         }
-        assertEquals(20, events.count { it is WebSyncEvent.Streaming })
+        // Later frames of the same live message travel as patches against the first full frame.
+        assertEquals(20, events.count { it is WebSyncEvent.StreamingPatch })
+        assertTrue(events.none { it is WebSyncEvent.Streaming })
         assertTrue(events.none { it is WebSyncEvent.Path || it is WebSyncEvent.Payload || it is WebSyncEvent.Context })
         snapshot.value = snapshot.value.copy(streamingMessage = terminal, isLoading = false, isGenerating = false)
         runCurrent()
@@ -355,7 +417,7 @@ class WebUiMessagePresentationTest {
                 status = MessageStatus.SUCCESS, timestamp = index.toLong(), runId = "run", runSequence = index.toLong())
         }
         val bodies = kotlinx.coroutines.flow.MutableStateFlow(rows)
-        val repository = io.mockk.mockk<com.newoether.agora.data.repository.ConversationRepository>(relaxed = true)
+        val repository = repositoryForConversationOpen()
         io.mockk.every { repository.observeConversation("c") } returns kotlinx.coroutines.flow.flowOf(com.newoether.agora.model.ChatConversation("c", "Test"))
         io.mockk.every { repository.observeMessageTopology("c") } returns kotlinx.coroutines.flow.flowOf(rows.map {
             com.newoether.agora.data.local.MessageContextTopology(
@@ -436,6 +498,19 @@ class WebUiMessagePresentationTest {
         runCurrent()
         assertTrue(events.none { it is WebSyncEvent.Payload })
         job.cancel()
+    }
+
+    @Test
+    fun capsuleDisplayModeProjectsAndRoundTripsInDisplayEvents() {
+        val original = display()
+        assertEquals("individual", original.toEvent().subagentCapsuleDisplayMode)
+        for (mode in listOf("individual", "grouped")) {
+            val event = original.copy(subagentCapsuleDisplayMode = mode).toEvent()
+            assertEquals(mode, event.subagentCapsuleDisplayMode)
+            val encoded = WebUiSync.json.encodeToString(WebSyncEvent.serializer(), event)
+            assertTrue(encoded.contains("\"subagentCapsuleDisplayMode\":\"$mode\""))
+            assertEquals(event, WebUiSync.json.decodeFromString(WebSyncEvent.serializer(), encoded))
+        }
     }
 
     @Test

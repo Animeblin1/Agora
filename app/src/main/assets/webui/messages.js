@@ -8,7 +8,7 @@ import { Markdown, highlightSearch } from "./markdown.js";
 import {
   icon, ICON_WEB, ICON_BUILD, ICON_CALL_SPLIT, ICON_CHEVRON_DOWN, ICON_CHEVRON_RIGHT,
   ICON_COMPRESS, ICON_COMPACT_ERROR, ICON_CONTENT_COPY, ICON_DELETE, ICON_EDIT, ICON_ERROR, ICON_IMAGE, ICON_INFO,
-  ICON_MORE_VERT, ICON_NEUROLOGY, ICON_QUESTION_ANSWER, ICON_REFRESH, ICON_REPEAT,
+  ICON_MORE_VERT, ICON_NEUROLOGY, ICON_ACCOUNT_TREE, ICON_QUESTION_ANSWER, ICON_REFRESH, ICON_REPEAT,
   ICON_SCHEDULE, ICON_SELECT_ALL, ICON_SHARE, ICON_STOP_CIRCLE, ICON_LINK,
 } from "./icons.js";
 import { MoreMenu } from "./menu.js";
@@ -102,7 +102,7 @@ function sheetItemsForMessage(message, groupKey) {
 }
 
 
-/** The text a row copies and edits: an ask_user row reads as its questions and answers, as on the phone. */
+/** Copy and Select Text retain the original body, including a compact Subagent receipt's result. */
 function readableText(message) {
   const source = message?.source;
   if (source?.kind !== "ask_user") return message?.text?.markdown ?? "";
@@ -132,7 +132,7 @@ function formatRowTime(value) {
 const SOURCE_LABELS = {
   task: [ICON_SCHEDULE, "sourceTask"],
   loop: [ICON_REPEAT, "sourceLoop"],
-  subagent: [ICON_QUESTION_ANSWER, "sourceSubagent"],
+  subagent: [ICON_ACCOUNT_TREE, "sourceSubagent"],
   ask_user: [ICON_QUESTION_ANSWER, "sourceAskUser"],
 };
 
@@ -142,6 +142,16 @@ function SourceLabel({ source }) {
   if (!labelled) return null;
   return html`
     <div class="message-source">${icon(labelled[0])}<span>${t[labelled[1]]}</span></div>`;
+}
+
+/** Completion display comes from the model; child instructions have no result display metadata. */
+function SubagentResult({ result }) {
+  const name = result.name.trim() || t.sourceSubagent;
+  const status = t.subagentStatuses[result.status];
+  return html`<div class="user-text subagent-result" role="group" aria-label=${t.sourceSubagent}>
+    <div class="subagent-result-name">${name}</div>
+    ${status && html`<div class="subagent-result-status">${status}</div>`}
+  </div>`;
 }
 
 /**
@@ -236,14 +246,14 @@ function MessageInfoDialog({ message, onClose: onClosed }) {
  * The phone's inline editor for a user row: it resends the edited text through the phone's own edit
  * owner, so only Save commits. Escape and the scrim dismiss without sending anything.
  */
-function MessageEditDialog({ message, onClose: onClosed }) {
+function MessageEditDialog({ message, canEdit, onClose: onClosed }) {
   const dialog = useRef(null);
   const onClose = useDialog(dialog, onClosed);
   const field = useRef(null);
   const [value, setValue] = useState(readableText(message));
   useLayoutEffect(() => { field.current?.focus(); }, []);
   function save() {
-    if (!value.trim()) return;
+    if (!canEdit() || message.source || !value.trim()) return;
     if (sync.rowCommand("edit", message.id, { text: value })) onClose();
   }
   return html`
@@ -320,6 +330,12 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
   const [info, setInfo] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const editable = !generating && message.source == null;
+  const editAllowed = useRef(editable);
+  editAllowed.current = editable;
+  const canEdit = () => editAllowed.current;
+  const edit = () => { if (canEdit()) setEditing(true); };
+  useLayoutEffect(() => { if (!editable) setEditing(false); }, [editable]);
   const [preview, setPreview] = useState(null);
   const [failedImages, setFailedImages] = useState(new Set());
   const attachments = message.attachments ?? [];
@@ -328,8 +344,10 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
     url: `/api/message-attachments/${encodeURIComponent(conversationId)}/${encodeURIComponent(message.id)}/${item.index}`,
   }));
   const askUser = message.source?.kind === "ask_user" ? message.source.askUser : null;
+  const result = message.source?.kind === "subagent" ? message.source.subagentResult : null;
   const visible = readableText(message);
-  const hasText = (message.text?.markdown ?? "").length > 0;
+  const hasText = !result && (message.text?.markdown ?? "").length > 0;
+  const hasBody = hasText || !!askUser || !!result;
   const askUserKey = JSON.stringify(askUser);
   const searchKey = JSON.stringify([!!search?.query.trim(), matches.map(match =>
     [match.key, match.start, match.endExclusive])]);
@@ -359,14 +377,14 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
       <${SourceLabel} source=${message.source} />
       <div class="user-message-content">
         <div class="user-hover-actions">
-          <${RowAction} path=${ICON_EDIT} size=${18} label=${t.edit} enabled=${!generating}
-            onClick=${() => setEditing(true)} />
+          <${RowAction} path=${ICON_EDIT} size=${18} label=${t.edit} enabled=${editable}
+            onClick=${edit} />
           <button class="row-action" type="button" ref=${menuButton} title=${t.options} aria-label=${t.options}
             aria-haspopup="menu" aria-expanded=${menuOpen} onClick=${() => { setRetainedMenu(true); setMenuOpen(!menuOpen); }}>
             ${icon(ICON_MORE_VERT)}</button>
         </div>
         <div class="user-bubble">
-          ${attachments.length > 0 && html`<div class="user-attachments" data-body-gap=${hasText}>
+          ${attachments.length > 0 && html`<div class="user-attachments" data-body-gap=${hasBody}>
             ${attachments.map(item => {
               const index = media.findIndex(current => current.index === item.index);
               const failed = item.unavailable || failedImages.has(item.index);
@@ -384,7 +402,8 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
               </span>` : html`<span key=${item.index} class="user-attachment-media">${thumbnail}</span>`;
             })}
           </div>`}
-          ${(hasText || askUser) && html`<div class="user-text" ref=${text}></div>`}
+          ${result ? html`<${SubagentResult} result=${result} />`
+            : (hasText || askUser) && html`<div class="user-text" ref=${text}></div>`}
         </div>
       </div>
       ${branchControl}
@@ -396,8 +415,8 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
         }}>
         <${RowMenuItem} path=${ICON_CONTENT_COPY} label=${t.copy} enabled=${visible.trim().length > 0}
           onClick=${() => { setMenuOpen(false); copyRowText(message); }} />
-        <${RowMenuItem} path=${ICON_EDIT} label=${t.edit} enabled=${!generating}
-          onClick=${() => { setMenuOpen(false); setEditing(true); }} />
+        <${RowMenuItem} path=${ICON_EDIT} label=${t.edit} enabled=${editable}
+          onClick=${() => { setMenuOpen(false); edit(); }} />
         <${RowMenuItem} path=${ICON_SELECT_ALL} label=${t.selectText} enabled=${visible.trim().length > 0}
           onClick=${() => { setMenuOpen(false); setSelecting(true); }} />
         <${RowMenuItem} path=${ICON_INFO} label=${t.info}
@@ -412,7 +431,7 @@ function UserBubble({ message, search, matches, reduceMotion, generating, delete
       ${info && html`<${MessageInfoDialog} message=${message} onClose=${() => setInfo(false)} />`}
       ${preview != null && html`<${AttachmentViewer} viewer=${{ items: media, index: preview }}
         onNavigate=${setPreview} onClose=${() => setPreview(null)} />`}
-      ${editing && html`<${MessageEditDialog} message=${message} onClose=${() => setEditing(false)} />`}
+      ${editing && editable && html`<${MessageEditDialog} message=${message} canEdit=${canEdit} onClose=${() => setEditing(false)} />`}
     </div>`;
 }
 
@@ -1146,7 +1165,8 @@ export function MessageList({ state, label, onPageAction }) {
     }
   });
   displayedPage.current = pageRequestFor(displayed, "closed");
-  const pageLoading = !requestedReady;
+  const pageLoading = !requestedReady || (!!state.openId && state.initialToolsReady !== undefined &&
+    state.initialToolsReady !== 7 && !["failed", "deleted"].includes(state.openStatus));
   const tailReady = requestedReady && displayed.end === roundCount;
   refreshBottom.current = () => {
     const root = scroller.current;
@@ -1299,7 +1319,8 @@ export function MessageList({ state, label, onPageAction }) {
   const tailAnchorId = (() => {
     for (let index = pagePath.length - 1; index >= 0; index -= 1) {
       const entry = pagePath[index];
-      if (entry.participant === "USER" || state.bodies.get(entry.id)?.compact) return entry.id;
+      const message = state.streaming?.id === entry.id ? state.streaming : state.bodies.get(entry.id);
+      if (entry.participant === "USER" || message?.compact) return entry.id;
     }
     return null;
   })();

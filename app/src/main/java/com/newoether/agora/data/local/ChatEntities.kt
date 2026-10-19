@@ -131,6 +131,8 @@ data class ChatEntity(
     val todoJson: String? = null,
     /** Parent ownership is separate from message ancestry; subagents never inherit history. */
     val parentConversationId: String? = null,
+    /** Stable creation time; ordinary content and status updates preserve it. */
+    @ColumnInfo(defaultValue = "0") val createdAt: Long = lastUpdated,
     /** Durable completion outbox, not a second generation lifecycle. */
     val subagentResultJson: String? = null,
     val subagentResultId: String? = null,

@@ -121,6 +121,17 @@ internal object PortableSettingsArchive {
         put("shellEnabled", JsonPrimitive(sm.shellEnabled.first()))
         put("shellConfirmEnabled", JsonPrimitive(sm.shellConfirmEnabled.first()))
         put("askUserEnabled", JsonPrimitive(sm.askUserEnabled.first()))
+        put("todoEnabled", JsonPrimitive(sm.todoEnabled.first()))
+        put("subagentToolsEnabled", JsonPrimitive(sm.subagentToolsEnabled.first()))
+        val subagentMaxTotal = sm.subagentMaxTotal.first()
+        put("subagentMaxTotal", JsonPrimitive(subagentMaxTotal))
+        put(
+            "subagentMaxConcurrent",
+            JsonPrimitive(normalizeSubagentMaxConcurrent(sm.subagentMaxConcurrent.first(), subagentMaxTotal)),
+        )
+        put("subagentCapsuleDisplayMode", JsonPrimitive(sm.subagentCapsuleDisplayMode.first()))
+        putEncoded("subagentEnabledModels", sm.subagentEnabledModels.first())
+        putNullableString("subagentRecommendedModel", sm.subagentRecommendedModel.first())
         putEncoded("shellDevices", sm.shellDevices.first().map(ShellDeviceConfig::withoutSecrets))
         put("automationToolsEnabled", JsonPrimitive(sm.automationToolsEnabled.first()))
         put("exactExecutionEnabled", JsonPrimitive(sm.exactExecutionEnabled.first()))
@@ -315,7 +326,9 @@ internal object PortableSettingsArchive {
         obj.string("manualSearchMethod")?.let { sm.saveManualSearchMethod(it) }
 
         val remoteModelsElement = obj["remoteEmbeddingModels"] ?: obj["embeddingModels"]
-        if (remoteModelsElement != null || replace) {
+        val hasActiveReference = obj.containsKey("activeRemoteEmbeddingModelId") ||
+            obj.containsKey("activeEmbeddingModelId")
+        if (remoteModelsElement != null || replace || hasActiveReference) {
             val importedRemote = remoteModelsElement
                 ?.let { runCatching { json.decodeFromJsonElement<List<EmbeddingModelConfig>>(it) }.getOrNull() }
                 .orEmpty()
@@ -359,9 +372,12 @@ internal object PortableSettingsArchive {
             }
             val previousActive = sm.activeEmbeddingModelId.first()
             val active = requestedActive
-                ?.takeIf { requested -> finalModels.any { it.id == requested } }
+                ?.takeIf { requested -> finalRemote.any { it.id == requested } }
                 ?: previousActive.takeIf { previous ->
-                    finalModels.any { it.id == previous && it.type == EmbeddingModelType.LOCAL }
+                    finalModels.any {
+                        it.id == previous &&
+                            (it.type == EmbeddingModelType.LOCAL || (!replace && !hasActiveReference))
+                    }
                 }
                 .orEmpty()
             sm.setActiveEmbeddingModelId(active)
@@ -403,6 +419,22 @@ internal object PortableSettingsArchive {
         obj.boolean("shellEnabled")?.let { sm.saveShellEnabled(it) }
         obj.boolean("shellConfirmEnabled")?.let { sm.saveShellConfirmEnabled(it) }
         obj.boolean("askUserEnabled")?.let { sm.saveAskUserEnabled(it) }
+        obj.boolean("todoEnabled")?.let { sm.saveTodoEnabled(it) }
+        obj.boolean("subagentToolsEnabled")?.let { sm.saveSubagentToolsEnabled(it) }
+        val subagentMaxTotal = obj.int("subagentMaxTotal")
+        val subagentMaxConcurrent = obj.int("subagentMaxConcurrent")
+        if (subagentMaxTotal != null || subagentMaxConcurrent != null) {
+            sm.saveSubagentLimits(subagentMaxTotal, subagentMaxConcurrent)
+        }
+        obj.string("subagentCapsuleDisplayMode")?.let { sm.saveSubagentCapsuleDisplayMode(it) }
+        obj.decode<Set<String>>("subagentEnabledModels")?.let { imported ->
+            sm.saveSubagentEnabledModels(imported.mapTo(linkedSetOf(), ::remapModel), merge = !replace)
+        }
+        obj.nullableString("subagentRecommendedModel")?.let(::remapModel)?.let { recommended ->
+            if (recommended in sm.subagentModelIds.first()) {
+                sm.saveSubagentRecommendedModel(recommended)
+            }
+        }
         val shellElement = obj["shellDevices"]
         if (shellElement != null || replace) {
             val decoded = shellElement

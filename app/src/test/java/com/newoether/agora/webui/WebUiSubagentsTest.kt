@@ -21,9 +21,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class WebUiSubagentsTest {
     private val dao = mockk<ChatDao>()
-    private val repository = mockk<ConversationRepository> {
-        every { chatDao } returns dao
-    }
+    private val repository = ConversationRepository(dao, database = null, scheduleMaintenance = {})
 
     @Test
     fun emptySelectionClearsCapsulesWithoutReadingAnyOwner() = runTest {

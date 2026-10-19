@@ -95,6 +95,11 @@ class AppContainer(
         ConversationRepository(
             chatDao = chatDao,
             database = database,
+            generationErrorFormatter = { raw ->
+                com.newoether.agora.viewmodel.normalizePersistedGenerationErrorText(
+                    appContext, raw.ifBlank { appContext.getString(com.newoether.agora.R.string.failed_to_generate) },
+                )
+            },
             semanticModelSnapshotProvider = {
                 settingsRepository.awaitInitialLoad()
                 semanticModelSnapshot(
@@ -197,7 +202,14 @@ class AppContainer(
 
     /** Serializes every foreground/background generation touching the same conversation. */
     val conversationExecutionCoordinator: ConversationExecutionCoordinator by lazy {
-        ConversationExecutionCoordinator()
+        ConversationExecutionCoordinator(
+            parentConversationId = { id ->
+                chatDao.observeParentConversationId(id).first()?.also {
+                    settingsRepository.awaitInitialLoad()
+                }
+            },
+            subagentMaxConcurrent = settingsRepository.subagentMaxConcurrent,
+        )
     }
 
     /** Foreground generation slots survive Activity/ViewModel recreation within this process. */
@@ -278,6 +290,13 @@ class AppContainer(
         )
     }
 
+    internal val subagentCompletionDelivery by lazy {
+        com.newoether.agora.viewmodel.SubagentCompletionQueueDelivery(
+            conversationRepository, conversationStateRegistry,
+            fallbackModelId = { settingsRepository.selectedModel.value },
+        )
+    }
+
     val subagentManager: com.newoether.agora.automation.SubagentManager by lazy {
         com.newoether.agora.automation.SubagentManager(
             conversations = conversationRepository,
@@ -288,6 +307,12 @@ class AppContainer(
             coordinator = conversationExecutionCoordinator,
             gate = automationExecutionGate,
             scope = appScope,
+            enqueueCompletions = { parentId ->
+                // Evaluated only on a completion/open event, after AppContainer lazy creation.
+                chatRuntime
+                subagentCompletionDelivery.deliver(parentId)
+            },
+            enqueueMessage = { id, text, context -> chatRuntime.enqueueSubagentMessage(id, text, context) },
             stopLoop = { loopManager.stopLoop(it) },
         )
     }
@@ -492,6 +517,10 @@ class AppContainer(
                 ),
             ) { context, (aliases, providerNames) ->
                 context.copy(modelAliases = aliases, modelProviderNames = providerNames)
+            }.combine(
+                settingsRepository.subagentCapsuleDisplayMode,
+            ) { context, capsuleDisplayMode ->
+                context.copy(subagentCapsuleDisplayMode = capsuleDisplayMode)
             },
         )
     }

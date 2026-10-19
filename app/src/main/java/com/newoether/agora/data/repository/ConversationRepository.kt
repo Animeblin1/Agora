@@ -50,11 +50,14 @@ class ConversationRepository(
     private val database: ChatDatabase?,
     internal val scheduleMaintenance: () -> Unit = { MaintenanceDebtWorker.schedule() },
     private val maintenanceDebtDao: MaintenanceDebtDao? = database?.maintenanceDebtDao(),
+    internal val generationErrorFormatter: (String) -> String = { it.ifBlank { "Failed to generate" } },
     private val semanticModelSnapshotProvider: suspend () -> SemanticModelSnapshot = {
         semanticModelSnapshot("", emptyList())
     },
 ) {
     private val branchSelections = ConversationBranchSelections(chatDao)
+    // SubagentManager alone admits/removes these jobs; observers share their exact lifetime.
+    internal val subagentJobs = kotlinx.coroutines.flow.MutableStateFlow<Map<String, kotlinx.coroutines.Job>>(emptyMap())
 
     // ── Conversations ─────────────────────────────────────────
 
@@ -236,12 +239,9 @@ class ConversationRepository(
         at: Long = System.currentTimeMillis(),
         touchConversationOnAdmission: Boolean,
     ): RunGraphCommit = withSemanticTransaction(messages.map(MessageEntity::id), at) {
-        commitSubagentReceipts(
-            run.conversationId,
-            messages.firstOrNull { it.participant == com.newoether.agora.model.Participant.USER }
-                ?.sourceJson?.let(com.newoether.agora.model.MessageSource::decode),
-            at,
-        )
+        messages.filter { it.participant == com.newoether.agora.model.Participant.USER }.forEach {
+            commitSubagentReceipts(run.conversationId, com.newoether.agora.model.MessageSource.decode(it.sourceJson), at)
+        }
         chatDao.createRunWithMessages(
             run,
             messages,
@@ -319,15 +319,17 @@ class ConversationRepository(
         chatDao.createForkGraph(conversation, runs, messages, sourceToForkMessageIds)
     }
 
+    internal var onSubagentWaitCommitted: (suspend (String, Map<String, String>) -> Unit)? = null
     suspend fun appendToolRoundToRun(
         messages: List<MessageEntity>,
         expectedPass: Int,
     ): ToolRoundCommit {
         require(messages.isNotEmpty() && messages.all { it.runId.isNotBlank() })
-        return withSemanticTransaction(messages.map(MessageEntity::id)) {
+        val receipts = linkedMapOf<String, String>()
+        val commit = withSemanticTransaction(messages.map(MessageEntity::id)) {
             chatDao.appendToolRoundToRun(messages, expectedPass).also { commit ->
                 if (commit.inserted) {
-                    commitSubagentWaitReceipts(messages)
+                    commitSubagentWaitReceipts(messages, receipts)
                     check(
                         chatDao.touchConversationData(
                             messages.first().conversationId,
@@ -337,6 +339,8 @@ class ConversationRepository(
                 }
             }
         }
+        if (receipts.isNotEmpty()) notifySubagentWaitCommitted(messages.first().conversationId, receipts)
+        return commit
     }
 
     suspend fun recoverConversationRuntime(
@@ -466,7 +470,7 @@ class ConversationRepository(
                 at = at,
                 markConversationUnread = markConversationUnread,
             )
-            if (committed) persistSubagentTerminal(conversationId, at)
+            if (committed) persistSubagentTerminal(conversationId, at, message.id)
             committed
         }
         if (applied) onSubagentTerminal?.invoke(conversationId)
@@ -497,7 +501,7 @@ class ConversationRepository(
                 runId = runId,
                 at = at,
             )
-            if (committed) persistSubagentTerminal(conversationId, at)
+            if (committed) persistSubagentTerminal(conversationId, at, messages.lastOrNull()?.id)
             committed
         }
         if (applied) {
@@ -659,8 +663,8 @@ class ConversationRepository(
     suspend fun getAllConversationsList(): List<ChatEntity> =
         chatDao.getAllConversationsList()
 
-    suspend fun getSearchableConversation(id: String): ChatEntity? =
-        chatDao.getSearchableConversation(id)
+    suspend fun getSearchableConversation(id: String, ownerConversationId: String? = null): ChatEntity? =
+        chatDao.getSearchableConversation(id, ownerConversationId)
 
     suspend fun getSearchableConversationCount(): Int =
         chatDao.getSearchableConversationCount()

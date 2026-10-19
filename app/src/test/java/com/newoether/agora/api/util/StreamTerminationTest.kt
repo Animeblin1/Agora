@@ -218,6 +218,63 @@ class StreamTerminationTest {
     }
 
     @Test
+    fun permanentOrUnknownApiErrorsCannotRetryThroughAnIncompleteStream() {
+        listOf(
+            GenerationError.Api("insufficient_quota", "rate_limit_error", "Failed to generate"),
+            GenerationError.Api("429", "invalid_request_error", "Overloaded"),
+            GenerationError.Api(null, "provider_error", "Rejected"),
+        ).forEach { error ->
+            listOf(false, true).forEach { terminal ->
+                val result = termination(
+                    sawTerminalMarker = terminal,
+                    stopReason = null,
+                    producedContent = false,
+                    toolCallInFlight = true,
+                    timedOut = true,
+                    retryableStreamError = true,
+                    streamError = error,
+                )
+                assertEquals(error, result.toError("test"))
+                assertFalse(error.toString(), result.isRetryable)
+            }
+        }
+    }
+
+    @Test
+    fun prematureEofInCauseChainMapsOpeningAndBodyReads() {
+        listOf(
+            java.io.EOFException(),
+            java.io.IOException("Unexpected end of stream on https://example.invalid"),
+            java.io.IOException("read failed", java.io.IOException("Unexpected end of file")),
+            IllegalStateException("wrapper", java.io.EOFException()),
+        ).forEach { failure ->
+            val opening = failure.asRetryableTransportError()
+            val body = failure.asRetryableResponseBodyReadError()
+            assertTrue(failure.toString(), opening is GenerationError.Network)
+            assertEquals(opening, body)
+            val result = termination(producedContent = false, streamError = body)
+            assertTrue(result.isRetryable)
+            assertFalse(result.copy(producedContent = true).isRetryable)
+            assertFalse(result.copy(stopReason = "max_tokens").isRetryable)
+            assertFalse(result.copy(alreadyReportedError = true).isRetryable)
+        }
+    }
+
+    @Test
+    fun bodyReadClassificationPreservesDnsCancellationAndUnrelatedIoFailures() {
+        listOf(
+            java.io.IOException("disk or protocol failure"),
+            IllegalStateException("Unexpected end of stream"),
+            java.io.IOException("Unexpected end of stream", java.net.UnknownHostException("host")),
+            java.io.IOException("Unexpected end of file", kotlinx.coroutines.CancellationException("stopped")),
+            kotlinx.coroutines.CancellationException("Unexpected end of stream"),
+        ).forEach { failure ->
+            assertNull(failure.toString(), failure.asRetryableResponseBodyReadError())
+            assertNull(failure.toString(), failure.asRetryableTransportError())
+        }
+    }
+
+    @Test
     fun timeout_isSurfacedAndRetriedWhenNothingWasShown() {
         val result = termination(
             sawTerminalMarker = false,

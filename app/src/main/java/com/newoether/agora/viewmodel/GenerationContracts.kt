@@ -65,6 +65,9 @@ data class GenerationContext(
     val conversationId: String? = null,
     val subagentToolsEnabled: Boolean = false,
     val enabledModelIds: List<String> = emptyList(),
+    /** Null and empty both allow no new subagents; global enabled IDs are not a fallback. */
+    val subagentModelIds: List<String>? = null,
+    val subagentRecommendedModel: String? = null,
     val todoEnabled: Boolean = true,
     /** Supplied only by the authorized executor, never by Provider arguments. */
     val toolEffectIdentity: RunEffectIdentity? = null,

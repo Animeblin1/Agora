@@ -280,7 +280,9 @@ abstract class BaseOpenAiProvider : LlmProvider {
                         } else {
                             val errorRaw = handle.errorBody.orEmpty()
                             val hasV1Fallback = endpointIndex + 1 < endpointUrls.size
-                            if (hasV1Fallback) {
+                            if (hasV1Fallback &&
+                                !ProviderRetryPolicy.isPermanentHttpFailure(handle.code, errorRaw)
+                            ) {
                                 DebugLog.w(
                                     "AgoraAPI",
                                     "[$name] HTTP ${handle.code}; trying endpoint candidate " +

@@ -18,8 +18,11 @@ internal suspend fun validateSubagentArchiveOwners(
         }
         val completion = com.newoether.agora.model.SubagentCompletion.decode(child.subagentResultJson)
         require((completion == null) == (child.subagentResultId == null)) { "Incomplete subagent result" }
-        require(completion?.id == child.subagentResultId && completion?.status == child.subagentResultStatus) {
-            "Mismatched subagent result"
+        require(completion?.id == child.subagentResultId) { "Mismatched subagent result" }
+        // Validation may repair display status without changing a durable completion or receipt.
+        require(child.subagentResultStatus in setOf("completed", "failed", "stopped") ||
+            completion == null && child.subagentResultStatus == null) {
+            "Invalid subagent status"
         }
     }
 }
@@ -40,6 +43,7 @@ internal data class NativeExportChatEntity(
     val id: String,
     val title: String,
     val lastUpdated: Long,
+    val createdAt: Long? = null,
     val dataChangedAt: Long = 0L,
     val isPinned: Boolean = false,
     val parentConversationId: String? = null,

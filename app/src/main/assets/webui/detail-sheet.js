@@ -5,7 +5,7 @@ import { Spinner } from "./material/progress.js";
 import { attachScrollbar } from "./material/scrollbar.js";
 import { Markdown, fadeStreamingText } from "./markdown.js";
 import { AttachmentViewer } from "./composer.js";
-import { icon, ICON_BUILD, ICON_CHEVRON_RIGHT, ICON_IMAGE, ICON_NEUROLOGY } from "./icons.js";
+import { icon, ICON_ACCOUNT_TREE, ICON_BUILD, ICON_CHECKLIST, ICON_CHEVRON_RIGHT, ICON_IMAGE, ICON_NEUROLOGY } from "./icons.js";
 const SHEET_BACK_PATH = "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z";
 // Material Icons.Default.Close, centred on (12, 12). The previous path was offset to the left,
 // so the X sat off-centre inside its round button.
@@ -231,9 +231,12 @@ function ToolDetail({ item, conversationId, messageId }) {
   </div>`;
 }
 
-export function CardIcon({ kind }) {
+export function CardIcon({ kind, toolKind }) {
   if (kind === "LOADING") return html`<${Spinner} size=${16} stroke=${2} color="inherit" />`;
-  const path = kind === "TOOL" ? ICON_BUILD : kind === "IMAGE" ? ICON_IMAGE : ICON_NEUROLOGY;
+  const path = kind === "TOOL"
+    ? toolKind?.startsWith("TODO_") ? ICON_CHECKLIST
+      : toolKind?.startsWith("SUBAGENT_") ? ICON_ACCOUNT_TREE : ICON_BUILD
+    : kind === "IMAGE" ? ICON_IMAGE : ICON_NEUROLOGY;
   return icon(path, kind === "THINKING" ? "0 0 960 960" : "0 0 24 24");
 }
 
@@ -318,7 +321,7 @@ export function InfoItem({ item, compact = false, onClick, reduceMotion = false 
       type=${interactive ? "button" : null} data-type=${item.type}
       onClick=${onClick}>
       ${!compact && html`<span class="info-item-icon">
-        <${CardIcon} kind=${item.type === "tool" ? "TOOL" : item.type === "transcription" ? "IMAGE" : "THINKING"} />
+        <${CardIcon} kind=${item.type === "tool" ? "TOOL" : item.type === "transcription" ? "IMAGE" : "THINKING"} toolKind=${item.toolDetail?.kind} />
       </span>`}
       <div class="info-item-text">
         <span class="info-item-title">${item.title}</span>
@@ -328,7 +331,7 @@ export function InfoItem({ item, compact = false, onClick, reduceMotion = false 
     </${Tag}>`;
 }
 
-export function DetailSheet({ group, items, page, detailIndex, selectedItem, conversationId, messageId, display, wrap, onSelectItem, onBack, onClose, title: suppliedTitle, children, focusReturn, settings = false, closing: closeRequested = false }) {
+export function DetailSheet({ group, items, page, detailIndex, selectedItem, conversationId, messageId, display, wrap, onSelectItem, onBack, onClose, title: suppliedTitle, headerTrailing, children, focusReturn, settings = false, closing: closeRequested = false }) {
   const reduceMotion = !!display?.reduceMotion;
   const [anchor, setAnchor] = useState({ fraction: .45 });
   const [settingsHeight, setSettingsHeight] = useState(0);
@@ -494,6 +497,7 @@ export function DetailSheet({ group, items, page, detailIndex, selectedItem, con
             ${icon(SHEET_BACK_PATH)}
           </button>`}
           <h2>${title || "Message details"}</h2>
+          ${headerTrailing != null && html`<span class="detail-sheet-header-trailing">${headerTrailing}</span>`}
           <button class="detail-sheet-icon" type="button" aria-label="Close" ref=${closeButton} onClick=${close}>
             ${icon(SHEET_CLOSE_PATH)}
           </button>

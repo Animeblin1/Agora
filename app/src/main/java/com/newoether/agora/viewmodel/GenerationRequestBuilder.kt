@@ -402,7 +402,7 @@ class GenerationRequestBuilder(
             selectedModelId = selectedModelId,
             config = ordinaryConfig,
             context = context.copy(
-                subagentToolsEnabled = !isSubagent,
+                subagentToolsEnabled = context.subagentToolsEnabled && !isSubagent,
                 accessPastConversations = context.accessPastConversations && !isSubagent,
                 webSearchApiKeys = context.webSearchApiKeys.toMap(),
                 shellDevices = context.shellDevices.toList(),
@@ -449,7 +449,7 @@ class GenerationRequestBuilder(
         val conversation = convRepo.getConversation(conversationId)
         val isSubagent = conversation?.parentConversationId != null
         val projectionContext = context.copy(
-            subagentToolsEnabled = !isSubagent,
+            subagentToolsEnabled = context.subagentToolsEnabled && !isSubagent,
             accessPastConversations = context.accessPastConversations && !isSubagent,
             webSearchApiKeys = context.webSearchApiKeys.toMap(),
             shellDevices = context.shellDevices.toList(),
@@ -549,10 +549,17 @@ class GenerationRequestBuilder(
             frequencyPenalty = effectiveSettings.frequencyPenalty,
             presencePenalty = effectiveSettings.presencePenalty
         )
+        val enabledModelIds = settings.enabledModels.value.toSet()
+        val subagentModelIds = settings.subagentEnabledModels.value.orEmpty()
+            .intersect(enabledModelIds).sorted()
         val genCtx = GenerationContext(
             conversationId = currentId,
-            subagentToolsEnabled = true,
-            enabledModelIds = settings.enabledModels.value.sorted(),
+            todoEnabled = settings.todoEnabled.value,
+            subagentToolsEnabled = settings.subagentToolsEnabled.value,
+            enabledModelIds = enabledModelIds.sorted(),
+            subagentModelIds = subagentModelIds,
+            subagentRecommendedModel = settings.subagentRecommendedModel.value
+                ?.takeIf { it in subagentModelIds },
             accessSavedMemories = settings.accessSavedMemories.value,
             accessActiveMemory = settings.accessActiveMemory.value,
             skillReadAccess = skillReadAccess,

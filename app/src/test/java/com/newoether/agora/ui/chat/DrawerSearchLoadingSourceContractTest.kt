@@ -38,7 +38,7 @@ class DrawerSearchLoadingSourceContractTest {
         val searchBar = source("ui/chat/search/DrawerSearchBar.kt")
         val searchResultItem = source("ui/chat/search/ChatSearchResultItem.kt")
 
-        assertTrue(dao.contains("SELECT id, title, systemPromptId, modelId, taskId, origin, graduated, hasUnreadGeneration, isPinned, selectedBranchesJson, parentConversationId FROM conversations"))
+        assertTrue(dao.contains("SELECT id, title, systemPromptId, modelId, taskId, origin, graduated, hasUnreadGeneration, isPinned, NULL AS selectedBranchesJson, parentConversationId FROM conversations"))
         assertTrue(dao.contains("WHERE taskId IS NULL AND parentConversationId IS NULL ORDER BY lastUpdated DESC"))
         assertTrue(dao.contains("WHERE taskId IS NULL AND parentConversationId IS NULL ORDER BY isPinned DESC"))
         assertTrue(dao.contains("WHERE taskId IS NULL AND parentConversationId IS NULL AND id IN (:ids)"))

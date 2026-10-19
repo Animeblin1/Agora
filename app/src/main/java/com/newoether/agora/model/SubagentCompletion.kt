@@ -10,6 +10,8 @@ data class SubagentCompletion(
     val status: String,
     val text: String,
     val modelMessageId: String? = null,
+    val errorText: String? = null,
+    val errorCode: String? = null,
 ) {
     init {
         require(id.isNotBlank())
@@ -22,7 +24,7 @@ data class SubagentCompletion(
     }
 }
 
-/** Payload-free selected-parent projection for capsules and list_agents. */
+/** Selected-parent capsule projection; only explicit list_agents loads optional diagnostics. */
 @Serializable
 data class SubagentSummary(
     val id: String,
@@ -30,4 +32,6 @@ data class SubagentSummary(
     val modelId: String?,
     val parentConversationId: String,
     val status: String,
+    val errorText: String? = null,
+    val errorCode: String? = null,
 )

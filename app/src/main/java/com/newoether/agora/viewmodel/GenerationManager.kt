@@ -51,6 +51,7 @@ class GenerationManager(
     private val sandboxFactory: com.newoether.agora.sandbox.SandboxManagerFactory? = null,
     additionalToolProviders: List<ToolProvider> = emptyList(),
     private val customProviders: () -> List<CustomProviderConfig> = { emptyList() },
+    generatingConversationIds: () -> Set<String> = { emptySet() },
 ) {
     var onMessagePersisted: ((messageId: String, text: String) -> Unit)? = null
 
@@ -65,6 +66,7 @@ class GenerationManager(
         skillManager = skillManager,
         sandboxFactory = sandboxFactory,
         additionalProviders = additionalToolProviders,
+        generatingConversationIds = generatingConversationIds,
         confirmShellCommand = { server, summary, conversationId ->
             onConfirmShellCommand?.invoke(server, summary, conversationId) ?: true
         },
@@ -598,9 +600,8 @@ class GenerationManager(
                 if (endedForFollowUp) break
 
                 // A send queued mid-generation starts a fresh Run at this round boundary.
-                // The round's tool/result rows are already persisted above, so ending here is
-                // clean: slot release drains the complete FIFO batch into one merged USER message,
-                // and the new generation continues from those durable tool results.
+                // Its committed tool/results stay in history; the drain persists separate FIFO
+                // messages in one fresh Run that continues from those durable results.
                 if (callbacks.hasQueuedSends()) {
                     endedAtGuidanceBoundary = true
                     break
@@ -719,7 +720,7 @@ class GenerationManager(
                         val terminalDisposition = generationTerminalDisposition(
                             messageStatus = output.currentStatus,
                             hasPendingGuidance =
-                                callbacks.hasQueuedSends() || endedForFollowUp,
+                                callbacks.hasQueuedSends() || endedAtGuidanceBoundary || endedForFollowUp,
                             conversationVisible = terminalConversationVisible,
                         )
                         val finalizationIdentity = RunEffectIdentity(

@@ -3,11 +3,9 @@ import com.newoether.agora.data.CustomProviderConfig
 import com.newoether.agora.data.CustomEndpointProtocol
 
 import com.newoether.agora.automation.ConversationExecutionCoordinator
-import com.newoether.agora.data.local.MessageContextTopology
 import com.newoether.agora.data.local.DrawerConversationRow
 import com.newoether.agora.data.repository.ConversationRepository
 import com.newoether.agora.model.ChatConversation
-import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.model.Participant
 import com.newoether.agora.model.ThinkingSegmentDisplayModes
@@ -79,13 +77,18 @@ class WebUiSyncTest {
         "m2" to message("m2", "root", Participant.MODEL, "other"),
     )
     private val todo = MutableStateFlow<String?>(null)
-    private val todoDao = mockk<com.newoether.agora.data.local.ChatDao> {
+    internal val todoDao = mockk<com.newoether.agora.data.local.ChatDao> {
         every { observeConversationTodo(any()) } returns todo
         every { observeParentConversationId(any()) } returns flowOf(null)
         every { observeSubagents(any()) } returns flowOf(emptyList())
+        coEvery { getSubagentFamilyRootId(any()) } answers { firstArg<String>() }
+        coEvery { getSubagentIds(any()) } returns emptyList()
+        coEvery { getLiveRun(any()) } returns null
+        coEvery { getValidatedSubagentStatus(any()) } returns null
     }
-    private val conversations = mockk<ConversationRepository> {
+    internal val conversations = mockk<ConversationRepository> {
         every { chatDao } returns todoDao
+        every { subagentJobs } returns MutableStateFlow(emptyMap())
         every { observeDrawerConversations(any()) } answers {
             val limit = firstArg<Int>()
             list.map { rows -> rows.take(limit).map { DrawerConversationRow(it.id, it.title, it.hasUnreadGeneration, it.isPinned) } }
@@ -94,11 +97,14 @@ class WebUiSyncTest {
         coEvery { setConversationPinned(any(), any()) } returns true
         every { observeMessageTopology("a") } returns topology
         coEvery { recoverConversationRuntime(any(), any()) } returns 0
+        coEvery { withProviderContextSnapshot<Unit>(any()) } coAnswers {
+            firstArg<suspend () -> Unit>().invoke()
+        }
     }
     private val state = mockk<ConversationGenerationState> {
         every { generationSnapshot } returns snapshot
     }
-    private val registry = mockk<ConversationStateRegistry> {
+    internal val registry = mockk<ConversationStateRegistry> {
         every { activeConversationIds } returns MutableStateFlow(setOf("b"))
         every { getOrCreate("a") } returns state
     }
@@ -521,6 +527,9 @@ class WebUiSyncTest {
         assertEquals("true", path.string("generating"))
         val streaming = events.single { it.type == "streaming" }["message"]!!.jsonObject
         assertEquals("partial", streaming["text"]!!.jsonObject.string("markdown"))
+        // A later frame of the same message carries only its appended text.
+        snapshot.value = snapshot.value.copy(streamingMessage = message("m3", "m1", Participant.MODEL, "partial reply", MessageStatus.SENDING))
+        assertEquals(" reply", received().single { it.type == "streaming_patch" }["patch"]!!.jsonObject["o"]!!.jsonObject["text"]!!.jsonObject["o"]!!.jsonObject["markdown"]!!.jsonObject.string("a"))
     }
 
     @Test
@@ -751,7 +760,7 @@ class WebUiSyncTest {
             assertTrue(received().none { it.type == "conversation_search" })
         } finally { unmockkObject(DebugLog) }
     }
-    private fun sync(
+    internal fun sync(
         block: suspend TestScope.(send: suspend (String) -> Unit, received: () -> List<JsonObject>) -> Unit,
     ) = runTest {
         val sync = webUiSync(StandardTestDispatcher(testScheduler))
@@ -786,12 +795,5 @@ class WebUiSyncTest {
         search = { search(it) },
         projectionDispatcher = dispatcher,
     )
-
-    private val JsonObject.type: String get() = string("type")
-
-    private fun JsonObject.string(key: String): String = this[key]!!.jsonPrimitive.content
-
-    private fun JsonObject.ids(): List<String> =
-        this["messages"]!!.jsonArray.map { it.jsonObject.string("id") }
 
 }

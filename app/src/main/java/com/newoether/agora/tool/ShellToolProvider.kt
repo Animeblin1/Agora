@@ -592,17 +592,13 @@ class ShellToolProvider(
         val path = arg(args, "path")
         if (path.isBlank()) return jsonError("file_read", "path is required")
         val serverName = arg(args, "server")
-        val offset = arg(args, "offset").toLongOrNull() ?: 0L
-        val limit = arg(args, "limit").toLongOrNull() ?: 0L
-        val rawStartLine = arg(args, "start_line")
-        val rawMaxLines = arg(args, "max_lines")
-        val lineMode = rawStartLine.isNotBlank() || rawMaxLines.isNotBlank()
-        val startLine = if (rawStartLine.isBlank()) 1 else rawStartLine.toIntOrNull()
-            ?: return jsonError("file_read", "start_line must be an integer")
-        if (startLine < 1) return jsonError("file_read", "start_line must be at least 1")
-        val maxLines = if (rawMaxLines.isBlank()) FILE_READ_DEFAULT_LINES else rawMaxLines.toIntOrNull()
-            ?: return jsonError("file_read", "max_lines must be an integer")
-        if (maxLines < 1) return jsonError("file_read", "max_lines must be at least 1")
+        val (readArgs, argError) = parseFileReadArgs(args)
+        if (readArgs == null) return jsonError("file_read", argError ?: "Invalid arguments")
+        val offset = readArgs.offset
+        val limit = readArgs.limit
+        val lineMode = readArgs.lineMode
+        val startLine = readArgs.startLine
+        val maxLines = readArgs.maxLines
 
         val backend = getBackend(serverName, ctx)
             ?: return jsonError("file_read", serverNotFoundMessage(serverName, ctx))

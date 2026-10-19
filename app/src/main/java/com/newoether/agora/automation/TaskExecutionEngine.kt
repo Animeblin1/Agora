@@ -214,6 +214,9 @@ class TaskExecutionEngine(
         // interaction bar, or as a notification while that screen is not showing.
         additionalToolProviders = listOf(mcpToolProvider, AskUserToolProvider(askUser)) + additionalTools(),
         customProviders = { settings.customProviders.value },
+        generatingConversationIds = {
+            generationRegistry.activeConversationIds.value + executionCoordinator.activeAutomationConversationIds.value
+        },
     ).also {
         // Foreground Task/Loop executions share the exact same prompt and session trust state as
         // Chat, including the notification-backed wait when no Activity is visible.
@@ -241,19 +244,16 @@ class TaskExecutionEngine(
         requestKind: String = "task",
     ): Result = automationExecutionGate.withExecution {
         executionCoordinator.withAutomationConversationLock(conversationId) {
-            settings.awaitInitialLoad()
-            automationWakeLockOwner.whileHeld(settings.automationWakeLockEnabled.value) {
-                convRepo.recoverConversationRuntime(conversationId)
-                runOnceLocked(
-                    conversationId = conversationId,
-                    userText = userText,
-                    modelId = modelId,
-                    systemPromptOverride = systemPromptOverride,
-                    foregroundServiceManagedExternally = foregroundServiceManagedExternally,
-                    precondition = precondition,
-                    requestKind = requestKind,
-                )
-            }
+            convRepo.recoverConversationRuntime(conversationId)
+            runOnceWithAutomationGuardsHeld(
+                conversationId = conversationId,
+                userText = userText,
+                modelId = modelId,
+                systemPromptOverride = systemPromptOverride,
+                foregroundServiceManagedExternally = foregroundServiceManagedExternally,
+                precondition = precondition,
+                requestKind = requestKind,
+            )
         }
     }
 
@@ -272,9 +272,9 @@ class TaskExecutionEngine(
         requestKind: String = "loop",
         source: MessageSource? = null,
         contextOverride: com.newoether.agora.viewmodel.GenerationContext? = null,
-    ): Result {
+    ): Result = executionCoordinator.withGenerationAdmission(conversationId) {
         settings.awaitInitialLoad()
-        return automationWakeLockOwner.whileHeld(settings.automationWakeLockEnabled.value) {
+        automationWakeLockOwner.whileHeld(settings.automationWakeLockEnabled.value) {
             runOnceLocked(
                 conversationId = conversationId,
                 userText = userText,
@@ -297,8 +297,8 @@ class TaskExecutionEngine(
         foregroundServiceManagedExternally: Boolean,
         precondition: suspend () -> Boolean,
         requestKind: String,
-        source: MessageSource? = null,
-        contextOverride: com.newoether.agora.viewmodel.GenerationContext? = null,
+        source: MessageSource?,
+        contextOverride: com.newoether.agora.viewmodel.GenerationContext?,
     ): Result {
         require(requestKind.isNotBlank())
         settings.awaitInitialLoad()
@@ -383,6 +383,7 @@ class TaskExecutionEngine(
             val taskContext = (contextOverride ?: captured.context).copy(
                 conversationId = conversationId,
                 toolEffectIdentity = null,
+                todoEnabled = (contextOverride?.todoEnabled ?: true) && captured.context.todoEnabled,
                 subagentToolsEnabled = captured.context.subagentToolsEnabled && contextOverride == null,
                 accessPastConversations = captured.context.accessPastConversations && contextOverride == null,
                 // Subagents retain the parent's admitted tools except recursive delegation/history.
@@ -468,6 +469,11 @@ class TaskExecutionEngine(
                         generationState.onQueueDrainRequested?.invoke(generationState)
                     }
                 }
+                return Result.Failure("Conversation generation slot was revoked")
+            }
+            if (!generationState.acquireGenerationAdmission(uiToken, executionCoordinator)) {
+                ownerJob.complete()
+                ownerJob.join()
                 return Result.Failure("Conversation generation slot was revoked")
             }
             val persistToken = generationState.nextPersistId()
