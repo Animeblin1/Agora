@@ -483,6 +483,11 @@ output from the preceding pass does not disqualify the new `SENDING` pass. Once 
 produces any Provider output, these failures are terminal and must not replay it. This rule reuses
 the existing initial request plus at most five retries, delays `[5s, 5s, 5s, 30s, 30s]`, `Retrying`
 presentation, cancellation, and exhaustion behavior; it does not make every `IOException` retryable.
+Before substantive output, the existing stream normalizer holds formatting-only Answer/Thought
+chunks and any following metadata in their arrival order until that attempt produces output or finishes.
+`Retrying` discards only the failed attempt's held formatting and forwards held metadata before retry;
+a successful attempt retains its exact prefix, including signatures and whitespace.
+No cleanup may change output accumulated from an earlier Tool pass.
 
 Temporary rate limiting and explicitly transient upstream errors remain eligible for that bounded
 sequence. Known exhausted quota, balance or billing limits, authentication failures, and invalid

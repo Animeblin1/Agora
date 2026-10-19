@@ -6,7 +6,11 @@ import com.newoether.agora.api.ollama.OllamaProvider
 import com.newoether.agora.api.openai.CustomOpenAiProvider
 import com.newoether.agora.api.util.ProviderRetryPolicy
 import com.newoether.agora.model.ChatMessage
+import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.model.Participant
+import com.newoether.agora.model.RunEffectIdentity
+import com.newoether.agora.model.ToolCallData
+import com.newoether.agora.viewmodel.ProviderPassRunner
 import com.newoether.agora.util.DebugLog
 import io.mockk.Runs
 import io.mockk.every
@@ -65,6 +69,96 @@ class ProviderInterruptionQuotaRetryTest {
                     case.name,
                     after.first.filterIsInstance<StreamEvent.Error>().single().error is GenerationError.Network,
                 )
+            }
+        }
+    }
+
+    @Test
+    fun formattingOnlyChunksBeforeParseReadAndEofFailuresUseExistingRetry() {
+        cases().forEach { case ->
+            case.formattingOnlyLines().forEach { prefix ->
+                listOf<Any>(
+                    if (case.name == "Ollama") "not-json" else "data: not-json",
+                    IOException("The server response could not be read."),
+                    IOException("read failed", IOException("The server response could not be read.")),
+                    EOFException(),
+                ).forEach { failure ->
+                    val result = collect(case, reads = prefix + failure + case.success, throughConsumer = true)
+                    assertEquals(case.name, 2, result.second)
+                    assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5)), result.first.filterIsInstance<StreamEvent.Retrying>())
+                    assertEquals(case.name, "ok", answer(result.first))
+                    assertEquals(case.name, "", result.first.filterIsInstance<StreamEvent.ThoughtChunk>().joinToString("") { it.thought })
+                    assertTrue(case.name, result.first.none { it is StreamEvent.Error })
+                }
+            }
+        }
+    }
+
+    @Test
+    fun unreadableApiEnvelopeRetriesBeforeOutputButNotAfterPartialOrPermanentRejection() {
+        cases().forEach { case ->
+            val message = "The server response could not be read."
+            assertRecovered(
+                case,
+                collect(case, reads = listOf(case.errorLine("provider_error", "provider_error", message)) + case.success),
+            )
+            val partial = collect(
+                case,
+                reads = case.partial + case.errorLine("provider_error", "provider_error", message, sequenceNumber = 2),
+            )
+            assertEquals(case.name, 1, partial.second)
+            assertEquals(case.name, "partial", answer(partial.first))
+            assertFalse(case.name, partial.first.any { it is StreamEvent.Retrying })
+            val error = partial.first.filterIsInstance<StreamEvent.Error>().single().error as GenerationError.Api
+            assertEquals(case.name, message, error.message)
+            case.formattingOnlyLines().forEach { prefix ->
+                val permanentMessage = "$message Insufficient quota"
+                val permanent = collect(
+                    case,
+                    reads = prefix + case.errorLine("insufficient_quota", "insufficient_quota", permanentMessage, sequenceNumber = 2),
+                )
+                assertEquals(case.name, 1, permanent.second)
+                assertFalse(case.name, permanent.first.any { it is StreamEvent.Retrying })
+                val api = permanent.first.filterIsInstance<StreamEvent.Error>().single().error as GenerationError.Api
+                assertEquals(case.name, permanentMessage, api.message)
+                assertTrue(case.name, answer(permanent.first).isBlank())
+            }
+        }
+    }
+
+    @Test
+    fun parseFailureAfterPartialOutputStillReportsOnceWithoutReplay() {
+        cases().forEach { case ->
+            val malformed = if (case.name == "Ollama") "not-json" else "data: not-json"
+            val result = collect(case, reads = case.partial + malformed)
+            assertEquals(case.name, 1, result.second)
+            assertEquals(case.name, "partial", answer(result.first))
+            assertFalse(case.name, result.first.any { it is StreamEvent.Retrying })
+            assertTrue(case.name, result.first.filterIsInstance<StreamEvent.Error>().single().error is GenerationError.SseParse)
+        }
+    }
+
+    @Test
+    fun completedToolHistoryAndSendingPlaceholderDoNotCountAsCurrentPassOutput() {
+        val call = ToolCallData("file_read", "{}", "", toolCallId = "call_previous")
+        val history = listOf(
+            ChatMessage(id = "user", text = "hello", participant = Participant.USER),
+            ChatMessage(id = "tool", text = "Previous pass", participant = Participant.MODEL, toolCall = call),
+            ChatMessage(id = "result", text = "done", participant = Participant.USER, toolCall = call.copy(result = "done")),
+            ChatMessage(id = "sending", text = "", participant = Participant.MODEL, status = MessageStatus.SENDING),
+        )
+        cases().forEach { case ->
+            listOf<Any>(
+                if (case.name == "Ollama") "not-json" else "data: not-json",
+                IOException("The server response could not be read."),
+                EOFException(),
+            ).forEach { failure ->
+                val prefix = case.formattingOnlyLines().first()
+                val result = collect(case, reads = prefix + failure + case.success, messages = history, throughConsumer = true)
+                assertEquals(case.name, 2, result.second)
+                assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5)), result.first.filterIsInstance<StreamEvent.Retrying>())
+                assertEquals(case.name, "ok", answer(result.first))
+                assertTrue(case.name, result.first.none { it is StreamEvent.Error })
             }
         }
     }
@@ -217,6 +311,13 @@ class ProviderInterruptionQuotaRetryTest {
         cases().forEach { case ->
             listOf(
                 collect(case, reads = List(ProviderRetryPolicy.MAX_ATTEMPTS) { EOFException() }),
+                collect(
+                    case,
+                    reads = List(ProviderRetryPolicy.MAX_ATTEMPTS) {
+                        case.formattingOnlyLines().first() +
+                            (if (case.name == "Ollama") "not-json" else "data: not-json")
+                    }.flatten(),
+                ),
                 collect(case, status = 429, errorBody = "Too many requests, retry later"),
                 collect(
                     case,
@@ -232,7 +333,7 @@ class ProviderInterruptionQuotaRetryTest {
                     result.first.filterIsInstance<StreamEvent.Retrying>(),
                 )
                 assertEquals(case.name, 1, result.first.filterIsInstance<StreamEvent.Error>().size)
-                assertEquals(case.name, "", answer(result.first))
+                assertTrue(case.name, answer(result.first).isBlank())
             }
         }
     }
@@ -263,6 +364,8 @@ class ProviderInterruptionQuotaRetryTest {
         openingFailure: Throwable? = null,
         recoverHttp: Boolean = false,
         config: ProviderConfig = case.config,
+        messages: List<ChatMessage> = listOf(ChatMessage(id = "user", text = "hello", participant = Participant.USER)),
+        throughConsumer: Boolean = false,
     ): Pair<List<StreamEvent>, Int> {
         val opens = AtomicInteger()
         val readIndex = AtomicInteger()
@@ -282,10 +385,16 @@ class ProviderInterruptionQuotaRetryTest {
         return try {
             val events = runBlocking {
                 withTimeout(3_000L) {
-                    case.provider.generateResponse(
-                        listOf(ChatMessage(id = "user", text = "hello", participant = Participant.USER)),
-                        config,
-                    ).toList()
+                    if (throughConsumer) {
+                        val forwarded = mutableListOf<StreamEvent>()
+                        ProviderPassRunner().run(
+                            RunEffectIdentity("conversation", 1L, "run", 1, "provider-1-0"),
+                            case.provider, messages, config, forwarded::add,
+                        )
+                        forwarded
+                    } else {
+                        case.provider.generateResponse(messages, config).toList()
+                    }
                 }
             }
             events to opens.get()
@@ -311,6 +420,35 @@ class ProviderInterruptionQuotaRetryTest {
             }
             else -> """{"error":"$message"}"""
         }
+    }
+
+    private fun Case.formattingOnlyLines(): List<List<String>> = when (name) {
+        "OpenAI Chat" -> listOf(
+            listOf("""data: {"choices":[{"index":0,"delta":{"content":" \t\n"}}]}"""),
+            listOf("""data: {"choices":[{"index":0,"delta":{"reasoning_content":" \t\n"}}]}"""),
+        )
+        "OpenAI Responses" -> listOf(
+            listOf("""data: {"type":"response.output_text.delta","sequence_number":1,"delta":" \t\n"}"""),
+            listOf("""data: {"type":"response.reasoning_text.delta","sequence_number":1,"delta":" \t\n"}"""),
+        )
+        "Anthropic" -> listOf(
+            listOf(
+                """data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}""",
+                """data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" \t\n"}}""",
+            ),
+            listOf(
+                """data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}""",
+                """data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" \t\n"}}""",
+            ),
+        )
+        "Gemini" -> listOf(
+            listOf("""data: {"candidates":[{"content":{"parts":[{"text":" \t\n"}]}}]}"""),
+            listOf("""data: {"candidates":[{"content":{"parts":[{"text":" \t\n","thought":true}]}}]}"""),
+        )
+        else -> listOf(
+            listOf("""{"model":"test","message":{"role":"assistant","content":" \t\n"},"done":false}"""),
+            listOf("""{"model":"test","message":{"role":"assistant","content":"","thinking":" \t\n"},"done":false}"""),
+        )
     }
 
     private fun config(model: String, responses: Boolean = false) = ProviderConfig(

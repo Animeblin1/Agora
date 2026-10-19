@@ -151,13 +151,13 @@ private fun Throwable.matchingFailureMessage(
 }
 
 /**
- * True for events carrying model output the user can already see. Used to decide whether a replay
- * would duplicate content; usage / retry / error bookkeeping does not count.
+ * True for substantive model output. Formatting-only chunks keep the current pass empty; usage /
+ * retry / error bookkeeping does not count. Tool events and thinking signatures prevent replay.
  */
 internal fun StreamEvent.carriesModelOutput(): Boolean = when (this) {
-    is StreamEvent.TextChunk -> text.isNotEmpty()
+    is StreamEvent.TextChunk -> text.isNotBlank()
     is StreamEvent.CitationUpdate -> false
-    is StreamEvent.ThoughtChunk -> thought.isNotEmpty() || signature != null
+    is StreamEvent.ThoughtChunk -> thought.isNotBlank() || signature != null
     is StreamEvent.HostedToolCallUpdate -> true
     is StreamEvent.ToolCallUpdate -> true
     is StreamEvent.ToolCallRequest -> true
