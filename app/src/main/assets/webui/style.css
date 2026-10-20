@@ -1573,7 +1573,7 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .todo-capsule > svg { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--md-primary); }
 .todo-capsule strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: 0; }
 .todo-capsule > span { flex: none; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--md-on-surface-variant); }
-.subagent-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: min(240px, var(--tools-viewport-width, 816px)); flex: none; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); transition: background-color 250ms linear, color 250ms linear; box-shadow: var(--shadow-4); font: inherit; cursor: pointer; }
+.subagent-capsule { display: flex; align-items: center; gap: 8px; height: 48px; max-width: min(240px, var(--tools-viewport-width, 816px)); flex: none; padding: 0 16px; border: 0; border-radius: 24px; background: var(--md-surface-container-high); color: var(--md-on-surface); --md-component-transition: background-color 250ms linear, color 250ms linear; transition: var(--md-component-transition); box-shadow: var(--shadow-4); font: inherit; cursor: pointer; }
 .subagent-capsule[aria-current="page"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 .subagent-status { position: relative; width: 18px; height: 18px; flex: none; }
 .subagent-status > span { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }

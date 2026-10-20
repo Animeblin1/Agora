@@ -260,7 +260,10 @@ test("selection colors fade for 250ms without spatial or Reduced Motion override
   };
   const normal = declarations(".subagent-capsule");
   const selected = declarations('.subagent-capsule[aria-current="page"]');
-  assert.equal(normal.get("transition"), "background-color 250ms linear, color 250ms linear");
+  assert.equal(normal.get("--md-component-transition"), "background-color 250ms linear, color 250ms linear");
+  assert.equal(normal.get("transition"), "var(--md-component-transition)");
+  const material = fs.readFileSync(new URL("../../main/assets/webui/material/material.css", import.meta.url), "utf8");
+  assert.match(material, /transition:\s*--md-state[^;]*var\(--md-component-transition, color 0s\)/);
   assert.equal(normal.get("background"), "var(--md-surface-container-high)");
   assert.equal(normal.get("color"), "var(--md-on-surface)");
   assert.equal(selected.get("background"), "var(--md-secondary-container)");
