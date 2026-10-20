@@ -471,30 +471,36 @@ Provider completion with no answer, thought, follow-up, guidance, or other succe
 ordinary generation error. Terminal persistence must include a nonblank error value so every
 consumer can render the shared error bar.
 
-For every applicable remote Provider, a zero-output parse/protocol failure presented through the
-localized `The server response could not be read.` error, a response-body read exception whose
-cause chain contains that phrase, and premature `EOFException` or transport `IOException` with
-`unexpected end of stream` enter the Provider's existing retry sequence. The same premature-end
-classification applies while opening the response. Eligibility is evaluated only from the current
-Provider pass: it must have produced no nonblank Answer, Thought, Tool, hosted-tool, or other Provider
-output. An active `SENDING` state with no output in that pass and an established but empty Answer
-both remain zero-output. A Provider pass started after a completed Tool call is evaluated independently:
-output from the preceding pass does not disqualify the new `SENDING` pass. Once the current pass
-produces any Provider output, these failures are terminal and must not replay it. This rule reuses
-the existing initial request plus at most five retries, delays `[5s, 5s, 5s, 30s, 30s]`, `Retrying`
-presentation, cancellation, and exhaustion behavior; it does not make every `IOException` retryable.
-Before substantive output, the existing stream normalizer holds formatting-only Answer/Thought
-chunks and any following metadata in their arrival order until that attempt produces output or finishes.
-`Retrying` discards only the failed attempt's held formatting and forwards held metadata before retry;
-a successful attempt retains its exact prefix, including signatures and whitespace.
-No cleanup may change output accumulated from an earlier Tool pass.
+For every applicable remote Provider, the typed parse/protocol error presented as
+`The server response could not be read.` and that exact response-read failure carried by an API
+error or transport cause chain must consume the existing retry budget before a final error is
+published. This applies before and after current-pass Answer, Thought, Tool or hosted-tool output,
+and takes priority over generic API rejection fields and token-cap gates when that exact failure
+is present. Each replay explicitly resets only the failed request attempt: restore its complete
+pre-request output/citation/signature/timing/usage baseline, discard its unaccepted local calls and
+parser state, and force the restored checkpoint through the existing writer before waiting.
+Previously completed tool passes remain unchanged. Local tools from the failed attempt never gain
+execution authority. The final exhausted attempt keeps its partial output and reports one error.
+Ordinary chat, Subagents, Task, Loop, Compact, title and both image-transcription callers share this
+rule; direct consumers reset only their current request or image, preserving completed images.
+User Stop and cancellation never retry.
+
+Premature `EOFException` and transport `IOException` with `unexpected end of stream` or
+`unexpected end of file` retain the existing zero-output retry gate, including while opening a
+response. Prior completed Tool passes do not count as output in the current pass. Other partial
+responses and actual token-cap outcomes remain terminal without replay. All retries use the same
+initial request plus at most five retries, delays `[5s, 5s, 5s, 30s, 30s]`, `Retrying`
+presentation, cancellation and exhaustion behavior, with no second retry owner. Formatting-only
+Answer/Thought chunks stay held by the existing stream normalizer until substantive output or
+completion; no-output retry discards failed formatting while preserving metadata order.
 
 Temporary rate limiting and explicitly transient upstream errors remain eligible for that bounded
-sequence. Known exhausted quota, balance or billing limits, authentication failures, and invalid
-requests finish immediately, even when returned as HTTP 429 or combined with transient wording.
-An explicit API error needs positive transient evidence; missing protocol completion alone must not
-reclassify it. A known permanent OpenAI-compatible HTTP failure must not trigger the alternate `/v1`
-endpoint request. All paths retain one retry owner and one final error; cancellation never retries.
+sequence before output. Other exhausted quota, balance/billing, authentication and invalid-request
+errors finish immediately, even with HTTP429 or generic transient wording. An explicit API error
+needs positive transient evidence; missing completion alone never reclassifies it. An exact
+response-read failure retries the same endpoint rather than using OpenAI's alternate `/v1` candidate.
+Other known permanent OpenAI HTTP failures do not trigger that fallback. All paths retain one retry
+owner and one final error.
 
 Every Compact Run success-gates all automatic handoff, not only the no-input loop and regardless of
 whether the caller is foreground UI, Task, or Loop. Its ordinary launcher installs the queue-release

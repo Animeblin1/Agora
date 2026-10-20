@@ -21,6 +21,7 @@ import io.mockk.unmockkObject
 import java.io.EOFException
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -85,7 +86,7 @@ class ProviderInterruptionQuotaRetryTest {
                 ).forEach { failure ->
                     val result = collect(case, reads = prefix + failure + case.success, throughConsumer = true)
                     assertEquals(case.name, 2, result.second)
-                    assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5)), result.first.filterIsInstance<StreamEvent.Retrying>())
+                    assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5, resetCurrentAttempt = failure !is EOFException)), result.first.filterIsInstance<StreamEvent.Retrying>())
                     assertEquals(case.name, "ok", answer(result.first))
                     assertEquals(case.name, "", result.first.filterIsInstance<StreamEvent.ThoughtChunk>().joinToString("") { it.thought })
                     assertTrue(case.name, result.first.none { it is StreamEvent.Error })
@@ -95,46 +96,38 @@ class ProviderInterruptionQuotaRetryTest {
     }
 
     @Test
-    fun unreadableApiEnvelopeRetriesBeforeOutputButNotAfterPartialOrPermanentRejection() {
+    fun unreadableApiEnvelopeRetriesAfterPartialAndDespitePermanentFields() {
         cases().forEach { case ->
             val message = "The server response could not be read."
             assertRecovered(
                 case,
                 collect(case, reads = listOf(case.errorLine("provider_error", "provider_error", message)) + case.success),
+                resetCurrentAttempt = true,
             )
             val partial = collect(
                 case,
-                reads = case.partial + case.errorLine("provider_error", "provider_error", message, sequenceNumber = 2),
+                reads = case.partial + case.errorLine("provider_error", "provider_error", message, sequenceNumber = 2) + case.success,
             )
-            assertEquals(case.name, 1, partial.second)
-            assertEquals(case.name, "partial", answer(partial.first))
-            assertFalse(case.name, partial.first.any { it is StreamEvent.Retrying })
-            val error = partial.first.filterIsInstance<StreamEvent.Error>().single().error as GenerationError.Api
-            assertEquals(case.name, message, error.message)
+            assertRecoveredPartial(case, partial) { it is StreamEvent.TextChunk && it.text == "partial" }
             case.formattingOnlyLines().forEach { prefix ->
-                val permanentMessage = "$message Insufficient quota"
-                val permanent = collect(
+                val withPermanentFields = collect(
                     case,
-                    reads = prefix + case.errorLine("insufficient_quota", "insufficient_quota", permanentMessage, sequenceNumber = 2),
+                    reads = prefix + case.errorLine(
+                        "insufficient_quota", "insufficient_quota", "$message Insufficient quota", sequenceNumber = 2,
+                    ) + case.success,
+                    throughConsumer = true,
                 )
-                assertEquals(case.name, 1, permanent.second)
-                assertFalse(case.name, permanent.first.any { it is StreamEvent.Retrying })
-                val api = permanent.first.filterIsInstance<StreamEvent.Error>().single().error as GenerationError.Api
-                assertEquals(case.name, permanentMessage, api.message)
-                assertTrue(case.name, answer(permanent.first).isBlank())
+                assertRecovered(case, withPermanentFields, resetCurrentAttempt = true)
             }
         }
     }
 
     @Test
-    fun parseFailureAfterPartialOutputStillReportsOnceWithoutReplay() {
+    fun parseFailureAfterPartialOutputRetriesAndKeepsRawAttemptEventsOrdered() {
         cases().forEach { case ->
             val malformed = if (case.name == "Ollama") "not-json" else "data: not-json"
-            val result = collect(case, reads = case.partial + malformed)
-            assertEquals(case.name, 1, result.second)
-            assertEquals(case.name, "partial", answer(result.first))
-            assertFalse(case.name, result.first.any { it is StreamEvent.Retrying })
-            assertTrue(case.name, result.first.filterIsInstance<StreamEvent.Error>().single().error is GenerationError.SseParse)
+            val result = collect(case, reads = case.partial + malformed + case.success)
+            assertRecoveredPartial(case, result) { it is StreamEvent.TextChunk && it.text == "partial" }
         }
     }
 
@@ -156,7 +149,7 @@ class ProviderInterruptionQuotaRetryTest {
                 val prefix = case.formattingOnlyLines().first()
                 val result = collect(case, reads = prefix + failure + case.success, messages = history, throughConsumer = true)
                 assertEquals(case.name, 2, result.second)
-                assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5)), result.first.filterIsInstance<StreamEvent.Retrying>())
+                assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5, resetCurrentAttempt = failure !is EOFException)), result.first.filterIsInstance<StreamEvent.Retrying>())
                 assertEquals(case.name, "ok", answer(result.first))
                 assertTrue(case.name, result.first.none { it is StreamEvent.Error })
             }
@@ -197,7 +190,7 @@ class ProviderInterruptionQuotaRetryTest {
             listOf(
                 Triple(401, "authentication_error", "Failed to generate: key rejected"),
                 Triple(403, "permission_error", "Failed to generate: forbidden"),
-                Triple(503, "invalid_request_error", "The server response could not be read"),
+                Triple(503, "invalid_request_error", "Invalid request: unsupported parameter"),
             ).forEach { (status, type, message) ->
                 val result = collect(
                     case,
@@ -219,7 +212,7 @@ class ProviderInterruptionQuotaRetryTest {
             listOf(
                 Triple("insufficient_quota", "insufficient_quota", "Failed to generate: insufficient quota"),
                 Triple("invalid_api_key", "authentication_error", "Failed to generate: invalid API key"),
-                Triple("invalid_request_error", "invalid_request_error", "The server response could not be read: invalid request"),
+                Triple("invalid_request_error", "invalid_request_error", "Invalid request: unsupported parameter"),
                 Triple("provider_error", "provider_error", "Request rejected by provider"),
             ).forEach { (code, type, message) ->
                 val result = collect(case, reads = listOf(case.errorLine(code, type, message)))
@@ -325,11 +318,11 @@ class ProviderInterruptionQuotaRetryTest {
                         case.errorLine("rate_limit_exceeded", "rate_limit_error", "Rate limit exceeded")
                     },
                 ),
-            ).forEach { result ->
+            ).forEachIndexed { failureIndex, result ->
                 assertEquals(case.name, ProviderRetryPolicy.MAX_ATTEMPTS, result.second)
                 assertEquals(
                     case.name,
-                    (1..ProviderRetryPolicy.MAX_RETRIES).map { StreamEvent.Retrying(it, 5) },
+                    (1..ProviderRetryPolicy.MAX_RETRIES).map { StreamEvent.Retrying(it, 5, resetCurrentAttempt = failureIndex == 1) },
                     result.first.filterIsInstance<StreamEvent.Retrying>(),
                 )
                 assertEquals(case.name, 1, result.first.filterIsInstance<StreamEvent.Error>().size)
@@ -338,9 +331,204 @@ class ProviderInterruptionQuotaRetryTest {
         }
     }
 
-    private fun assertRecovered(case: Case, result: Pair<List<StreamEvent>, Int>) {
+    @Test
+    fun partialTextThoughtAndToolFailuresRetryAcrossEveryRemoteProtocol() {
+        cases().forEach { case ->
+            case.partialOutputLines().forEach { (kind, prefix) ->
+                listOf<Any>(
+                    if (case.name == "Ollama") "not-json" else "data: not-json",
+                    IOException("The server response could not be read."),
+                    IOException("read failed", IOException("The server response could not be read.")),
+                    case.errorLine("invalid_request_error", "authentication_error", "The server response could not be read.", 2),
+                ).forEach { failure ->
+                    val result = collect(case, reads = prefix + failure + case.success)
+                    assertRecoveredPartial(case, result) { event ->
+                        when (kind) {
+                            "text" -> event is StreamEvent.TextChunk && event.text == "partial"
+                            "thought" -> event is StreamEvent.ThoughtChunk && event.thought == "partial thought"
+                            else -> event is StreamEvent.ToolCallUpdate && event.name == "file_read"
+                        }
+                    }
+                    val retryIndex = result.first.indexOfFirst { it is StreamEvent.Retrying }
+                    assertTrue(case.name, result.first.drop(retryIndex + 1).none {
+                        it is StreamEvent.ToolCallRequest || it is StreamEvent.ToolCallsRequest
+                    })
+                }
+            }
+        }
+    }
+
+    @Test
+    fun partialResponseReadFailuresExhaustSixAttemptsBeforeOneFinalError() {
+        cases().forEach { case ->
+            listOf<Any>(
+                if (case.name == "Ollama") "not-json" else "data: not-json",
+                IOException("The server response could not be read."),
+                case.errorLine("insufficient_quota", "invalid_request_error", "The server response could not be read.", 2),
+            ).forEach { failure ->
+                val result = collect(case, reads = List(6) { case.partial + failure }.flatten())
+                assertEquals(case.name, 6, result.second)
+                assertEquals(
+                    case.name,
+                    (1..5).map { StreamEvent.Retrying(it, 5, resetCurrentAttempt = true) },
+                    result.first.filterIsInstance<StreamEvent.Retrying>(),
+                )
+                assertEquals(case.name, List(6) { "partial" }, result.first.filterIsInstance<StreamEvent.TextChunk>().map { it.text })
+                val error = result.first.filterIsInstance<StreamEvent.Error>().single().error
+                when (failure) {
+                    is IOException -> assertTrue(case.name, error is GenerationError.Network)
+                    else -> assertTrue(case.name, if (failure.toString().contains("not-json")) error is GenerationError.SseParse else error is GenerationError.Api)
+                }
+                assertTrue(case.name, result.first.last() is StreamEvent.Error)
+                assertTrue(case.name, result.first.indexOfLast { it is StreamEvent.Retrying } < result.first.indexOfFirst { it is StreamEvent.Error })
+            }
+        }
+    }
+
+    @Test
+    fun exactUnreadableSocketTimeoutAfterPartialRetriesAndExhaustsAsNetworkError() {
+        val message = "The server response could not be read."
+        cases().forEach { case ->
+            listOf(
+                java.net.SocketTimeoutException(message),
+                java.net.SocketTimeoutException("read timed out").apply { initCause(IOException(message)) },
+                IOException("read failed", java.net.SocketTimeoutException(message)),
+            ).forEach { failure ->
+                val recovered = collect(case, reads = case.partial + failure + case.success)
+                assertRecoveredPartial(case, recovered) { it is StreamEvent.TextChunk && it.text == "partial" }
+                val exhausted = collect(case, reads = List(6) { case.partial + failure }.flatten())
+                assertEquals(case.name, 6, exhausted.second)
+                assertEquals(
+                    case.name,
+                    (1..5).map { StreamEvent.Retrying(it, 5, resetCurrentAttempt = true) },
+                    exhausted.first.filterIsInstance<StreamEvent.Retrying>(),
+                )
+                val error = exhausted.first.filterIsInstance<StreamEvent.Error>().single().error
+                assertTrue(case.name, error is GenerationError.Network)
+                assertEquals(case.name, message, (error as GenerationError.Network).message)
+                assertEquals(case.name, 0, error.statusCode)
+                assertTrue(case.name, exhausted.first.last() is StreamEvent.Error)
+            }
+        }
+    }
+
+    @Test
+    fun exactUnreadableHttpFailuresOverridePermanentFieldsWithoutEndpointFallback() {
+        cases().forEach { case ->
+            listOf(401 to "authentication_error", 403 to "permission_error", 503 to "invalid_request_error").forEach { (status, type) ->
+                val urls = mutableListOf<String>()
+                val body = """{"error":{"code":"insufficient_quota","type":"$type","message":"The server response could not be read."}}"""
+                val result = collect(
+                    case, status = status, errorBody = body,
+                    config = case.config.copy(baseUrl = "https://example.invalid"), requestUrls = urls,
+                )
+                assertEquals(case.name, 6, result.second)
+                assertEquals(case.name, 1, urls.distinct().size)
+                assertEquals(case.name, (1..5).map { StreamEvent.Retrying(it, 5) }, result.first.filterIsInstance<StreamEvent.Retrying>())
+                val error = result.first.filterIsInstance<StreamEvent.Error>().single().error as GenerationError.Api
+                assertEquals(case.name, "The server response could not be read.", error.message)
+                assertEquals(case.name, "insufficient_quota", error.code)
+                assertEquals(case.name, type, error.type)
+            }
+        }
+    }
+
+    @Test
+    fun encodedUnreadableHttpResponseRetriesAtOneEndpointAndReportsDecodedMessage() {
+        val body = """{"error":{"type":"invalid_request_error","message":"The server response could not be \u0072ead."}}"""
+        assertFalse(body.contains("The server response could not be read."))
+        cases().forEach { case ->
+            listOf(400, 401, 403, 429, 503).forEach { status ->
+                val urls = mutableListOf<String>()
+                val result = collect(
+                    case, status = status, errorBody = body,
+                    config = case.config.copy(baseUrl = "https://example.invalid"), requestUrls = urls,
+                )
+                assertEquals(case.name, 6, result.second)
+                assertEquals(case.name, 6, urls.size)
+                assertEquals(case.name, 1, urls.distinct().size)
+                assertEquals(case.name, (1..5).map { StreamEvent.Retrying(it, 5) }, result.first.filterIsInstance<StreamEvent.Retrying>())
+                val error = result.first.filterIsInstance<StreamEvent.Error>().single().error as GenerationError.Api
+                assertEquals(case.name, "The server response could not be read.", error.message)
+                assertEquals(case.name, "invalid_request_error", error.type)
+                assertTrue(case.name, result.first.last() is StreamEvent.Error)
+            }
+        }
+    }
+
+    @Test
+    fun ordinaryQuotaAndAuthenticationErrorsAfterPartialOutputRemainTerminal() {
+        cases().forEach { case ->
+            listOf(
+                Triple("insufficient_quota", "insufficient_quota", "Insufficient quota"),
+                Triple("invalid_api_key", "authentication_error", "Invalid API key"),
+                Triple("invalid_request_error", "invalid_request_error", "Invalid request"),
+            ).forEach { (code, type, message) ->
+                val result = collect(case, reads = case.partial + case.errorLine(code, type, message, 2))
+                assertEquals(case.name, 1, result.second)
+                assertEquals(case.name, "partial", answer(result.first))
+                assertTrue(case.name, result.first.none { it is StreamEvent.Retrying })
+                assertEquals(case.name, message, (result.first.filterIsInstance<StreamEvent.Error>().single().error as GenerationError.Api).message)
+            }
+        }
+    }
+
+    @Test
+    fun cancellationDuringPartialReadOrRetryDoesNotStartAnotherRequest() {
+        cases().forEach { case ->
+            listOf(false, true).forEach { cancelOnRetry ->
+                val urls = mutableListOf<String>()
+                val events = mutableListOf<StreamEvent>()
+                val failure = if (cancelOnRetry) IOException("The server response could not be read.")
+                    else kotlinx.coroutines.CancellationException("The server response could not be read.")
+                val result = runCatching {
+                    collect(case, reads = case.partial + failure + case.success, requestUrls = urls, onEvent = { event ->
+                        events += event
+                        if (cancelOnRetry && event is StreamEvent.Retrying) throw kotlinx.coroutines.CancellationException("stopped")
+                    })
+                }
+                assertTrue(case.name, result.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+                assertEquals(case.name, 1, urls.size)
+                assertTrue(case.name, events.none { it is StreamEvent.Error })
+                assertEquals(case.name, if (cancelOnRetry) 1 else 0, events.filterIsInstance<StreamEvent.Retrying>().size)
+            }
+        }
+    }
+
+    @Test
+    fun anthropicUnnamedOpenToolRetriesBeforeAnyTerminalError() {
+        val case = cases().single { it.name == "Anthropic" }
+        val prefix = listOf("""data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_incomplete"}}""")
+        val recovered = collect(case, reads = prefix + listOf(null) + case.success)
+        assertRecoveredPartial(case, recovered) { it is StreamEvent.ToolCallUpdate }
+        assertTrue(recovered.first.none { it is StreamEvent.ToolCallRequest || it is StreamEvent.ToolCallsRequest })
+        val exhausted = collect(case, reads = List(6) { prefix + listOf(null) }.flatten())
+        assertEquals(6, exhausted.second)
+        assertEquals((1..5).map { StreamEvent.Retrying(it, 5, resetCurrentAttempt = true) }, exhausted.first.filterIsInstance<StreamEvent.Retrying>())
+        assertTrue(exhausted.first.filterIsInstance<StreamEvent.Error>().single().error is GenerationError.SseParse)
+        assertTrue(exhausted.first.last() is StreamEvent.Error)
+    }
+
+    private fun assertRecoveredPartial(
+        case: Case,
+        result: Pair<List<StreamEvent>, Int>,
+        failedOutput: (StreamEvent) -> Boolean,
+    ) {
         assertEquals(case.name, 2, result.second)
-        assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5)), result.first.filterIsInstance<StreamEvent.Retrying>())
+        assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5, resetCurrentAttempt = true)), result.first.filterIsInstance<StreamEvent.Retrying>())
+        val retryIndex = result.first.indexOfFirst { it is StreamEvent.Retrying }
+        assertTrue(case.name, result.first.take(retryIndex).any(failedOutput))
+        assertEquals(case.name, "ok", answer(result.first.drop(retryIndex + 1)))
+        assertTrue(case.name, result.first.none { it is StreamEvent.Error })
+    }
+
+    private fun assertRecovered(
+        case: Case,
+        result: Pair<List<StreamEvent>, Int>,
+        resetCurrentAttempt: Boolean = false,
+    ) {
+        assertEquals(case.name, 2, result.second)
+        assertEquals(case.name, listOf(StreamEvent.Retrying(1, 5, resetCurrentAttempt)), result.first.filterIsInstance<StreamEvent.Retrying>())
         assertEquals(case.name, "ok", answer(result.first))
         assertTrue(case.name, result.first.none { it is StreamEvent.Error })
     }
@@ -366,6 +554,8 @@ class ProviderInterruptionQuotaRetryTest {
         config: ProviderConfig = case.config,
         messages: List<ChatMessage> = listOf(ChatMessage(id = "user", text = "hello", participant = Participant.USER)),
         throughConsumer: Boolean = false,
+        requestUrls: MutableList<String>? = null,
+        onEvent: (StreamEvent) -> Unit = {},
     ): Pair<List<StreamEvent>, Int> {
         val opens = AtomicInteger()
         val readIndex = AtomicInteger()
@@ -379,6 +569,7 @@ class ProviderInterruptionQuotaRetryTest {
         }
         mockkObject(HttpClient)
         every { HttpClient.streamPost(any(), any(), any()) } answers {
+            requestUrls?.add(firstArg<String>())
             if (opens.incrementAndGet() == 1 && openingFailure != null) throw openingFailure
             handle
         }
@@ -393,7 +584,7 @@ class ProviderInterruptionQuotaRetryTest {
                         )
                         forwarded
                     } else {
-                        case.provider.generateResponse(messages, config).toList()
+                        case.provider.generateResponse(messages, config).onEach { onEvent(it) }.toList()
                     }
                 }
             }
@@ -449,6 +640,27 @@ class ProviderInterruptionQuotaRetryTest {
             listOf("""{"model":"test","message":{"role":"assistant","content":" \t\n"},"done":false}"""),
             listOf("""{"model":"test","message":{"role":"assistant","content":"","thinking":" \t\n"},"done":false}"""),
         )
+    }
+
+    private fun Case.partialOutputLines(): List<Pair<String, List<String>>> {
+        val thought = when (name) {
+            "OpenAI Chat" -> listOf("""data: {"choices":[{"index":0,"delta":{"reasoning_content":"partial thought"}}]}""")
+            "OpenAI Responses" -> listOf("""data: {"type":"response.reasoning_text.delta","sequence_number":1,"delta":"partial thought"}""")
+            "Anthropic" -> listOf(
+                """data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}""",
+                """data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"partial thought"}}""",
+            )
+            "Gemini" -> listOf("""data: {"candidates":[{"content":{"parts":[{"text":"partial thought","thought":true}]}}]}""")
+            else -> listOf("""{"model":"test","message":{"role":"assistant","content":"","thinking":"partial thought"},"done":false}""")
+        }
+        val tool = when (name) {
+            "OpenAI Chat" -> listOf("""data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_partial","type":"function","function":{"name":"file_read","arguments":"{"}}]}}]}""")
+            "OpenAI Responses" -> listOf("""data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"id":"item_partial","type":"function_call","call_id":"call_partial","name":"file_read"}}""")
+            "Anthropic" -> listOf("""data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_partial","name":"file_read"}}""")
+            "Gemini" -> listOf("""data: {"candidates":[{"content":{"parts":[{"functionCall":{"id":"call_partial","name":"file_read","args":{}}}]}}]}""")
+            else -> listOf("""{"model":"test","message":{"role":"assistant","content":"","tool_calls":[{"id":"call_partial","type":"function","function":{"name":"file_read","arguments":{}}}]},"done":false}""")
+        }
+        return listOf("text" to partial, "thought" to thought, "tool" to tool)
     }
 
     private fun config(model: String, responses: Boolean = false) = ProviderConfig(

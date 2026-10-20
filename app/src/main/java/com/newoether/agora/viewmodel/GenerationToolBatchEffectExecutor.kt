@@ -31,6 +31,21 @@ internal class GenerationToolOverlay(
     fun snapshot(): List<MessageSegment> =
         segments.toList() + citations.map { it.toMessageSegment() }
 
+    /** Request-boundary rollback includes merged citations and live stream-to-segment indices. */
+    fun capture(): () -> Unit {
+        val savedSegments = segments.toList()
+        val savedCitations = citations.toList()
+        val savedIndices = streamIndices.toMap()
+        return {
+            segments.clear()
+            segments.addAll(savedSegments)
+            citations.clear()
+            citations.addAll(savedCitations)
+            streamIndices.clear()
+            streamIndices.putAll(savedIndices)
+        }
+    }
+
     fun contentSnapshot(): List<MessageSegment> = segments.toList()
 
     fun replaceAll(replacement: List<MessageSegment>) {

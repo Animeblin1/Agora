@@ -422,7 +422,7 @@ class GenerationManager(
                 onFirstEvent: (() -> Unit)? = null,
             ): ProviderPassOutcome {
                 val providerAnswerStart = output.totalText.length
-                output.tokenUsageAccumulator.beginRequest()
+                output.beginProviderRequest()
                 val providerRequestIndex = providerRequestOrdinal++
                 val providerRequestTrace = if (providerRequestIndex == 0) {
                     requestTrace
@@ -464,7 +464,11 @@ class GenerationManager(
                                     uiUpdateGate = uiUpdateGate,
                                     publishStreamUpdate = ::publishStreamUpdate,
                                     publishRetrySnapshot = {
-                                        onStreamUpdate(projectOutput(modelMessage()))
+                                        val projected = projectOutput(modelMessage())
+                                        onStreamUpdate(projected)
+                                        if (event is StreamEvent.Retrying && event.resetCurrentAttempt) {
+                                            checkpoints.persist(projected, force = true)
+                                        }
                                     },
                                 )
                             },

@@ -40,21 +40,19 @@ internal data class StreamTermination(
     val truncatedByTokenCap: Boolean get() = stopReason in TOKEN_CAP_REASONS
 
     /**
-     * Replaying is safe only while nothing has been surfaced: retrying after partial output would
-     * duplicate visible content and bill the same completion twice. Before output, only a classified
-     * transient error or an incomplete stream without an API rejection may enter the existing retry.
-     *
-     * A token-cap stop is never retried — the same request would truncate at the same place.
+     * Response-read failures always consume the existing retry budget. Their failed attempt is
+     * explicitly replaced before replay, so prior successful tool passes stay intact. Other
+     * failures retain the no-output and token-cap gates. Cancellation never reaches this decision.
      */
     val isRetryable: Boolean
-        get() = !producedContent &&
-            !alreadyReportedError &&
-            !truncatedByTokenCap &&
-            when (val error = streamError) {
-                is GenerationError.Api -> ProviderRetryPolicy.shouldRetryStreamError(error)
-                null -> timedOut || toolCallInFlight || !sawTerminalMarker
-                else -> retryableStreamError || ProviderRetryPolicy.shouldRetryStreamError(error)
-            }
+        get() = !alreadyReportedError &&
+            (ProviderRetryPolicy.requiresResponseReadRetry(streamError) ||
+                (!producedContent && !truncatedByTokenCap &&
+                    when (val error = streamError) {
+                        is GenerationError.Api -> ProviderRetryPolicy.shouldRetryStreamError(error)
+                        null -> timedOut || toolCallInFlight || !sawTerminalMarker
+                        else -> retryableStreamError || ProviderRetryPolicy.shouldRetryStreamError(error)
+                    }))
 
     /** Terminal diagnostic to surface, or null when the stream ended cleanly. */
     fun toError(provider: String): GenerationError? = when {
@@ -94,29 +92,38 @@ internal data class StreamTermination(
  * providers' retry loops entirely and surfaced as a hard failure on the first flaky connection.
  * Nothing has been streamed at that point, so a replay is always safe.
  *
- * [java.net.UnknownHostException] is deliberately excluded: it almost always means a wrong base URL
- * or absent connectivity, and retrying only delays a diagnostic the user needs to see.
+ * Ordinary [java.net.UnknownHostException] failures remain excluded because they usually mean a
+ * wrong base URL or absent connectivity. The explicit unreadable-response outcome takes priority.
  */
-internal fun Throwable.asRetryableTransportError(): GenerationError? = when (this) {
-    // SocketTimeoutException extends InterruptedIOException, so the order of these matters.
-    is java.net.SocketTimeoutException -> GenerationError.Timeout
-    is java.io.InterruptedIOException -> GenerationError.Timeout
-    is java.net.ConnectException ->
-        GenerationError.Network(statusCode = 0, message = localizedMessage ?: "Connection refused")
-    is java.net.SocketException ->
-        GenerationError.Network(statusCode = 0, message = localizedMessage ?: "Connection reset")
-    is javax.net.ssl.SSLException ->
-        GenerationError.Network(statusCode = 0, message = localizedMessage ?: "TLS failure")
-    is java.net.UnknownHostException -> null
-    else -> asRetryableResponseBodyReadError()
-        ?: matchingFailureMessage(ProviderRetryPolicy::isFailedToGenerateOutcome)?.let { message ->
-            GenerationError.Network(statusCode = 0, message = message)
-        }
+internal fun Throwable.asRetryableTransportError(): GenerationError? {
+    asUnreadableServerResponseError()?.let { return it }
+    return when (this) {
+        // SocketTimeoutException extends InterruptedIOException, so the order of these matters.
+        is java.net.SocketTimeoutException -> GenerationError.Timeout
+        is java.io.InterruptedIOException -> GenerationError.Timeout
+        is java.net.ConnectException ->
+            GenerationError.Network(statusCode = 0, message = localizedMessage ?: "Connection refused")
+        is java.net.SocketException ->
+            GenerationError.Network(statusCode = 0, message = localizedMessage ?: "Connection reset")
+        is javax.net.ssl.SSLException ->
+            GenerationError.Network(statusCode = 0, message = localizedMessage ?: "TLS failure")
+        is java.net.UnknownHostException -> null
+        else -> asRetryableResponseBodyReadError()
+            ?: matchingFailureMessage(ProviderRetryPolicy::isFailedToGenerateOutcome)?.let { message ->
+                GenerationError.Network(statusCode = 0, message = message)
+            }
+    }
 }
 
-/** A matching read failure after response headers re-enters the existing pre-output retry gate. */
-internal fun Throwable.asRetryableResponseBodyReadError(): GenerationError? =
+private fun Throwable.asUnreadableServerResponseError(): GenerationError? =
     matchingFailureMessage(
+        ProviderRetryPolicy::isUnreadableServerResponseFailure,
+        allowDns = true,
+    )?.let { GenerationError.Network(statusCode = 0, message = it) }
+
+/** Body reads retain exact unreadable-response priority before other transport classification. */
+internal fun Throwable.asRetryableResponseBodyReadError(): GenerationError? =
+    asUnreadableServerResponseError() ?: matchingFailureMessage(
         ProviderRetryPolicy::isUnreadableServerResponseFailure,
         includePrematureEof = true,
     )?.let { message ->
@@ -126,12 +133,13 @@ internal fun Throwable.asRetryableResponseBodyReadError(): GenerationError? =
 private fun Throwable.matchingFailureMessage(
     matches: (String?) -> Boolean,
     includePrematureEof: Boolean = false,
+    allowDns: Boolean = false,
 ): String? {
     val visited = mutableSetOf<Throwable>()
     var failure: Throwable? = this
     var matchedMessage: String? = null
     while (failure != null && visited.add(failure)) {
-        if (failure is java.net.UnknownHostException ||
+        if ((!allowDns && failure is java.net.UnknownHostException) ||
             failure is kotlinx.coroutines.CancellationException
         ) return null
         if (matchedMessage == null) {
@@ -152,7 +160,8 @@ private fun Throwable.matchingFailureMessage(
 
 /**
  * True for substantive model output. Formatting-only chunks keep the current pass empty; usage /
- * retry / error bookkeeping does not count. Tool events and thinking signatures prevent replay.
+ * retry / error bookkeeping does not count. Tool events and thinking signatures prevent ordinary
+ * replay; explicit response-read failures replace even those partially surfaced attempts.
  */
 internal fun StreamEvent.carriesModelOutput(): Boolean = when (this) {
     is StreamEvent.TextChunk -> text.isNotBlank()

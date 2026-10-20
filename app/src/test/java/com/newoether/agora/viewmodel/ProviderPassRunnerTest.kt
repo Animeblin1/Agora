@@ -313,21 +313,25 @@ class ProviderPassRunnerTest {
                 val citation = StreamEvent.CitationUpdate(
                     CitationRecord(sourceId = "previous_source", provider = "test", kind = "url", title = "Source"),
                 )
+                output.beginProviderRequest()
                 val priorOutcome = runner(listOf(
                     StreamEvent.ThoughtChunk("Previous thought", signature = "previous_signature"),
                     StreamEvent.TextChunk("Previous answer\n"), citation, call,
                 )).run(IDENTITY, messages(), config, consume)
                 assertTrue(priorOutcome is ProviderPassOutcome.CompletedToolCalls)
+                output.tokenUsageAccumulator.finishRequest()
                 output.flushAnswerSegment()
                 output.flushThoughtSegment()
                 output.currentStatus = MessageStatus.SENDING
                 val priorSegments = output.toolOverlay.snapshot()
                 providerAnswerStart = output.totalText.length
+                output.beginProviderRequest()
 
                 val outcome = runner(
                     prefix + StreamEvent.Retrying(1, 5) + prefix + StreamEvent.Retrying(2, 5) +
                         listOf(StreamEvent.TextChunk("    \n"), StreamEvent.TextChunk("ok")),
                 ).run(IDENTITY.copy(pass = 4, effectId = "provider-4-0"), messages(), config, consume)
+                output.tokenUsageAccumulator.finishRequest()
 
                 assertTrue(outcome is ProviderPassOutcome.CompletedText)
                 assertEquals(listOf("Previous answer\n", "Previous answer\n"), retrySnapshots)
@@ -383,7 +387,7 @@ class ProviderPassRunnerTest {
         )
         val forwarded = mutableListOf<StreamEvent>()
 
-        output.tokenUsageAccumulator.beginRequest()
+        output.beginProviderRequest()
         val outcome = runner(events).run(IDENTITY, messages(), CONFIG.copy(tools = null)) { event ->
             forwarded += event
             output.handleStreamEvent(
@@ -391,6 +395,7 @@ class ProviderPassRunnerTest {
                 publishStreamUpdate = {}, publishRetrySnapshot = {},
             )
         }
+        output.tokenUsageAccumulator.finishRequest()
 
         assertEquals(ProviderPassOutcome.CompletedText(IDENTITY), outcome)
         assertEquals(events, forwarded)
