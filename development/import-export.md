@@ -294,7 +294,8 @@ derived portable model caches so stale discovery results cannot masquerade as im
 ## 5. Secret transport
 
 The secret payload contains Provider API-key records and active IDs, Web Search API keys, proxy
-password, Shell API keys and SSH passwords keyed by stable device ID, remote Embedding API keys keyed
+password, Shell API keys, SSH passwords, private-key content and key passphrases keyed by stable
+device ID, remote Embedding API keys keyed
 by model ID, and MCP headers keyed by server ID. Version 1-3 name-keyed Shell API keys are accepted
 only for legacy compatibility.
 
@@ -302,6 +303,15 @@ only for legacy compatibility.
 therefore emitted only after explicit include-secrets selection. Structural Settings payloads always
 strip those values. Secret restore ignores orphan records that have no matching structural owner and
 reports warnings rather than inventing devices, models, or servers.
+
+SSH authentication mode (`password` by default, or `private_key`) and the imported key's display
+filename are structural Shell fields. Key content and its passphrase live only in the existing
+Keystore-encrypted device configuration locally and the opt-in secret payload in a native archive.
+All structural exports strip password, private key and passphrase, including legacy-style copies.
+Older archives without the mode remain password-authenticated. Settings-only imports cannot inject
+private-key material; existing secrets follow the same matching-device preservation rules as passwords.
+Secret MERGE retains unmatched key/passphrase values, while secret REPLACE clears omitted values.
+No private filesystem path or SAF URI is transported, and secret restore creates no key files.
 
 ## 6. Import strategies
 

@@ -681,7 +681,7 @@ class SettingsManager(private val context: Context) {
         context.dataStore.edit { it[SUBAGENT_TOOLS_ENABLED] = enabled }
     }
     suspend fun saveShellDevices(devices: List<ShellDeviceConfig>) {
-        context.dataStore.edit { it[SHELL_DEVICES_JSON] = com.newoether.agora.util.SecretCrypto.encrypt(json.encodeToString(devices)) }
+        context.dataStore.edit { it[SHELL_DEVICES_JSON] = encryptShellDevices(devices, json) }
     }
     suspend fun saveMcpServers(servers: List<McpServerConfig>) {
         context.dataStore.edit {

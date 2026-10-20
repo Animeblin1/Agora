@@ -193,6 +193,23 @@ class QueuedGuidancePermissionsTest {
         }
     }
 
+    @Test fun sshCredentialChangesKeepTargetIntersectionAndOnlyChosenCredentials() {
+        val admitted = ShellDeviceConfig(
+            id = "ssh", name = "SSH", type = "ssh", sshHost = "host", sshUser = "user",
+            sshHostKey = "pin", sshPassword = "old password",
+        )
+        val chosenDevice = admitted.copy(
+            sshAuthMode = com.newoether.agora.data.SSH_AUTH_PRIVATE_KEY,
+            sshPassword = "", sshPrivateKey = "chosen key", sshKeyPassphrase = "chosen passphrase",
+        )
+        val parent = snapshot("Parent:model", context().copy(shellDevices = listOf(admitted)))
+        val chosen = snapshot("UI:last", context().copy(shellDevices = listOf(chosenDevice)))
+        val result = narrowQueuedGuidancePermissions(listOf(queued("parent", parent)), chosen)
+        assertSame(chosenDevice, result.context.shellDevices.single())
+        assertEquals("chosen key", result.context.shellDevices.single().sshPrivateKey)
+        assertEquals("chosen passphrase", result.context.shellDevices.single().sshKeyPassphrase)
+    }
+
     @Test fun webConfigurationsAndCredentialsAreNeverMixedAcrossModels() {
         val parent = snapshot("Parent:model", context().copy(
             webSearchProvider = "brave", webSearchApiKeys = mapOf("brave" to "parent key"),

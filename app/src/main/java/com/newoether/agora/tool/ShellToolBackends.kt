@@ -205,15 +205,12 @@ internal class ConchBackend(override val device: ShellDeviceConfig) : Backend {
 
 internal class SshBackend(override val device: ShellDeviceConfig) : Backend {
     private val host = device.sshHost
-    private val port = device.sshPort
-    private val user = device.sshUser
-    private val password = device.sshPassword
     private val deviceName = device.name
     private val hostKey = device.sshHostKey
 
     private val client: SshClient by lazy {
         SshClient(
-            host, port, user, password,
+            device = device,
             pinnedHostKey = hostKey,
             // Un-pinned devices stay usable (capture-only); once a key is pinned it is enforced.
             allowUnknownHostKey = hostKey.isBlank()

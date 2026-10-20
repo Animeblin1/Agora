@@ -263,6 +263,15 @@
     <string name="shell_device_port">連接埠</string>
     <string name="shell_device_user">使用者名稱</string>
     <string name="shell_device_password">密碼</string>
+    <string name="shell_ssh_auth_method">驗證方式</string>
+    <string name="shell_ssh_auth_private_key">私密金鑰</string>
+    <string name="shell_ssh_import_private_key">匯入私密金鑰</string>
+    <string name="shell_ssh_private_key_desc">匯入不超過 256 KiB 的 SSH 私密金鑰。</string>
+    <string name="shell_ssh_private_key_passphrase">金鑰密語</string>
+    <string name="shell_ssh_private_key_invalid">SSH 私密金鑰無效或不受支援</string>
+    <string name="shell_ssh_private_key_too_large">私密金鑰超過 256 KiB</string>
+    <string name="shell_ssh_private_key_read_failed">無法讀取私密金鑰</string>
+    <string name="shell_ssh_private_key_passphrase_invalid">金鑰密語不正確</string>
 
     <!-- Settings - Sandbox Management -->
     <string name="sandbox_mgmt_title">沙箱管理</string>

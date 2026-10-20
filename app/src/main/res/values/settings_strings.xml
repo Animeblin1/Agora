@@ -285,6 +285,15 @@
     <string name="shell_device_port">Port</string>
     <string name="shell_device_user">Username</string>
     <string name="shell_device_password">Password</string>
+    <string name="shell_ssh_auth_method">Authentication method</string>
+    <string name="shell_ssh_auth_private_key">Private Key</string>
+    <string name="shell_ssh_import_private_key">Import Private Key</string>
+    <string name="shell_ssh_private_key_desc">Import an SSH private key up to 256 KiB.</string>
+    <string name="shell_ssh_private_key_passphrase">Key passphrase</string>
+    <string name="shell_ssh_private_key_invalid">Invalid or unsupported SSH private key</string>
+    <string name="shell_ssh_private_key_too_large">Private key exceeds 256 KiB</string>
+    <string name="shell_ssh_private_key_read_failed">Could not read private key</string>
+    <string name="shell_ssh_private_key_passphrase_invalid">Incorrect key passphrase</string>
 
     <!-- Settings - Sandbox Management -->
     <string name="sandbox_mgmt_title">Sandbox Management</string>

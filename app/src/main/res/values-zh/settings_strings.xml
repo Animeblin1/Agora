@@ -275,6 +275,15 @@
     <string name="shell_device_port">端口</string>
     <string name="shell_device_user">用户名</string>
     <string name="shell_device_password">密码</string>
+    <string name="shell_ssh_auth_method">认证方式</string>
+    <string name="shell_ssh_auth_private_key">私钥</string>
+    <string name="shell_ssh_import_private_key">导入私钥</string>
+    <string name="shell_ssh_private_key_desc">导入不超过 256 KiB 的 SSH 私钥。</string>
+    <string name="shell_ssh_private_key_passphrase">私钥口令</string>
+    <string name="shell_ssh_private_key_invalid">SSH 私钥无效或不受支持</string>
+    <string name="shell_ssh_private_key_too_large">私钥超过 256 KiB</string>
+    <string name="shell_ssh_private_key_read_failed">无法读取私钥</string>
+    <string name="shell_ssh_private_key_passphrase_invalid">私钥口令不正确</string>
 
     <!-- Settings - Sandbox Management -->
     <string name="sandbox_mgmt_title">沙箱管理</string>

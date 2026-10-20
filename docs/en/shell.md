@@ -10,7 +10,7 @@ Foreground commands are created as durable server jobs and waited on for a bound
 
 ## SSH
 
-Configure host, port, user, authentication, and host-key verification/pinning. Direct SSH transport is separate from Agora's shared HTTP proxy.
+Configure the host, port, and username, then choose password authentication or select **Private Key** and **Import Private Key** to import a file no larger than 256 KiB. For an encrypted key, enter its passphrase. Use **Verify & Pin Host Key** to review the server fingerprint, then select **Save** to store the device and credentials. Once pinned, later connections must match that host key. Credentials are stored encrypted on the device. Structural Settings exports exclude passwords, private keys, and key passphrases; native `.agora` backups include them only with the explicit include-secrets option. Direct SSH transport is separate from Agora's shared HTTP proxy.
 
 ## Confirmation
 

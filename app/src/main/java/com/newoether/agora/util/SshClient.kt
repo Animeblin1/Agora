@@ -1,6 +1,7 @@
 package com.newoether.agora.util
 
 import android.util.Base64
+import com.newoether.agora.data.ShellDeviceConfig
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.HostKey
@@ -31,15 +32,13 @@ import java.io.ByteArrayOutputStream
  * NOT thread-safe — create a new instance per tool call.
  */
 class SshClient(
-    private val host: String,
-    private val port: Int,
-    private val user: String,
-    private val password: String,
+    private val device: ShellDeviceConfig,
     private val timeoutMs: Int = Constants.NETWORK_CONNECT_TIMEOUT_MS.toInt(),
     private val pinnedHostKey: String = "",
     private val allowUnknownHostKey: Boolean = false
 ) {
     private var session: Session? = null
+    private var identityOwner: JSch? = null
 
     /** The server host key (base64 of the public-key blob) seen on the last connect. */
     var capturedHostKey: String? = null
@@ -50,17 +49,26 @@ class SshClient(
     private suspend fun getSession(): Session {
         session?.let { if (it.isConnected) return it }
         return withContext(Dispatchers.IO) {
+            close()
             val jsch = JSch()
-            val s = jsch.getSession(user, host, port).apply {
-                setPassword(password)
-                setConfig("PreferredAuthentications", "password")
-                hostKeyRepository = TofuHostKeyRepository()
-                // "yes" makes JSch reject NOT_INCLUDED/CHANGED keys; "no" accepts (capture mode).
-                setConfig("StrictHostKeyChecking", if (allowUnknownHostKey && pinnedHostKey.isBlank()) "no" else "yes")
-                connect(timeoutMs)
+            var candidate: Session? = null
+            try {
+                val connected = jsch.getSession(device.sshUser, device.sshHost, device.sshPort).apply {
+                    candidate = this
+                    configureSshAuthentication(jsch, this, device)
+                    hostKeyRepository = TofuHostKeyRepository()
+                    setConfig("StrictHostKeyChecking", if (allowUnknownHostKey && pinnedHostKey.isBlank()) "no" else "yes")
+                    connect(timeoutMs)
+                }
+                currentCoroutineContext().ensureActive()
+                identityOwner = jsch
+                session = connected
+                connected
+            } catch (error: Throwable) {
+                candidate?.disconnect()
+                jsch.removeAllIdentity()
+                throw error
             }
-            session = s
-            s
         }
     }
 
@@ -93,8 +101,13 @@ class SshClient(
     }
 
     fun close() {
-        session?.disconnect()
-        session = null
+        try {
+            session?.disconnect()
+        } finally {
+            session = null
+            identityOwner?.removeAllIdentity()
+            identityOwner = null
+        }
     }
 
     // ── Shell Command ──────────────────────────────────────

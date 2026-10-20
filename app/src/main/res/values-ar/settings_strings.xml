@@ -277,6 +277,15 @@
     <string name="shell_device_port">المنفذ</string>
     <string name="shell_device_user">اسم المستخدم</string>
     <string name="shell_device_password">كلمة المرور</string>
+    <string name="shell_ssh_auth_method">طريقة المصادقة</string>
+    <string name="shell_ssh_auth_private_key">مفتاح خاص</string>
+    <string name="shell_ssh_import_private_key">استيراد مفتاح خاص</string>
+    <string name="shell_ssh_private_key_desc">استورد مفتاح SSH خاصًا لا يتجاوز حجمه 256 KiB.</string>
+    <string name="shell_ssh_private_key_passphrase">عبارة مرور المفتاح</string>
+    <string name="shell_ssh_private_key_invalid">مفتاح SSH الخاص غير صالح أو غير مدعوم</string>
+    <string name="shell_ssh_private_key_too_large">يتجاوز حجم المفتاح الخاص 256 KiB</string>
+    <string name="shell_ssh_private_key_read_failed">تعذرت قراءة المفتاح الخاص</string>
+    <string name="shell_ssh_private_key_passphrase_invalid">عبارة مرور المفتاح غير صحيحة</string>
 
     <!-- Settings - Sandbox Management -->
     <string name="sandbox_mgmt_title">إدارة الصندوق الرملي</string>

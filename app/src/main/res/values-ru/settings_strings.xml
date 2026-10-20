@@ -277,6 +277,15 @@
     <string name="shell_device_port">Порт</string>
     <string name="shell_device_user">Имя пользователя</string>
     <string name="shell_device_password">Пароль</string>
+    <string name="shell_ssh_auth_method">Способ аутентификации</string>
+    <string name="shell_ssh_auth_private_key">Закрытый ключ</string>
+    <string name="shell_ssh_import_private_key">Импортировать закрытый ключ</string>
+    <string name="shell_ssh_private_key_desc">Импортируйте закрытый ключ SSH размером до 256 KiB.</string>
+    <string name="shell_ssh_private_key_passphrase">Парольная фраза ключа</string>
+    <string name="shell_ssh_private_key_invalid">Недействительный или неподдерживаемый закрытый ключ SSH</string>
+    <string name="shell_ssh_private_key_too_large">Размер закрытого ключа превышает 256 KiB</string>
+    <string name="shell_ssh_private_key_read_failed">Не удалось прочитать закрытый ключ</string>
+    <string name="shell_ssh_private_key_passphrase_invalid">Неверная парольная фраза ключа</string>
 
     <!-- Settings - Sandbox Management -->
     <string name="sandbox_mgmt_title">Управление песочницей</string>

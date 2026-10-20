@@ -452,6 +452,10 @@ internal object PortableSettingsArchive {
                     } else {
                         existing?.sshPassword.orEmpty()
                     },
+                    // Private keys were introduced after secrets moved out of structural settings.
+                    // Even legacy mode cannot authorize a settings-embedded private key.
+                    sshPrivateKey = existing?.sshPrivateKey.orEmpty(),
+                    sshKeyPassphrase = existing?.sshKeyPassphrase.orEmpty(),
                 )
             }
             sm.saveShellDevices(

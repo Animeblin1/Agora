@@ -36,7 +36,12 @@ internal class SettingsShellDeviceStore(
             val updated = if (creating) devices + normalized else devices.map {
                 if (it.id == device.id) normalized else it
             }
-            preferences[SHELL_DEVICES_JSON] = SecretCrypto.encrypt(json.encodeToString(updated))
+            val encrypted = try {
+                encryptShellDevices(updated, json)
+            } catch (_: IllegalStateException) {
+                return@edit
+            }
+            preferences[SHELL_DEVICES_JSON] = encrypted
             saved = true
         }
         return saved
@@ -45,8 +50,8 @@ internal class SettingsShellDeviceStore(
     suspend fun remove(deviceId: String) {
         store.edit { preferences ->
             val devices = decodeEncryptedShellDevices(preferences, json)
-            preferences[SHELL_DEVICES_JSON] = SecretCrypto.encrypt(
-                json.encodeToString(devices.filterNot { it.id == deviceId }),
+            preferences[SHELL_DEVICES_JSON] = encryptShellDevices(
+                devices.filterNot { it.id == deviceId }, json,
             )
         }
     }

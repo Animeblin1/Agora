@@ -277,6 +277,15 @@
     <string name="shell_device_port">ポート</string>
     <string name="shell_device_user">ユーザー名</string>
     <string name="shell_device_password">パスワード</string>
+    <string name="shell_ssh_auth_method">認証方式</string>
+    <string name="shell_ssh_auth_private_key">秘密鍵</string>
+    <string name="shell_ssh_import_private_key">秘密鍵をインポート</string>
+    <string name="shell_ssh_private_key_desc">256 KiB 以下の SSH 秘密鍵をインポートします。</string>
+    <string name="shell_ssh_private_key_passphrase">鍵のパスフレーズ</string>
+    <string name="shell_ssh_private_key_invalid">SSH 秘密鍵が無効か、対応していません</string>
+    <string name="shell_ssh_private_key_too_large">秘密鍵が 256 KiB を超えています</string>
+    <string name="shell_ssh_private_key_read_failed">秘密鍵を読み取れませんでした</string>
+    <string name="shell_ssh_private_key_passphrase_invalid">鍵のパスフレーズが正しくありません</string>
 
     <!-- Settings - Sandbox Management -->
     <string name="sandbox_mgmt_title">サンドボックス管理</string>

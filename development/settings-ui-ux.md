@@ -241,6 +241,25 @@ and WebUI share this contract.
   renames cannot bypass validation through stale UI snapshots; failed admission preserves all data.
   Import/secret restoration keeps its separate legacy compatibility and identity rules.
 
+## SSH private-key authentication
+
+- The existing explicit-save inline Shell editor offers Password and Private Key authentication.
+  The private-key choice replaces the password field with an import action and the selected
+  filename, using the shared two-line Settings import/action presentation with a fixed leading
+  icon/progress slot and localized 256 KiB import description. An encrypted key additionally
+  shows its masked passphrase field through the shared secret-visibility owner. Do not expose a
+  raw filesystem-path field or private-key text editor.
+- SAF import reads and validates at most 256 KiB on IO. Cancellation, unreadable or unsupported
+  files retain the previous draft and report localized feedback. An imported key remains only in
+  the local editor draft until explicit Save; Back/navigation never persist it. No key files or
+  durable source URI grants are created. Picker/validation completion must match the current editor.
+- Password remains the default for existing devices. Only the selected authentication method is
+  used by commands and host-key Verify. Preserve explicit trust/pinning and do not fall back from
+  failed key authentication to a retained password. Switching device type clears irrelevant fields.
+- The existing encrypted device configuration stores private-key content and its passphrase.
+  File labels and authentication mode contain no key bytes; backup boundaries belong to
+  import-export.md. Failed validation must not log keys, passphrases or source file content.
+
 ## Interaction timeout
 
 - Interaction adds a Timeout slider directly below the Ask User enable switch, using the existing

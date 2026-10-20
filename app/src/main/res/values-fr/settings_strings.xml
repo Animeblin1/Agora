@@ -277,6 +277,15 @@
     <string name="shell_device_port">Port</string>
     <string name="shell_device_user">Nom d\'utilisateur</string>
     <string name="shell_device_password">Mot de passe</string>
+    <string name="shell_ssh_auth_method">Méthode d’authentification</string>
+    <string name="shell_ssh_auth_private_key">Clé privée</string>
+    <string name="shell_ssh_import_private_key">Importer une clé privée</string>
+    <string name="shell_ssh_private_key_desc">Importez une clé privée SSH de 256 KiB maximum.</string>
+    <string name="shell_ssh_private_key_passphrase">Phrase secrète de la clé</string>
+    <string name="shell_ssh_private_key_invalid">Clé privée SSH invalide ou non prise en charge</string>
+    <string name="shell_ssh_private_key_too_large">La clé privée dépasse 256 KiB</string>
+    <string name="shell_ssh_private_key_read_failed">Impossible de lire la clé privée</string>
+    <string name="shell_ssh_private_key_passphrase_invalid">Phrase secrète de la clé incorrecte</string>
 
     <!-- Settings - Sandbox Management -->
     <string name="sandbox_mgmt_title">Gestion du bac à sable</string>

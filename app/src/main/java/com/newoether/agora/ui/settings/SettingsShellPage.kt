@@ -27,6 +27,12 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import com.newoether.agora.R
 import com.newoether.agora.data.ShellDeviceConfig
+import com.newoether.agora.data.SSH_AUTH_PASSWORD
+import com.newoether.agora.data.SSH_AUTH_PRIVATE_KEY
+import com.newoether.agora.util.validateSshPrivateKey
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.newoether.agora.data.isShellDeviceNameAvailable
 import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
 import com.newoether.agora.viewmodel.ChatViewModel
@@ -263,7 +269,9 @@ private fun DeviceEditor(
     var sshHostInput by remember(device.id) { mutableStateOf(device.sshHost) }
     var sshPortInput by remember(device.id) { mutableStateOf(device.sshPort.toString()) }
     var sshUserInput by remember(device.id) { mutableStateOf(device.sshUser) }
-    var sshPwInput by remember(device.id) { mutableStateOf(device.sshPassword) }
+    var sshAuthInput by remember(device.id) { mutableStateOf(device) }
+    var importingKey by remember(device.id) { mutableStateOf(false) }
+    var authError by remember(device.id) { mutableStateOf<Int?>(null) }
     var sshHostKeyInput by remember(device.id) { mutableStateOf(device.sshHostKey) }
     val nameFocusRequester = remember { FocusRequester() }
     val urlFocusRequester = remember { FocusRequester() }
@@ -272,12 +280,15 @@ private fun DeviceEditor(
     // Captured (key, fingerprint) awaiting the user's trust decision.
     var pendingVerify by remember(device.id) { mutableStateOf<Pair<String, String>?>(null) }
     var verifyError by remember(device.id) { mutableStateOf<String?>(null) }
+    var verifiedDraft by remember(device.id) { mutableStateOf<ShellDeviceConfig?>(null) }
 
     LaunchedEffect(device) {
         nameInput = device.name; descInput = device.description; typeInput = device.type
         urlInput = device.serverUrl; keyInput = device.apiKey
         sshHostInput = device.sshHost; sshPortInput = device.sshPort.toString()
-        sshUserInput = device.sshUser; sshPwInput = device.sshPassword
+        sshUserInput = device.sshUser
+        sshAuthInput = device
+        authError = null
         sshHostKeyInput = device.sshHostKey
     }
 
@@ -294,6 +305,13 @@ private fun DeviceEditor(
         }
     }
 
+    fun sshDraft() = sshAuthInput.copy(
+        sshHost = sshHostInput.trim(),
+        sshPort = sshPortInput.toIntOrNull() ?: 22,
+        sshUser = sshUserInput.trim().ifBlank { "root" },
+        sshHostKey = sshHostKeyInput,
+        type = typeInput,
+    )
     Column {
         SettingsItem(
             headlineContent = {
@@ -354,7 +372,20 @@ private fun DeviceEditor(
                         expanded = typeMenuExpanded,
                         onDismissRequest = { typeMenuExpanded = false }
                     ) {
-                        AgoraDropdownMenuItem(text = { Text("Conch") }, onClick = { typeInput = "conch"; typeMenuExpanded = false }, leadingIcon = { Icon(Icons.Default.Cable, null) })
+                        AgoraDropdownMenuItem(text = { Text("Conch") }, onClick = {
+                            typeInput = "conch"
+                            typeMenuExpanded = false
+                            sshHostInput = ""
+                            sshPortInput = "22"
+                            sshUserInput = "root"
+                            sshHostKeyInput = ""
+                            sshAuthInput = device.copy(
+                                sshAuthMode = SSH_AUTH_PASSWORD, sshPassword = "",
+                                sshPrivateKey = "", sshPrivateKeyName = "", sshKeyPassphrase = "",
+                            )
+                            authError = null
+                            pendingVerify = null
+                        }, leadingIcon = { Icon(Icons.Default.Cable, null) })
                         AgoraDropdownMenuItem(text = { Text("SSH") }, onClick = { typeInput = "ssh"; typeMenuExpanded = false }, leadingIcon = { Icon(Icons.Default.Cable, null) })
                     }
                 }
@@ -362,7 +393,6 @@ private fun DeviceEditor(
 
                 // Conditional fields
                 var keyVisible by rememberSecretVisible()
-                var passwordVisible by rememberSecretVisible()
                 if (typeInput == "conch") {
                     OutlinedTextField(value = urlInput, onValueChange = { urlInput = it }, label = { Text(stringResource(R.string.shell_device_url)) },
                         placeholder = { Text(stringResource(R.string.shell_device_url_hint)) }, leadingIcon = { Icon(Icons.Default.Link, null) },
@@ -387,10 +417,12 @@ private fun DeviceEditor(
                             singleLine = true, shape = RoundedCornerShape(16.dp), modifier = Modifier.weight(0.6f))
                     }
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(value = sshPwInput, onValueChange = { sshPwInput = it }, label = { Text(stringResource(R.string.shell_device_password)) },
-                        leadingIcon = { Icon(Icons.Default.Password, null) }, visualTransformation = secretVisualTransformation(passwordVisible),
-                        trailingIcon = { SecretVisibilityToggle(passwordVisible) { passwordVisible = !passwordVisible } },
-                        singleLine = true, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth())
+                    SettingsSshAuthenticationEditor(
+                        device = sshAuthInput,
+                        onChange = { sshAuthInput = it; authError = null; pendingVerify = null },
+                        onImportingChange = { importingKey = it },
+                        saveError = authError,
+                    )
 
                     // ── Host-key pinning (TOFU) ──
                     Spacer(Modifier.height(10.dp))
@@ -425,19 +457,23 @@ private fun DeviceEditor(
                     OutlinedButton(
                         onClick = {
                             verifyError = null; verifying = true
+                            val request = sshDraft()
                             scope.launch {
-                                val result = viewModel.sshHostKeyVerifier.verify(
-                                    sshHostInput.trim(), sshPortInput.toIntOrNull() ?: 22,
-                                    sshUserInput.trim().ifBlank { "root" }, sshPwInput
-                                )
-                                verifying = false
-                                result.fold(
-                                    onSuccess = { pendingVerify = it },
-                                    onFailure = { verifyError = it.message }
-                                )
+                                try {
+                                    val result = viewModel.sshHostKeyVerifier.verify(request)
+                                    if (request == sshDraft() && typeInput == "ssh") {
+                                        result.fold(
+                                            onSuccess = { verifiedDraft = request; pendingVerify = it },
+                                            onFailure = { verifyError = it.message },
+                                        )
+                                    }
+                                } finally {
+                                    verifying = false
+                                }
                             }
                         },
-                        enabled = !verifying && sshHostInput.isNotBlank(),
+                        enabled = !verifying && !importingKey && sshHostInput.isNotBlank() &&
+                            (sshAuthInput.sshAuthMode != SSH_AUTH_PRIVATE_KEY || sshAuthInput.sshPrivateKey.isNotBlank()),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (verifying) {
@@ -473,10 +509,15 @@ private fun DeviceEditor(
                             name = nameInput.trim(), description = descInput.trim(), type = typeInput,
                             serverUrl = if (typeInput == "conch") urlInput.trim() else "",
                             apiKey = if (typeInput == "conch") keyInput.trim() else "",
+                            conchPublicKey = if (typeInput == "conch") device.conchPublicKey else "",
                             sshHost = if (typeInput == "ssh") sshHostInput.trim() else "",
                             sshPort = sshPortInput.toIntOrNull() ?: 22,
                             sshUser = if (typeInput == "ssh") sshUserInput.trim().ifBlank { "root" } else "root",
-                            sshPassword = if (typeInput == "ssh") sshPwInput else "",
+                            sshAuthMode = if (typeInput == "ssh") sshAuthInput.sshAuthMode else SSH_AUTH_PASSWORD,
+                            sshPassword = if (typeInput == "ssh" && sshAuthInput.sshAuthMode == SSH_AUTH_PASSWORD) sshAuthInput.sshPassword else "",
+                            sshPrivateKey = if (typeInput == "ssh" && sshAuthInput.sshAuthMode == SSH_AUTH_PRIVATE_KEY) sshAuthInput.sshPrivateKey else "",
+                            sshPrivateKeyName = if (typeInput == "ssh" && sshAuthInput.sshAuthMode == SSH_AUTH_PRIVATE_KEY) sshAuthInput.sshPrivateKeyName else "",
+                            sshKeyPassphrase = if (typeInput == "ssh" && sshAuthInput.sshAuthMode == SSH_AUTH_PRIVATE_KEY) sshAuthInput.sshKeyPassphrase else "",
                             sshHostKey = if (typeInput == "ssh") sshHostKeyInput else ""
                         )
                         val onResult: (Boolean) -> Unit = { saved ->
@@ -487,9 +528,25 @@ private fun DeviceEditor(
                                 onSaved(device.id)
                             }
                         }
-                        if (isDraft) viewModel.settings.addShellDevice(updated, onResult)
-                        else viewModel.settings.updateShellDevice(updated, onResult)
-                    }, enabled = nameAvailable && !saving,
+                        scope.launch {
+                            try {
+                                if (updated.type == "ssh" && updated.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
+                                    withContext(Dispatchers.IO) {
+                                        validateSshPrivateKey(updated.sshPrivateKey, updated.sshKeyPassphrase)
+                                    }
+                                }
+                                if (isDraft) viewModel.settings.addShellDevice(updated, onResult)
+                                else viewModel.settings.updateShellDevice(updated, onResult)
+                            } catch (cancelled: CancellationException) {
+                                saving = false
+                                throw cancelled
+                            } catch (error: Exception) {
+                                saving = false
+                                authError = sshPrivateKeyErrorResource(error)
+                            }
+                        }
+                    }, enabled = nameAvailable && !saving && !importingKey &&
+                        (typeInput != "ssh" || sshAuthInput.sshAuthMode != SSH_AUTH_PRIVATE_KEY || sshAuthInput.sshPrivateKey.isNotBlank()),
                         modifier = Modifier.weight(1f)) { Text(stringResource(R.string.save)) }
                 }
             }
@@ -517,7 +574,11 @@ private fun DeviceEditor(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { sshHostKeyInput = key; pendingVerify = null }) {
+                    TextButton(onClick = {
+                        if (verifiedDraft == sshDraft() && typeInput == "ssh") sshHostKeyInput = key
+                        pendingVerify = null
+                        verifiedDraft = null
+                    }) {
                         Text(stringResource(R.string.shell_ssh_trust))
                     }
                 },
