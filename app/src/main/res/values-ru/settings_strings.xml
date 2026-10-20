@@ -503,4 +503,6 @@
     <string name="unsaved_changes_message">Есть несохранённые изменения. Отменить их?</string>
     <string name="unsaved_changes_discard">Отменить</string>
     <string name="unsaved_changes_keep_editing">Продолжить редактирование</string>
+    <string name="shell_authentication">Аутентификация</string>
+    <string name="shell_ssh_host_key">Ключ хоста</string>
 </resources>

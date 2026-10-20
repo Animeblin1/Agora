@@ -503,4 +503,6 @@
     <string name="unsaved_changes_message">لديك تغييرات غير محفوظة. هل تريد تجاهلها؟</string>
     <string name="unsaved_changes_discard">تجاهل</string>
     <string name="unsaved_changes_keep_editing">متابعة التعديل</string>
+    <string name="shell_authentication">المصادقة</string>
+    <string name="shell_ssh_host_key">مفتاح المضيف</string>
 </resources>

@@ -503,4 +503,6 @@
     <string name="unsaved_changes_message">Có thay đổi chưa lưu. Hủy bỏ chúng?</string>
     <string name="unsaved_changes_discard">Hủy bỏ</string>
     <string name="unsaved_changes_keep_editing">Tiếp tục chỉnh sửa</string>
+    <string name="shell_authentication">Xác thực</string>
+    <string name="shell_ssh_host_key">Khóa máy chủ</string>
 </resources>

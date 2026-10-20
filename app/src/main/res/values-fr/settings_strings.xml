@@ -503,4 +503,6 @@
     <string name="unsaved_changes_message">Certaines modifications ne sont pas enregistrées. Les abandonner ?</string>
     <string name="unsaved_changes_discard">Abandonner</string>
     <string name="unsaved_changes_keep_editing">Continuer la modification</string>
+    <string name="shell_authentication">Authentification</string>
+    <string name="shell_ssh_host_key">Clé de l\'hôte</string>
 </resources>

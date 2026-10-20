@@ -230,20 +230,41 @@ and WebUI share this contract.
   partial values. Save trims the name and URL and returns to the existing Providers list.
 - Provider documentation uses the shared FAB, visibility setting and bottom clearance.
 
-## Shell device names
+## Shell device list and editors
 
+- Shell devices use the existing guarded Settings list/detail navigation. Root rows show the
+  persisted name, type and connection summary with an actual right-side Edit IconButton. The whole
+  row opens the same full-page editor; no inline expansion or passive disclosure glyph is present.
+- Add/Edit uses the shared collapsing scaffold and named General (name/description), Connection,
+  Authentication and SSH Host Key groups, with the existing Settings icon/field presentation.
+  Keep the root list's scroll and collapsing-title position through the existing scroll owner.
+- The detail editor owns the shared `shell.md` documentation FAB and its conditional 80 dp bottom
+  clearance. The root list has neither. Sandbox management keeps its existing `sandbox.md` entry.
+- Save is explicit. Successful persistence animates back to the list through the shared transition
+  owner; failure retains the draft. Back uses the shared unsaved-changes guard and never saves.
+  Save's icon/progress uses one fixed 48 dp slot and a 250 ms Crossfade. Private-key validation
+  stays on IO, while encrypted storage and atomic name admission keep their existing owner.
+- Each entry captures a fresh immutable device snapshot. Persisted list emissions never reset an
+  open draft or revive a completed editor. Leaving immediately fences save, verification and picker
+  callbacks, including during the retained outgoing animation and re-entry into the same device ID.
+  Late completion from an older save attempt cannot close a newer retry or a different page.
+- Storage exceptions complete through the repository's explicit error callback. They release Saving,
+  keep the draft and show the existing generic save-failed snackbar, without reporting a name conflict.
+  Coroutine cancellation propagates without a false success or error callback.
+- Losing the current category/page identity permanently closes that editor entry and clears its root
+  route, even if a quick two-pane Crossfade returns before disposal. A later open captures a fresh
+  persisted snapshot; the retained outgoing draft and its asynchronous results never regain authority.
 - Shell device names are required and unique after trimming, ignoring case, matching shell-tool
   routing. Editing a device excludes its own stable ID from conflicts. `Local Sandbox` is reserved.
-- The existing inline Add/Save editor retains its layout. A new device remains a local draft until
-  explicit Save succeeds; Back/navigation/field changes never create blank records. Duplicate names
-  use the existing localized name-error presentation and disable Save without changing the draft.
+- A new device remains a local draft until explicit Save succeeds. Duplicate names use the existing
+  localized name-error presentation and disable Save without changing the draft.
 - The persisted decision rechecks the latest list inside one DataStore edit. Concurrent creates or
   renames cannot bypass validation through stale UI snapshots; failed admission preserves all data.
   Import/secret restoration keeps its separate legacy compatibility and identity rules.
 
 ## SSH private-key authentication
 
-- The existing explicit-save inline Shell editor offers Password and Private Key authentication.
+- The explicit-save Shell detail editor offers Password and Private Key authentication.
   The private-key choice replaces the password field with an import action and the selected
   filename, using the shared two-line Settings import/action presentation with a fixed leading
   icon/progress slot and localized 256 KiB import description. An encrypted key additionally

@@ -520,4 +520,6 @@
     <string name="unsaved_changes_message">You have unsaved changes. Discard them?</string>
     <string name="unsaved_changes_discard">Discard</string>
     <string name="unsaved_changes_keep_editing">Keep editing</string>
+    <string name="shell_authentication">Authentication</string>
+    <string name="shell_ssh_host_key">Host Key</string>
 </resources>

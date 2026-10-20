@@ -508,4 +508,6 @@
     <string name="unsaved_changes_message">有未儲存的變更，確定要捨棄嗎？</string>
     <string name="unsaved_changes_discard">捨棄</string>
     <string name="unsaved_changes_keep_editing">繼續編輯</string>
+    <string name="shell_authentication">身分驗證</string>
+    <string name="shell_ssh_host_key">主機金鑰</string>
 </resources>

@@ -75,6 +75,8 @@ class SettingsResourceContractTest {
     fun sshKeyAndRemoteEmptyStateCopyIsLocalizedWithExpectedEnglishCasing() {
         val resources = locateResourceDirectory()
         val expected = linkedMapOf(
+            "shell_authentication" to "Authentication",
+            "shell_ssh_host_key" to "Host Key",
             "shell_ssh_auth_method" to "Authentication method",
             "shell_ssh_auth_private_key" to "Private Key",
             "shell_ssh_import_private_key" to "Import Private Key",

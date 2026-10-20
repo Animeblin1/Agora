@@ -503,4 +503,6 @@
     <string name="unsaved_changes_message">Há alterações não salvas. Descartá-las?</string>
     <string name="unsaved_changes_discard">Descartar</string>
     <string name="unsaved_changes_keep_editing">Continuar editando</string>
+    <string name="shell_authentication">Autenticação</string>
+    <string name="shell_ssh_host_key">Chave do host</string>
 </resources>

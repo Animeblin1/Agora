@@ -503,4 +503,6 @@
     <string name="unsaved_changes_message">Es gibt ungespeicherte Änderungen. Verwerfen?</string>
     <string name="unsaved_changes_discard">Verwerfen</string>
     <string name="unsaved_changes_keep_editing">Weiter bearbeiten</string>
+    <string name="shell_authentication">Authentifizierung</string>
+    <string name="shell_ssh_host_key">Hostschlüssel</string>
 </resources>

@@ -706,10 +706,10 @@ class SettingsRepository(
     fun setSubagentMaxConcurrent(value: Int) = scope.launch { settingsManager.saveSubagentMaxConcurrent(value) }
     fun setSubagentToolsEnabled(enabled: Boolean) = scope.launch { settingsManager.saveSubagentToolsEnabled(enabled) }
     fun setSubagentCapsuleDisplayMode(mode: String) = scope.launch { settingsManager.saveSubagentCapsuleDisplayMode(mode) }
-    fun addShellDevice(device: ShellDeviceConfig, onResult: (Boolean) -> Unit = {}) =
-        scope.launch { onResult(settingsManager.shellDeviceStore.add(device)) }
-    fun updateShellDevice(device: ShellDeviceConfig, onResult: (Boolean) -> Unit = {}) =
-        scope.launch { onResult(settingsManager.shellDeviceStore.update(device)) }
+    fun addShellDevice(device: ShellDeviceConfig, onResult: (Boolean) -> Unit = {}, onError: (Exception) -> Unit = { onResult(false) }) =
+        persistShellDevice(device, creating = true, onResult, onError)
+    fun updateShellDevice(device: ShellDeviceConfig, onResult: (Boolean) -> Unit = {}, onError: (Exception) -> Unit = { onResult(false) }) =
+        persistShellDevice(device, creating = false, onResult, onError)
     fun addMcpServer(server: McpServerConfig) =
         scope.launch { settingsManager.saveMcpServers(mcpServers.value + server) }
     fun updateMcpServer(server: McpServerConfig) = scope.launch {

@@ -4,27 +4,28 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.SSH_AUTH_PASSWORD
 import com.newoether.agora.data.SSH_AUTH_PRIVATE_KEY
 import com.newoether.agora.data.ShellDeviceConfig
+import com.newoether.agora.ui.components.AgoraDropdownMenu
 import com.newoether.agora.ui.components.AgoraDropdownMenuItem
-import com.newoether.agora.ui.components.AgoraExposedDropdownMenu
-import com.newoether.agora.ui.components.SecretVisibilityToggle
-import com.newoether.agora.ui.components.rememberSecretVisible
-import com.newoether.agora.ui.components.secretVisualTransformation
 import com.newoether.agora.util.SshPrivateKeyException
 import com.newoether.agora.util.readSshPrivateKey
 import com.newoether.agora.util.validateSshPrivateKey
@@ -33,153 +34,179 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Owns the SAF import and authentication fields of the existing explicit-save device draft. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** SAF results and validation belong only to this active explicit-save draft. */
 @Composable
 internal fun SettingsSshAuthenticationEditor(
     device: ShellDeviceConfig,
     onChange: (ShellDeviceConfig) -> Unit,
     onImportingChange: (Boolean) -> Unit,
     @StringRes saveError: Int?,
+    isCurrent: () -> Boolean,
+    enabled: Boolean = true,
 ) {
     val resolver = LocalContext.current.contentResolver
     val scope = rememberCoroutineScope()
     val latestDevice by rememberUpdatedState(device)
     val latestOnChange by rememberUpdatedState(onChange)
+    val latestIsCurrent by rememberUpdatedState(isCurrent)
+    var closed by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
     var importError by remember { mutableStateOf<Int?>(null) }
-    var encrypted by remember(device.sshPrivateKey) { mutableStateOf(false) }
+    var encrypted by remember { mutableStateOf(false) }
     var requestSequence by remember { mutableIntStateOf(0) }
     var pickerSequence by remember { mutableIntStateOf(-1) }
-    var passwordVisible by rememberSecretVisible()
-    var passphraseVisible by rememberSecretVisible()
+    fun acceptsResult() = !closed && latestIsCurrent()
+    fun canEdit() = acceptsResult() && enabled
     LaunchedEffect(device.sshPrivateKey) {
-        encrypted = if (device.sshPrivateKey.isBlank()) false else withContext(Dispatchers.IO) {
-            runCatching { validateSshPrivateKey(device.sshPrivateKey) }.getOrDefault(false)
+        val key = device.sshPrivateKey
+        val result = if (key.isBlank()) false else withContext(Dispatchers.IO) {
+            runCatching { validateSshPrivateKey(key) }.getOrDefault(false)
         }
+        if (acceptsResult() && latestDevice.sshPrivateKey == key) encrypted = result
+    }
+    SideEffect {
+        if (!latestIsCurrent()) closed = true
     }
     DisposableEffect(Unit) {
-        onDispose { onImportingChange(false) }
+        onDispose { closed = true }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null && pickerSequence == requestSequence && latestDevice.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
-            val request = pickerSequence
-            scope.launch {
-                importing = true
-                onImportingChange(true)
-                try {
-                    val (name, imported) = withContext(Dispatchers.IO) {
-                        val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                            ?.use { cursor ->
-                                if (cursor.moveToFirst()) cursor.getString(0)?.take(160) else null
-                            }.orEmpty()
-                        val key = resolver.openInputStream(uri)?.use(::readSshPrivateKey)
-                            ?: error("Private key source is unavailable")
-                        name to key
+        val request = pickerSequence
+        if (acceptsResult() && request == requestSequence && latestDevice.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
+            if (uri == null) {
+                importing = false
+                onImportingChange(false)
+            } else {
+                scope.launch {
+                    try {
+                        val (name, imported) = withContext(Dispatchers.IO) {
+                            val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                                ?.use { cursor ->
+                                    if (cursor.moveToFirst()) cursor.getString(0)?.take(160) else null
+                                }.orEmpty()
+                            val key = resolver.openInputStream(uri)?.use(::readSshPrivateKey)
+                                ?: error("Private key source is unavailable")
+                            name to key
+                        }
+                        if (acceptsResult() && request == requestSequence && latestDevice.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
+                            latestOnChange(latestDevice.copy(
+                                sshPassword = "", sshPrivateKey = imported.first,
+                                sshPrivateKeyName = name, sshKeyPassphrase = "",
+                            ))
+                            encrypted = imported.second
+                            importError = null
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        if (acceptsResult() && request == requestSequence) importError = sshPrivateKeyErrorResource(error)
+                    } finally {
+                        if (acceptsResult() && request == requestSequence) {
+                            importing = false
+                            onImportingChange(false)
+                        }
                     }
-                    if (request == requestSequence && latestDevice.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
-                        latestOnChange(latestDevice.copy(
-                            sshPassword = "",
-                            sshPrivateKey = imported.first,
-                            sshPrivateKeyName = name,
-                            sshKeyPassphrase = "",
-                        ))
-                        encrypted = imported.second
-                        importError = null
-                    }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (error: Exception) {
-                    if (request == requestSequence) importError = sshPrivateKeyErrorResource(error)
-                } finally {
-                    importing = false
-                    onImportingChange(false)
                 }
             }
         }
     }
-    ExposedDropdownMenuBox(expanded = menuExpanded, onExpandedChange = { menuExpanded = it }) {
-        OutlinedTextField(
-            value = stringResource(if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
-                R.string.shell_ssh_auth_private_key
-            } else R.string.shell_device_password),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(R.string.shell_ssh_auth_method)) },
-            leadingIcon = { Icon(Icons.Default.Key, null) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(menuExpanded) },
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.menuAnchor().fillMaxWidth(),
-        )
-        AgoraExposedDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            listOf(SSH_AUTH_PASSWORD, SSH_AUTH_PRIVATE_KEY).forEach { mode ->
-                AgoraDropdownMenuItem(
-                    text = { Text(stringResource(if (mode == SSH_AUTH_PRIVATE_KEY) {
+    SettingsGroup(title = stringResource(R.string.shell_authentication), items = buildList {
+        add {
+            SettingsItem(
+                headlineContent = { Text(stringResource(R.string.shell_ssh_auth_method)) },
+                supportingContent = {
+                    Text(stringResource(if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
                         R.string.shell_ssh_auth_private_key
-                    } else R.string.shell_device_password)) },
-                    onClick = {
-                        menuExpanded = false
-                        if (mode != device.sshAuthMode) {
-                            requestSequence++
-                            importError = null
-                            onChange(device.copy(
-                                sshAuthMode = mode,
-                                sshPassword = "",
-                                sshPrivateKey = "",
-                                sshPrivateKeyName = "",
-                                sshKeyPassphrase = "",
-                            ))
+                    } else R.string.shell_device_password))
+                },
+                leadingContent = { Icon(Icons.Default.Key, null, tint = MaterialTheme.colorScheme.primary) },
+                trailingContent = {
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }, enabled = canEdit() && !importing) {
+                            Icon(Icons.Default.Edit, stringResource(R.string.edit))
                         }
-                    },
-                    leadingIcon = { Icon(if (mode == SSH_AUTH_PRIVATE_KEY) Icons.Default.Key else Icons.Default.Password, null) },
-                )
-            }
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
-        ModelImportItem(
-            title = device.sshPrivateKeyName.ifBlank { stringResource(R.string.shell_ssh_import_private_key) },
-            description = stringResource(R.string.shell_ssh_private_key_desc),
-            icon = Icons.Default.UploadFile,
-            importing = importing,
-            onClick = {
-                requestSequence++
-                pickerSequence = requestSequence
-                picker.launch(arrayOf("*/*"))
-            },
-        )
-        if (encrypted) {
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = device.sshKeyPassphrase,
-                onValueChange = { onChange(device.copy(sshKeyPassphrase = it)) },
-                label = { Text(stringResource(R.string.shell_ssh_private_key_passphrase)) },
-                leadingIcon = { Icon(Icons.Default.Password, null) },
-                visualTransformation = secretVisualTransformation(passphraseVisible),
-                trailingIcon = { SecretVisibilityToggle(passphraseVisible) { passphraseVisible = !passphraseVisible } },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
+                        AgoraDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            listOf(SSH_AUTH_PASSWORD, SSH_AUTH_PRIVATE_KEY).forEach { mode ->
+                                AgoraDropdownMenuItem(
+                                    text = { Text(stringResource(if (mode == SSH_AUTH_PRIVATE_KEY) {
+                                        R.string.shell_ssh_auth_private_key
+                                    } else R.string.shell_device_password)) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        if (canEdit() && !importing && mode != device.sshAuthMode) {
+                                            requestSequence++
+                                            importError = null
+                                            encrypted = false
+                                            onChange(device.copy(
+                                                sshAuthMode = mode, sshPassword = "", sshPrivateKey = "",
+                                                sshPrivateKeyName = "", sshKeyPassphrase = "",
+                                            ))
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(if (mode == SSH_AUTH_PRIVATE_KEY) Icons.Default.Key else Icons.Default.Password, null)
+                                    },
+                                    trailingIcon = if (device.sshAuthMode == mode) ({ Icon(Icons.Default.Check, null) }) else null,
+                                )
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.clickable(enabled = canEdit() && !importing) { menuExpanded = true },
             )
         }
-    } else {
-        OutlinedTextField(
-            value = device.sshPassword,
-            onValueChange = { onChange(device.copy(sshPassword = it)) },
-            label = { Text(stringResource(R.string.shell_device_password)) },
-            leadingIcon = { Icon(Icons.Default.Password, null) },
-            visualTransformation = secretVisualTransformation(passwordVisible),
-            trailingIcon = { SecretVisibilityToggle(passwordVisible) { passwordVisible = !passwordVisible } },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-    (importError ?: saveError)?.let {
-        Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-    }
+        if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
+            add {
+                ModelImportItem(
+                    title = device.sshPrivateKeyName.ifBlank { stringResource(R.string.shell_ssh_import_private_key) },
+                    description = stringResource(R.string.shell_ssh_private_key_desc),
+                    icon = Icons.Default.UploadFile,
+                    importing = importing,
+                    enabled = canEdit(),
+                    onClick = {
+                        if (canEdit() && !importing) {
+                            requestSequence++
+                            pickerSequence = requestSequence
+                            importing = true
+                            onImportingChange(true)
+                            picker.launch(arrayOf("*/*"))
+                        }
+                    },
+                )
+            }
+            if (encrypted) {
+                add {
+                    SettingsIconContent(Icons.Default.Password) {
+                        McpLabeledField(
+                            label = stringResource(R.string.shell_ssh_private_key_passphrase),
+                            value = device.sshKeyPassphrase,
+                            onValueChange = { if (canEdit()) onChange(device.copy(sshKeyPassphrase = it)) },
+                            password = true,
+                        )
+                    }
+                }
+            }
+        } else {
+            add {
+                SettingsIconContent(Icons.Default.Password) {
+                    McpLabeledField(
+                        label = stringResource(R.string.shell_device_password),
+                        value = device.sshPassword,
+                        onValueChange = { if (canEdit()) onChange(device.copy(sshPassword = it)) },
+                        password = true,
+                    )
+                }
+            }
+        }
+        (importError ?: saveError)?.let { error ->
+            add {
+                SettingsIconContent(Icons.Default.Key) {
+                    Text(stringResource(error), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    })
 }
 
 @StringRes
