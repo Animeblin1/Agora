@@ -887,8 +887,9 @@ feature have no label. All user messages carrying Task, Loop, Ask User or Subage
 are read-only: their existing long-press Edit item remains visible but disabled, and canonical edit
 admission rejects them. Ordinary unmarked typed messages retain the existing edit behavior.
 Subagent completion receipts use a compact bubble showing only the child name and localized status.
-Native and WebUI use surfaceContainerHigh behind an onSurface SemiBold name and an
-onSurfaceVariant Medium status. Keep the existing bubble shape, font sizes, line heights,
+Native and WebUI use the ordinary user bubble's primaryContainer background and paired
+onPrimaryContainer text for both the SemiBold name and Medium status. These roles follow the
+current light/dark/dynamic theme. Keep the existing bubble shape, font sizes, line heights,
 spacing and actions; add no status icon.
 Every state, including failed and stopped, hides the result body, failure detail and error code.
 They show no inline result preview or expand action; the existing Select Text sheet exposes the

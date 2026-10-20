@@ -200,10 +200,10 @@ class AutomaticUserMessageBubbleTest {
         val raw = "Worker (8f13ce72-8888-4444-9999-82cd77c4e890) [failed]\nPRIVATE RESULT BODY\n\nLast line."
         var selected = 0
         var deleted = 0
-        var gray = Color.Unspecified
+        var expectedText = Color.Unspecified
         lateinit var clipboard: ClipboardManager
         content {
-            gray = MaterialTheme.colorScheme.onSurfaceVariant
+            expectedText = MaterialTheme.colorScheme.onPrimaryContainer
             clipboard = LocalClipboardManager.current
             bubble(
                 message(completion("failed", "Connection closed", "E_CONNECTION"), raw),
@@ -217,7 +217,7 @@ class AutomaticUserMessageBubbleTest {
         compose.onNodeWithText("8f13ce72", substring = true, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("Connection closed", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("E_CONNECTION", useUnmergedTree = true).assertDoesNotExist()
-        assertEquals(gray, textColor(label(R.string.subagent_failed)))
+        assertEquals(expectedText, textColor(label(R.string.subagent_failed)))
         openMenu()
         compose.onNodeWithText(label(R.string.copy)).performClick()
         compose.runOnIdle { assertEquals(raw, clipboard.getText()?.text) }
@@ -265,12 +265,12 @@ class AutomaticUserMessageBubbleTest {
     }
 
     @Test
-    fun completionTextUsesNeutralHierarchyAndKeepsExistingTypography() {
+    fun completionTextUsesUserBubblePaletteAndKeepsExistingTypography() {
         var expectedName = Color.Unspecified
         var expectedStatus = Color.Unspecified
         content {
-            expectedName = MaterialTheme.colorScheme.onSurface
-            expectedStatus = MaterialTheme.colorScheme.onSurfaceVariant
+            expectedName = MaterialTheme.colorScheme.onPrimaryContainer
+            expectedStatus = MaterialTheme.colorScheme.onPrimaryContainer
             bubble(message(completion()))
         }
         fun style(text: String): androidx.compose.ui.text.TextStyle {

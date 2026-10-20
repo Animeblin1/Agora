@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,13 +68,12 @@ internal fun MessageSourceLabel(source: MessageSource, modifier: Modifier = Modi
 
 /** Completion metadata is the only timeline body; the original result stays in Select Text. */
 @Composable
-internal fun SubagentResultSummary(result: MessageSource.SubagentResult) {
-    val subduedColor = MaterialTheme.colorScheme.onSurfaceVariant
+internal fun SubagentResultSummary(result: MessageSource.SubagentResult, textColor: Color) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             result.name.ifBlank { stringResource(R.string.message_source_subagent) },
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = textColor,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -82,7 +82,7 @@ internal fun SubagentResultSummary(result: MessageSource.SubagentResult) {
             Text(
                 stringResource(statusLabel),
                 style = MaterialTheme.typography.labelMedium,
-                color = subduedColor,
+                color = textColor,
                 fontWeight = FontWeight.Medium,
             )
         }

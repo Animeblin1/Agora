@@ -2205,13 +2205,12 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .ask-user-answer + .ask-user-question { margin-top: 24.2px; }
 .ask-user-answer.unanswered { color: color-mix(in srgb, currentColor 60%, transparent); }
 /* Completion receipts keep the existing bubble and match the native compact text tiers. */
-.user-bubble.subagent-result-bubble { background: var(--md-surface-container-high); }
 .subagent-result { display: flex; flex-direction: column; gap: 4px; }
 .subagent-result-name {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
-.subagent-result-name { color: var(--md-on-surface); font-size: 14px; line-height: 20px; font-weight: 600; }
-.subagent-result-status { color: var(--md-on-surface-variant); font-size: 12px; line-height: 16px; font-weight: 500; }
+.subagent-result-name { color: inherit; font-size: 14px; line-height: 20px; font-weight: 600; }
+.subagent-result-status { color: inherit; font-size: 12px; line-height: 16px; font-weight: 500; }
 /* AssistantMessageContent's action Box: 44 dp with 12 dp of top padding and 2 dp between icons. */
 .message-action-slot { position: relative; min-height: 44px; }
 .message-information { opacity: 1; transition: opacity 320ms linear; }
