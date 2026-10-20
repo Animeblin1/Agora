@@ -34,15 +34,15 @@ internal data class StreamTermination(
     val alreadyReportedError: Boolean = false,
     /** Reads stopped because the socket went silent past the read-timeout budget. */
     val timedOut: Boolean = false,
-    /** Whether an in-stream API error is safe to replay. Explicit provider terminal failures are not. */
+    /** Protocol/read failures may replay before output; API errors require shared classification. */
     val retryableStreamError: Boolean = true,
 ) {
     val truncatedByTokenCap: Boolean get() = stopReason in TOKEN_CAP_REASONS
 
     /**
      * Replaying is safe only while nothing has been surfaced: retrying after partial output would
-     * duplicate visible content and bill the same completion twice. A stream that produced nothing
-     * is indistinguishable from a dropped connection, so retrying it costs nothing.
+     * duplicate visible content and bill the same completion twice. Before output, only a classified
+     * transient error or an incomplete stream without an API rejection may enter the existing retry.
      *
      * A token-cap stop is never retried — the same request would truncate at the same place.
      */
@@ -50,10 +50,11 @@ internal data class StreamTermination(
         get() = !producedContent &&
             !alreadyReportedError &&
             !truncatedByTokenCap &&
-            (timedOut ||
-                streamError != null &&
-                (retryableStreamError || ProviderRetryPolicy.shouldRetryStreamError(streamError)) ||
-                toolCallInFlight || !sawTerminalMarker)
+            when (val error = streamError) {
+                is GenerationError.Api -> ProviderRetryPolicy.shouldRetryStreamError(error)
+                null -> timedOut || toolCallInFlight || !sawTerminalMarker
+                else -> retryableStreamError || ProviderRetryPolicy.shouldRetryStreamError(error)
+            }
 
     /** Terminal diagnostic to surface, or null when the stream ended cleanly. */
     fun toError(provider: String): GenerationError? = when {
@@ -107,27 +108,42 @@ internal fun Throwable.asRetryableTransportError(): GenerationError? = when (thi
     is javax.net.ssl.SSLException ->
         GenerationError.Network(statusCode = 0, message = localizedMessage ?: "TLS failure")
     is java.net.UnknownHostException -> null
-    else -> matchingFailureMessage(ProviderRetryPolicy::isRetryableUpstreamFailure)?.let { message ->
-        GenerationError.Network(statusCode = 0, message = message)
-    }
+    else -> asRetryableResponseBodyReadError()
+        ?: matchingFailureMessage(ProviderRetryPolicy::isFailedToGenerateOutcome)?.let { message ->
+            GenerationError.Network(statusCode = 0, message = message)
+        }
 }
 
 /** A matching read failure after response headers re-enters the existing pre-output retry gate. */
 internal fun Throwable.asRetryableResponseBodyReadError(): GenerationError? =
-    matchingFailureMessage(ProviderRetryPolicy::isUnreadableServerResponseFailure)?.let { message ->
+    matchingFailureMessage(
+        ProviderRetryPolicy::isUnreadableServerResponseFailure,
+        includePrematureEof = true,
+    )?.let { message ->
         GenerationError.Network(statusCode = 0, message = message)
     }
 
 private fun Throwable.matchingFailureMessage(
     matches: (String?) -> Boolean,
+    includePrematureEof: Boolean = false,
 ): String? {
     val visited = mutableSetOf<Throwable>()
     var failure: Throwable? = this
     var matchedMessage: String? = null
     while (failure != null && visited.add(failure)) {
-        if (failure is java.net.UnknownHostException) return null
-        if (matchedMessage == null && matches(failure.localizedMessage)) {
-            matchedMessage = failure.localizedMessage
+        if (failure is java.net.UnknownHostException ||
+            failure is kotlinx.coroutines.CancellationException
+        ) return null
+        if (matchedMessage == null) {
+            matchedMessage = when {
+                includePrematureEof && failure is java.io.EOFException ->
+                    failure.localizedMessage ?: "Unexpected end of stream (EOFException)"
+                matches(failure.localizedMessage) -> failure.localizedMessage
+                includePrematureEof && failure is java.io.IOException &&
+                    ProviderRetryPolicy.isUnexpectedEndFailure(failure.localizedMessage) ->
+                    failure.localizedMessage
+                else -> null
+            }
         }
         failure = failure.cause
     }
@@ -135,13 +151,13 @@ private fun Throwable.matchingFailureMessage(
 }
 
 /**
- * True for events carrying model output the user can already see. Used to decide whether a replay
- * would duplicate content; usage / retry / error bookkeeping does not count.
+ * True for substantive model output. Formatting-only chunks keep the current pass empty; usage /
+ * retry / error bookkeeping does not count. Tool events and thinking signatures prevent replay.
  */
 internal fun StreamEvent.carriesModelOutput(): Boolean = when (this) {
-    is StreamEvent.TextChunk -> text.isNotEmpty()
+    is StreamEvent.TextChunk -> text.isNotBlank()
     is StreamEvent.CitationUpdate -> false
-    is StreamEvent.ThoughtChunk -> thought.isNotEmpty() || signature != null
+    is StreamEvent.ThoughtChunk -> thought.isNotBlank() || signature != null
     is StreamEvent.HostedToolCallUpdate -> true
     is StreamEvent.ToolCallUpdate -> true
     is StreamEvent.ToolCallRequest -> true
