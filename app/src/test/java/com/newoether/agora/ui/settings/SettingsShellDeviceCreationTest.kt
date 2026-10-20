@@ -107,7 +107,7 @@ class SettingsShellDeviceCreationTest {
                 R.string.shell_add_device, R.string.shell_device_name, R.string.shell_device_desc,
                 R.string.shell_device_url, R.string.shell_device_key, R.string.save, R.string.back,
                 R.string.custom_provider_name_error, R.string.unsaved_changes_discard,
-                R.string.unsaved_changes_keep_editing, R.string.edit, R.string.img_save_failed,
+                R.string.unsaved_changes_keep_editing, R.string.task_section_details, R.string.img_save_failed,
                 R.string.shell_ssh_verify_host_key, R.string.shell_ssh_verify_title,
                 R.string.shell_ssh_import_private_key, R.string.shell_ssh_private_key_read_failed,
             ).associateWith { context.getString(it) }
@@ -162,7 +162,8 @@ class SettingsShellDeviceCreationTest {
     private fun nameError() = compose.onNodeWithText(strings.getValue(R.string.custom_provider_name_error))
     private fun back() = compose.onNodeWithContentDescription(strings.getValue(R.string.back))
     private fun open(name: String) {
-        compose.onNode(hasText(name) and hasClickAction()).performScrollTo().performClick()
+        val id = devices.value.single { it.name == name }.id
+        compose.onNodeWithTag("shell-device-details:$id").performScrollTo().performClick()
         compose.waitForIdle()
         field(R.string.shell_device_name).assertExists()
     }
@@ -296,7 +297,7 @@ class SettingsShellDeviceCreationTest {
     fun editingIgnoresPersistedEchoAndDiscardReentryStartsFromTheLatestSnapshot() {
         val initial = ShellDeviceConfig(id = "existing", name = "Build Host", description = "Original")
         showPage(listOf(initial))
-        compose.onNodeWithContentDescription(strings.getValue(R.string.edit)).performScrollTo().performClick()
+        compose.onNodeWithContentDescription(strings.getValue(R.string.task_section_details)).performScrollTo().performClick()
         compose.waitForIdle()
         replace(R.string.shell_device_name, "  bUiLd HoSt  ")
         replace(R.string.shell_device_desc, "Unsaved change")
@@ -388,10 +389,10 @@ class SettingsShellDeviceCreationTest {
         val existing = (1..20).map { ShellDeviceConfig(id = "$it", name = "Host $it") }
         showPage(existing)
         val rootPath = listOf(false, "devices")
-        compose.onNode(hasText("Host 8") and hasClickAction()).performScrollTo()
+        compose.onNodeWithTag("shell-device-details:8").performScrollTo()
         compose.waitForIdle()
         val expected = retention.scrollState(rootPath)!!.value
-        compose.onNode(hasText("Host 8") and hasClickAction()).performClick()
+        compose.onNodeWithTag("shell-device-details:8").performClick()
         compose.waitForIdle()
         replace(R.string.shell_device_desc, "Saved detail")
         save().performClick()

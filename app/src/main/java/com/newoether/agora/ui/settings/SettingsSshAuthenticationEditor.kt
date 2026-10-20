@@ -4,28 +4,24 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.SSH_AUTH_PASSWORD
 import com.newoether.agora.data.SSH_AUTH_PRIVATE_KEY
 import com.newoether.agora.data.ShellDeviceConfig
-import com.newoether.agora.ui.components.AgoraDropdownMenu
-import com.newoether.agora.ui.components.AgoraDropdownMenuItem
 import com.newoether.agora.util.SshPrivateKeyException
 import com.newoether.agora.util.readSshPrivateKey
 import com.newoether.agora.util.validateSshPrivateKey
@@ -50,7 +46,6 @@ internal fun SettingsSshAuthenticationEditor(
     val latestOnChange by rememberUpdatedState(onChange)
     val latestIsCurrent by rememberUpdatedState(isCurrent)
     var closed by remember { mutableStateOf(false) }
-    var menuExpanded by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
     var importError by remember { mutableStateOf<Int?>(null) }
     var encrypted by remember { mutableStateOf(false) }
@@ -113,48 +108,34 @@ internal fun SettingsSshAuthenticationEditor(
     }
     SettingsGroup(title = stringResource(R.string.shell_authentication), items = buildList {
         add {
-            SettingsItem(
-                headlineContent = { Text(stringResource(R.string.shell_ssh_auth_method)) },
-                supportingContent = {
-                    Text(stringResource(if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
-                        R.string.shell_ssh_auth_private_key
-                    } else R.string.shell_device_password))
-                },
-                leadingContent = { Icon(Icons.Default.Key, null, tint = MaterialTheme.colorScheme.primary) },
-                trailingContent = {
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }, enabled = canEdit() && !importing) {
-                            Icon(Icons.Default.Edit, stringResource(R.string.edit))
+            SettingsIconContent(Icons.Default.Key) {
+                Text(
+                    stringResource(R.string.shell_ssh_auth_method),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(10.dp))
+                PillTabSwitcher(
+                    tabs = listOf(
+                        stringResource(R.string.shell_device_password),
+                        stringResource(R.string.shell_ssh_auth_private_key),
+                    ),
+                    selectedIndex = if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) 1 else 0,
+                    onSelect = { index ->
+                        val mode = if (index == 1) SSH_AUTH_PRIVATE_KEY else SSH_AUTH_PASSWORD
+                        if (canEdit() && !importing && mode != device.sshAuthMode) {
+                            requestSequence++
+                            importError = null
+                            encrypted = false
+                            onChange(device.copy(
+                                sshAuthMode = mode, sshPassword = "", sshPrivateKey = "",
+                                sshPrivateKeyName = "", sshKeyPassphrase = "",
+                            ))
                         }
-                        AgoraDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            listOf(SSH_AUTH_PASSWORD, SSH_AUTH_PRIVATE_KEY).forEach { mode ->
-                                AgoraDropdownMenuItem(
-                                    text = { Text(stringResource(if (mode == SSH_AUTH_PRIVATE_KEY) {
-                                        R.string.shell_ssh_auth_private_key
-                                    } else R.string.shell_device_password)) },
-                                    onClick = {
-                                        menuExpanded = false
-                                        if (canEdit() && !importing && mode != device.sshAuthMode) {
-                                            requestSequence++
-                                            importError = null
-                                            encrypted = false
-                                            onChange(device.copy(
-                                                sshAuthMode = mode, sshPassword = "", sshPrivateKey = "",
-                                                sshPrivateKeyName = "", sshKeyPassphrase = "",
-                                            ))
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        Icon(if (mode == SSH_AUTH_PRIVATE_KEY) Icons.Default.Key else Icons.Default.Password, null)
-                                    },
-                                    trailingIcon = if (device.sshAuthMode == mode) ({ Icon(Icons.Default.Check, null) }) else null,
-                                )
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier.clickable(enabled = canEdit() && !importing) { menuExpanded = true },
-            )
+                    },
+                    allowLabelOverflow = true,
+                )
+            }
         }
         if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) {
             add {

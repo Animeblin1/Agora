@@ -661,7 +661,11 @@ internal fun McpLabeledField(
                 isError = isError,
                 supportingText = supportingText?.let { text -> { Text(text) } },
                 placeholder = placeholder?.let { text -> {
-                    Text(text)
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 } },
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 visualTransformation = if (password) secretVisualTransformation(secretVisible) else VisualTransformation.None,

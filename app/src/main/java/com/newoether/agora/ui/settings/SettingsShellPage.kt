@@ -2,18 +2,16 @@ package com.newoether.agora.ui.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -23,11 +21,17 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.ShellDeviceConfig
+import com.newoether.agora.ui.components.AgoraDropdownMenu
+import com.newoether.agora.ui.components.AgoraDropdownMenuItem
 import com.newoether.agora.viewmodel.ChatViewModel
 
 /** A fresh route owns an immutable opening snapshot, independently of persisted list emissions. */
@@ -42,11 +46,15 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val sandboxSharedStorageEnabled by viewModel.settings.sandboxSharedStorageEnabled.collectAsState()
     val showDocFab by viewModel.settings.showDocumentationFab.collectAsState()
     var editorRoute by remember { mutableStateOf<ShellDeviceEditorRoute?>(null) }
+    var deleteTarget by remember { mutableStateOf<ShellDeviceConfig?>(null) }
     var showSandboxMgmt by remember { mutableStateOf(false) }
     var sandboxEntryCount by remember { mutableIntStateOf(0) }
     val pageActive = LocalSettingsScrollRetentionActive.current
     SideEffect {
-        if (!pageActive) editorRoute = null
+        if (!pageActive) {
+            editorRoute = null
+            deleteTarget = null
+        }
     }
     BackHandler(enabled = pageActive && showSandboxMgmt) { showSandboxMgmt = false }
 
@@ -149,8 +157,15 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                         }
                                         shellDevices.forEach { device ->
                                             add {
-                                                ShellDeviceRow(device) {
-                                                    editorRoute = ShellDeviceEditorRoute(device, isNew = false)
+                                                key(device.id) {
+                                                    ShellDeviceRow(
+                                                        device = device,
+                                                        active = pageActive && editorRoute == null && !showSandboxMgmt,
+                                                        onDetails = {
+                                                            editorRoute = ShellDeviceEditorRoute(device, isNew = false)
+                                                        },
+                                                        onDelete = { deleteTarget = device },
+                                                    )
                                                 }
                                             }
                                         }
@@ -173,28 +188,107 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
             }
         }
     }
+    deleteTarget?.let { target ->
+        if (pageActive && editorRoute == null) {
+            AlertDialog(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                onDismissRequest = { deleteTarget = null },
+                title = { Text(stringResource(R.string.shell_delete_confirm_title), fontWeight = FontWeight.Bold) },
+                text = { Text(stringResource(R.string.shell_delete_confirm_message, target.name)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (pageActive && deleteTarget === target) {
+                                viewModel.settings.removeShellDevice(target.id)
+                                deleteTarget = null
+                            }
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) { Text(stringResource(R.string.delete)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.cancel)) }
+                },
+            )
+        }
+    }
 }
 
 @Composable
-private fun ShellDeviceRow(device: ShellDeviceConfig, onEdit: () -> Unit) {
+private fun ShellDeviceRow(
+    device: ShellDeviceConfig,
+    active: Boolean,
+    onDetails: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuExpanded by remember(device.id) { mutableStateOf(false) }
+    SideEffect { if (!active) menuExpanded = false }
     val type = if (device.type == "ssh") "SSH" else "Conch"
     val connection = if (device.type == "ssh") {
         if (device.sshHost.isBlank()) "" else "${device.sshUser}@${device.sshHost}:${device.sshPort}"
     } else device.serverUrl
-    SettingsItem(
-        headlineContent = { Text(device.name.ifBlank { stringResource(R.string.search_untitled) }) },
-        supportingContent = {
-            Text(listOf(type, connection).filter { it.isNotBlank() }.joinToString(" · "))
-            if (device.description.isNotBlank()) Text(device.description)
-        },
-        leadingContent = { Icon(Icons.Default.Devices, null, tint = MaterialTheme.colorScheme.primary) },
-        trailingContent = {
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, stringResource(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        },
-        modifier = Modifier.clickable(onClick = onEdit),
-    )
+    Box {
+        SettingsItem(
+            headlineContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        device.name.ifBlank { stringResource(R.string.search_untitled) },
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.testTag("shell-device-type:${device.id}"),
+                    ) {
+                        Text(
+                            type,
+                            Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
+            },
+            supportingContent = {
+                if (device.description.isNotBlank()) Text(device.description)
+                if (connection.isNotBlank()) Text(connection)
+            },
+            leadingContent = { Icon(Icons.Default.Devices, null, tint = MaterialTheme.colorScheme.primary) },
+            trailingContent = {
+                IconButton(
+                    onClick = { if (active) { menuExpanded = false; onDetails() } },
+                    enabled = active,
+                    modifier = Modifier.testTag("shell-device-details:${device.id}"),
+                ) {
+                    Icon(Icons.Outlined.Info, stringResource(R.string.task_section_details), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            modifier = Modifier
+                .testTag("shell-device-row:${device.id}")
+                .clickable(enabled = active) { menuExpanded = true },
+            endPadding = 6.dp,
+        )
+        AgoraDropdownMenu(
+            expanded = active && menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 16.dp,
+        ) {
+            AgoraDropdownMenuItem(
+                text = { Text(stringResource(R.string.task_section_details)) },
+                leadingIcon = { Icon(Icons.Outlined.Info, null) },
+                onClick = { if (active) { menuExpanded = false; onDetails() } },
+            )
+            AgoraDropdownMenuItem(
+                text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                onClick = { if (active) { menuExpanded = false; onDelete() } },
+            )
+        }
+    }
 }
 
 @Composable

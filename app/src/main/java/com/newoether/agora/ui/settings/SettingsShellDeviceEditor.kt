@@ -3,7 +3,6 @@ package com.newoether.agora.ui.settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,8 +23,6 @@ import com.newoether.agora.data.SSH_AUTH_PASSWORD
 import com.newoether.agora.data.SSH_AUTH_PRIVATE_KEY
 import com.newoether.agora.data.ShellDeviceConfig
 import com.newoether.agora.data.isShellDeviceNameAvailable
-import com.newoether.agora.ui.components.AgoraDropdownMenu
-import com.newoether.agora.ui.components.AgoraDropdownMenuItem
 import com.newoether.agora.ui.components.rememberUnsavedChangesBack
 import com.newoether.agora.ui.motion.MotionAwareCircularProgressIndicator
 import com.newoether.agora.util.SshClient
@@ -208,9 +205,34 @@ internal fun SettingsShellDeviceEditor(
     ) {
         SettingsGroupColumn {
             SettingsGroup(
-                title = stringResource(R.string.embedding_general),
-                items = listOf(
-                    {
+                title = stringResource(R.string.mcp_connection),
+                items = buildList {
+                    add {
+                        SettingsIconContent(Icons.Default.SwapHoriz) {
+                            Text(
+                                stringResource(R.string.shell_device_type),
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            PillTabSwitcher(
+                                tabs = listOf("Conch", "SSH"),
+                                selectedIndex = if (draft.type == "ssh") 1 else 0,
+                                onSelect = { index ->
+                                    val type = if (index == 1) "ssh" else "conch"
+                                    if (ownsEditor() && !saving && draft.type != type) {
+                                        update(ShellDeviceConfig(
+                                            id = draft.id, name = draft.name,
+                                            description = draft.description, type = type,
+                                        ))
+                                        portInput = "22"
+                                    }
+                                },
+                                allowLabelOverflow = true,
+                            )
+                        }
+                    }
+                    add {
                         SettingsIconContent(Icons.AutoMirrored.Filled.Label) {
                             McpLabeledField(
                                 label = stringResource(R.string.shell_device_name),
@@ -222,8 +244,8 @@ internal fun SettingsShellDeviceEditor(
                                 placeholder = stringResource(R.string.shell_device_name_hint),
                             )
                         }
-                    },
-                    {
+                    }
+                    add {
                         SettingsIconContent(Icons.Default.Description) {
                             McpLabeledField(
                                 label = stringResource(R.string.shell_device_desc),
@@ -233,46 +255,6 @@ internal fun SettingsShellDeviceEditor(
                                 placeholder = stringResource(R.string.shell_device_desc_hint),
                             )
                         }
-                    },
-                ),
-            )
-            SettingsGroup(
-                title = stringResource(R.string.mcp_connection),
-                items = buildList {
-                    add {
-                        var typeMenu by remember { mutableStateOf(false) }
-                        SettingsItem(
-                            headlineContent = { Text(stringResource(R.string.shell_device_type)) },
-                            supportingContent = { Text(if (draft.type == "ssh") "SSH" else "Conch") },
-                            leadingContent = { Icon(Icons.Default.Cable, null, tint = MaterialTheme.colorScheme.primary) },
-                            trailingContent = {
-                                Box {
-                                    IconButton(onClick = { typeMenu = true }, enabled = !saving && ownsEditor()) {
-                                        Icon(Icons.Default.Edit, stringResource(R.string.edit))
-                                    }
-                                    AgoraDropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
-                                        listOf("conch", "ssh").forEach { type ->
-                                            AgoraDropdownMenuItem(
-                                                text = { Text(if (type == "ssh") "SSH" else "Conch") },
-                                                leadingIcon = { Icon(Icons.Default.Cable, null) },
-                                                trailingIcon = if (draft.type == type) ({ Icon(Icons.Default.Check, null) }) else null,
-                                                onClick = {
-                                                    typeMenu = false
-                                                    if (ownsEditor() && !saving && type != draft.type) {
-                                                        update(ShellDeviceConfig(
-                                                            id = draft.id, name = draft.name,
-                                                            description = draft.description, type = type,
-                                                        ))
-                                                        if (ownsEditor() && !saving) portInput = "22"
-                                                    }
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            },
-                            modifier = Modifier.clickable(enabled = !saving && ownsEditor()) { typeMenu = true },
-                        )
                     }
                     if (draft.type == "ssh") {
                         add {
