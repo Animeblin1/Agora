@@ -57,7 +57,12 @@ function fixture(specs, { width = 240, scroll = 0, reduced = false, rtl = false,
         return { left, right: left + this.offsetWidth };
       },
     }, { naturalWidth: itemWidth, offsetHeight: height, firstElementChild: { style: {}, offsetHeight: height,
-      getBoundingClientRect() { return nodes.find(node => node.firstElementChild === this).getBoundingClientRect(); } } }));
+      offsetWidth: itemWidth,
+      getBoundingClientRect() {
+        const owner = nodes.find(node => node.firstElementChild === this);
+        const box = owner.getBoundingClientRect();
+        return { ...box, width: owner.offsetWidth };
+      } } }));
   }
   setItems(specs);
   nodes.forEach(node => {
@@ -152,6 +157,27 @@ test("expanded interaction centers through the existing reveal and restores scro
     assert.equal(f.viewport.scrollLeft, rtl ? -70 : 70);
     f.dispose();
     assert.equal(f.viewport.dataset.toolsExpanded, undefined);
+  }
+});
+
+test("expanded paint clips only neighboring visuals and restores them on unlock or disposal", () => {
+  for (const rtl of [false, true]) {
+    const f = fixture([["interaction", 216, 160], ["todo", 120]], { rtl });
+    const editor = f.nodes()[0].firstElementChild, visual = f.nodes()[1].firstElementChild;
+    let stored = "", writes = 0;
+    Object.defineProperty(visual.style, "clipPath", { get: () => stored, set(value) { stored = value; writes++; } });
+    f.expand(); f.step(16); f.step(350);
+    assert.match(stored, /^inset\(-100% /);
+    assert.equal(editor.style.clipPath, undefined, "the rounded editor and its shadow are not clipped");
+    const count = writes;
+    f.resize(); f.step(16); f.resize(); f.step(16);
+    assert.equal(writes, count, "unchanged bounds must not rewrite clip styles");
+    f.expand(false); f.step(16);
+    assert.equal(stored, "");
+    f.expand(); f.step(16); f.step(350);
+    assert.notEqual(stored, "");
+    f.dispose();
+    assert.equal(stored, "");
   }
 });
 

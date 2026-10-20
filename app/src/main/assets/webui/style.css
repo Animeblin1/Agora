@@ -1526,14 +1526,14 @@ ul.md-list > li > .md-marker { padding-bottom: 4px; }
 .interaction-capsule > svg:last-child { margin-left: 2px; color: var(--md-on-surface-variant); }
 .interaction-card:not(.folded) .interaction-capsule { pointer-events: none; }
 /* CardHeader: 18 dp primary icon, 8 dp, titleSmall bold; 40 dp end padding clears the minimize button. */
-.interaction-header { display: flex; align-items: center; gap: 8px; min-height: 20px; padding-right: 40px; font-size: 14px; line-height: 20px; }
+.interaction-header { display: flex; align-items: center; gap: 8px; min-height: 20px; padding-inline-end: 40px; font-size: 14px; line-height: 20px; }
 .interaction-header strong { font-weight: 700; letter-spacing: 0.1px; }
 .interaction-header > svg, .interaction-capsule > svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
 .interaction-header > svg { color: var(--md-primary); }
 .interaction-server { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--md-on-surface-variant); }
-.interaction-position { margin-left: auto; white-space: nowrap; color: var(--md-on-surface-variant); font-size: 12px; line-height: 16px; font-weight: 500; }
+.interaction-position { margin-inline-start: auto; white-space: nowrap; color: var(--md-on-surface-variant); font-size: 12px; line-height: 16px; font-weight: 500; }
 /* IconButton (48 dp) at the content box's top end with 4 dp end padding; 20 dp collapse_content. */
-.interaction-header .interaction-minimize { position: absolute; top: 0; right: 4px; width: 48px; height: 48px; flex: none; color: var(--md-on-surface-variant); }
+.interaction-header .interaction-minimize { position: absolute; top: 0; inset-inline-end: 4px; margin: 0; width: 48px; height: 48px; flex: none; color: var(--md-on-surface-variant); }
 .interaction-header .interaction-minimize svg { width: 20px; height: 20px; }
 .interaction-pages { position: relative; overflow: hidden; margin-top: 10px; }
 .interaction-body { width: 100%; box-sizing: border-box; }

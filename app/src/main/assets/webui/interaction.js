@@ -182,7 +182,8 @@ export function InteractionBar({ state, enter = true }) {
     if (state.fold?.owner !== shown.owner) state.fold = { owner: shown.owner, progress: target, frame: 0 };
     const fold = state.fold, from = fold.progress, start = performance.now();
     const draw = () => {
-      const width = Math.max(0, host.current.closest(".tools-scroll").clientWidth - 16);
+      // Match the shared row's two 12px insets so the slot and rounded card occupy one width.
+      const width = Math.max(0, host.current.closest(".tools-scroll").clientWidth - 24);
       content.style.width = `${width}px`;
       container.style.width = `${width + (Math.min(label.offsetWidth, width) - width) * fold.progress}px`;
       container.style.height = `${content.offsetHeight + (48 - content.offsetHeight) * fold.progress}px`;

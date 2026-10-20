@@ -1749,7 +1749,13 @@ row overflows. Its input interrupts the existing shared-row scroll motion throug
 One horizontal scrolling owner covers User Interaction, Todo and all Subagents,
 in that order. Expanding Ask User animates the card to the viewport center through the existing
 reveal scroll and card-morph progress; the expanded card disables horizontal user scrolling.
-Both edge masks fade to zero through their existing 200ms alpha owners. Collapsing immediately
+Both edge masks fade to zero through their existing 200ms alpha owners. While that expanded
+lock is active, WebUI clips only neighboring Todo/Subagent visual layers and their hit regions
+to the viewport's inner bounds, 12px from each physical side. This prevents an adjacent capsule
+from painting into the outer inset. The editor's physical paint/hit bounds, rounded clip and
+shadow stay unchanged, as do capsule layout width, 8px gaps and the sole scroll/motion owner.
+The current measurement/scroll/entrance callbacks update this clip only when its bounds change;
+unlock, removal and disposal restore the original visual-layer clip. Collapsing immediately
 restores horizontal input and the masks again reflect overflow through the same alpha owners.
 Wide viewports center the editor independently of following capsules; no second scroll or spatial
 animation owner participates. Expanded requests also center on same-family navigation even without
@@ -1809,7 +1815,10 @@ without a no-content fade; a later live arrival retains its ordinary item animat
 replays the shared row entrance. A data-ready bit alone cannot release a partial row. Todo measurement readiness
 belongs to the rendered conversation owner; a same-family switch cannot reuse the outgoing Todo's
 ready width to admit the incoming capsule. Loaded-empty projections require
-no capsule node and still release the same existing entry barrier.
+no capsule node and still release the same existing entry barrier. Finishing the shared reveal or
+placement motion rechecks this barrier after releasing its motion state, so an initially nonempty
+Interaction deck never waits for an unrelated later mutation to become visible. The shared entrance
+settles an expanded editor's center against its final unscaled geometry when its scale completes.
 Request drafts, folded/page state, same-owner insertion/removal motion, the sole scroller,
 and current height/inset ownership are unchanged. Todo/Subagent capsules retain their natural settled content width,
 rounded outline and text layout throughout insertion/removal; animated occupied width must not

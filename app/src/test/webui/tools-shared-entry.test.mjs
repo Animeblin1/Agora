@@ -74,6 +74,34 @@ test("opening remains hidden until data, destination geometry and every child fa
   assert.equal(f.track.style.scale, "");
 });
 
+test("initial interaction reveal completion wakes the shared entrance without another mutation", () => {
+  for (const reduced of [false, true]) {
+    const f = row(reduced), node = f.nodes[0];
+    node.dataset.toolsKey = "interaction";
+    node.dataset.toolsProgress = "1";
+    node.dataset.toolsOpacity = "0";
+    node.firstElementChild.getBoundingClientRect = node.getBoundingClientRect;
+    f.viewport.dataset.toolsRequired = JSON.stringify([["interaction", "owner"]]);
+    f.change(); f.step(); f.step();
+    assert.equal(f.entrances().length, 0);
+    node.dataset.toolsOpacity = "1";
+    node.dataset.toolsReveal = "owner";
+    f.change(); f.step();
+    if (!reduced) {
+      assert.equal(f.entrances().length, 0);
+      f.step(349);
+      assert.equal(f.entrances().length, 0);
+      f.step(1);
+    }
+    assert.equal(f.entrances().length, 1, "finishing reveal must recheck entrance after it clears its own state");
+    f.viewport.dataset.toolsOpening = "false";
+    f.step(180);
+    assert.equal(f.viewport.style.opacity, "1");
+    assert.equal(f.pending(), 0);
+    f.dispose();
+  }
+});
+
 test("Reduced Motion keeps one opacity entrance while snapping scale and clearance", () => {
   const f = row(true);
   f.viewport.dataset.toolsRequired = JSON.stringify([["todo", "owner"]]);

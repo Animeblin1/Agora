@@ -111,13 +111,13 @@ test("Interaction resize uses live viewport geometry before the row publishes it
   for (const width of [382, 832, 382]) {
     viewport.clientWidth = width;
     resize();
-    assert.equal(content.style.width, `${width - 16}px`);
-    assert.equal(container.style.width, `${width - 16}px`);
+    assert.equal(content.style.width, `${width - 24}px`);
+    assert.equal(container.style.width, `${width - 24}px`);
     assert.equal(container.style.height, "189px");
   }
   motion.current.fold.progress = 1;
   resize();
-  assert.equal(content.style.width, "366px");
+  assert.equal(content.style.width, "358px");
   assert.equal(container.style.width, "144px");
   assert.equal(container.style.height, "48px");
   cleanup();

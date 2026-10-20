@@ -48,7 +48,33 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
     return getComputedStyle(viewport).direction === "rtl"
       ? Math.max(-maximum, Math.min(0, target)) : Math.max(0, Math.min(maximum, target));
   };
+  const clippedCapsules = new Map();
+  const paintCapsuleClips = () => {
+    const editor = expanded(), current = new Set();
+    if (editor) {
+      const bounds = viewport.getBoundingClientRect();
+      for (const node of items()) {
+        if (node === editor) continue;
+        const visual = node.firstElementChild, box = visual.getBoundingClientRect();
+        const scale = box.width / visual.offsetWidth || 1;
+        const left = (bounds.left + INSET - box.left) / scale;
+        const right = (box.right - bounds.left - viewport.clientWidth + INSET) / scale;
+        // Clip only neighboring paint and hit testing; the editor keeps its rounded edge and shadow.
+        const clip = `inset(-100% ${right.toFixed(3)}px -100% ${left.toFixed(3)}px)`;
+        current.add(visual);
+        if (!clippedCapsules.has(visual)) clippedCapsules.set(visual, { original: visual.style.clipPath || "", clip: null });
+        const retained = clippedCapsules.get(visual);
+        if (retained.clip !== clip) { visual.style.clipPath = clip; retained.clip = clip; }
+      }
+    }
+    for (const [visual, retained] of clippedCapsules) {
+      if (current.has(visual)) continue;
+      visual.style.clipPath = retained.original;
+      clippedCapsules.delete(visual);
+    }
+  };
   const paintEdges = () => {
+    paintCapsuleClips();
     const maximum = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
     const rtl = getComputedStyle(viewport).direction === "rtl";
     const left = rtl ? maximum + viewport.scrollLeft : viewport.scrollLeft;
@@ -146,11 +172,13 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
       current.progress = tweenProgress(time);
       viewport.style.opacity = String(current.progress);
       track.style.scale = String(reduced ? 1 : .96 + .04 * current.progress);
+      paintCapsuleClips();
       publishInset();
       if (time < 1) current.frame = requestAnimationFrame(tick);
       else {
         entrance = null;
         track.style.scale = "";
+        if (expanded()) viewport.scrollLeft = centeredScroll();
         previous = snapshot();
       }
     }
@@ -277,6 +305,7 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
           travel = false;
           range.style.width = `${track.offsetWidth}px`;
           previous = snapshot();
+          enterTogether();
         }
       }
       advance = tick;
@@ -364,6 +393,7 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
         previous = snapshot();
         travel = false;
         interrupted = false;
+        enterTogether();
       }
     }
     advance = tick;
@@ -441,6 +471,8 @@ export function attachToolsRow(viewport, reduced, onSettled = () => {}) {
     cancelAnimationFrame(queued);
     geometry.disconnect();
     mutations.disconnect();
+    clippedCapsules.forEach((retained, visual) => { visual.style.clipPath = retained.original; });
+    clippedCapsules.clear();
     if (!replacing) {
       clearPlacement();
       range.style.width = "0px";

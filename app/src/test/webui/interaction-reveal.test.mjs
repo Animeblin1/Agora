@@ -36,7 +36,7 @@ function harness(withRow = false) {
       } };
     track = { style: {}, lastElementChild: range,
       get children() { return [nodes.get("interaction-host tools-item"), neighbor, range]; },
-      get offsetWidth() { return Math.max(384, nodes.get("interaction-host tools-item").offsetWidth + 128); } };
+      get offsetWidth() { return Math.max(376, nodes.get("interaction-host tools-item").offsetWidth + 128); } };
     viewport.firstElementChild = track;
   }
   function node() {
@@ -62,7 +62,7 @@ function harness(withRow = false) {
           Object.defineProperties(dom, {
             offsetWidth: { configurable: true, get() {
               if (key === "interaction-host tools-item") return nodes.get("interaction-card").offsetWidth;
-              return parseFloat(this.style.width) || (key === "interaction-full" ? 384 : 100);
+              return parseFloat(this.style.width) || (key === "interaction-full" ? 376 : 100);
             } },
             offsetHeight: { configurable: true, get() {
               return parseFloat(this.style.height) || (key === "interaction-capsule" ? 48 : 160);
@@ -352,7 +352,7 @@ test("real interaction fold frames reserve card height and neighbor space withou
           `neighbor clears the expanding card at frame ${frame}`);
       }
       if (!reduced) assert.ok(maximumWidth > minimumWidth, "the real fold animation changes geometry");
-      assert.equal(f.card().offsetWidth, folded ? 100 : 384);
+      assert.equal(f.card().offsetWidth, folded ? 100 : 376);
       assert.equal(f.card().offsetHeight, folded ? 48 : 160);
     }
     f.dispose();
