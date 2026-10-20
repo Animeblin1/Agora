@@ -163,7 +163,6 @@ internal class RemoteViewModel(
 
     fun removeDevice(id: String) = deviceDirectory.removeDevice(id)
 
-    private fun checkDevice(id: String) = deviceDirectory.checkDevice(id)
 
     private fun updateDevice(id: String, update: (RemoteDevice) -> RemoteDevice) {
         mutableState.value = state.value.copy(devices = state.value.devices.map { if (it.id == id) update(it) else it })
@@ -256,25 +255,26 @@ internal class RemoteViewModel(
         if (snapshot.isDraft) {
             val id = snapshot.deviceId ?: return
             mutableState.value = snapshot.copy(failure = null)
-            checkDevice(id)
+            deviceDirectory.checkDevice(id)
         } else refresh()
     }
 
     private fun refresh(preserveRuntime: Boolean) {
-        if (!visible || state.value.restoring || state.value.addingDevice || state.value.isDraft) return
+        if (!visible || state.value.restoring || state.value.addingDevice) return
+        if (state.value.isDraft) return deviceDirectory.observeDesktop(state.value.deviceId)
         invalidateReads(preserveRuntime)
         val id = state.value.deviceId
         if (id == null) {
-            clients.keys.forEach(::checkDevice)
+            clients.keys.forEach(deviceDirectory::checkDevice)
             return
         }
         val client = clients[id] ?: return
         if (state.value.devices.firstOrNull { it.id == id }?.status != RemoteDeviceStatus.CONNECTED) {
             mutableState.value = state.value.copy(loading = true, failure = null)
-            checkDevice(id)
+            deviceDirectory.checkDevice(id)
             return
         }
-        deviceDirectory.observeDesktop(id.takeIf { state.value.session == null })
+        deviceDirectory.observeDesktop(id)
         val generation = epoch
         val session = state.value.session
         loadModels(id, client)
@@ -311,6 +311,7 @@ internal class RemoteViewModel(
                     if (generation == epoch) {
                         val readFailure = requireNotNull(trace("read_failed", error, notify = false))
                         mutableState.value = state.value.copy(loading = false, runtime = null)
+                        if (remoteErrorCode(error) == "desktop_unavailable") deviceDirectory.desktopUnavailable(id)
                         // A failed native read is not proof that the device is offline.
                         var reachable = false
                         if (session != null && readFailure in setOf(RemoteFailure.NETWORK, RemoteFailure.SERVICE)) {
@@ -332,6 +333,7 @@ internal class RemoteViewModel(
                                 if (generation != epoch) return@launch
                                 updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
                                     desktopStatus = desktop) }
+                                deviceDirectory.observeDesktop(id)
                                 reachable = true
                                 RemoteFailure.SERVICE
                             } catch (cancelled: CancellationException) { throw cancelled }
@@ -418,6 +420,7 @@ internal class RemoteViewModel(
             )
         }
         state.value.deviceId?.let { id -> updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null) } }
+        deviceDirectory.observeDesktop(state.value.deviceId.takeIf { visible })
         state.value.attempts[owner]?.let { attempt -> confirmDelivery(owner, attempt, page.inputReceipts) }
         settleStop(page.runtime)
         page.runtime?.takeIf { it.status in setOf("idle", "active", "ready") || it.completedTurnId != null }?.let { runtime ->
@@ -513,6 +516,7 @@ internal class RemoteViewModel(
             nodes = emptyList(), messageGroups = emptyList(), historyCursor = null, queued = emptyList(), failure = null,
             lastKnownModel = null, composerFocusOwner = "${snapshot.deviceId}/$id",
         )
+        refresh()
     }
 
     fun completeComposerFocus(owner: String) {

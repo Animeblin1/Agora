@@ -20,9 +20,12 @@ internal fun remoteConnectionStatusLabel(status: McpConnectionStatus): Int = whe
     McpConnectionStatus.IDLE, McpConnectionStatus.ERROR -> R.string.remote_offline
 }
 
-/** Chat reachability stays independent of the catalog's native Desktop status. */
-internal fun RemoteState.remoteConnectionStatus(): McpConnectionStatus =
-    (devices.firstOrNull { it.id == deviceId }?.status ?: RemoteDeviceStatus.IDLE).toMcpConnectionStatus()
+/** Display native Desktop availability; gateway failure can only remove readiness. */
+internal fun RemoteState.remoteConnectionStatus(): McpConnectionStatus {
+    val device = devices.firstOrNull { it.id == deviceId } ?: return McpConnectionStatus.IDLE
+    return (if (device.status == RemoteDeviceStatus.CONNECTED) device.desktopStatus else device.status)
+        .toMcpConnectionStatus()
+}
 
 /** Empty guidance never replaces an admitted message, including during read failure or recovery. */
 @StringRes

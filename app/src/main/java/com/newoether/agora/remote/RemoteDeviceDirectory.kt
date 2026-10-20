@@ -148,19 +148,26 @@ internal class RemoteDeviceDirectory(
         }
     }
 
-    /** Only the visible catalog observes native Desktop state; Devices and chats do not poll it. */
+    /** The selected visible Remote page observes native Desktop state through one serial owner. */
     fun observeDesktop(id: String?) {
-        if (observedDevice == id && (id == null || desktopObservation?.isActive == true)) return
+        val admitted = id?.takeIf { requested ->
+            state.value.deviceId == requested && state.value.devices.any {
+                it.id == requested && it.status == RemoteDeviceStatus.CONNECTED
+            }
+        }
+        if (observedDevice == admitted && (admitted == null || desktopObservation?.isActive == true)) return
         desktopObservation?.cancel()
-        observedDevice = id
+        observedDevice = admitted
         val generation = ++observationGeneration
-        val observedId = id ?: return
+        desktopObservation = null
+        val observedId = admitted ?: return
         val client = mutableClients[observedId] ?: return
         desktopObservation = scope.launch {
             while (isActive) {
                 // Initial gateway admission already supplied the first Desktop snapshot.
                 delay(3000)
                 if (checks[observedId]?.isActive == true) continue
+                if (state.value.devices.firstOrNull { it.id == observedId }?.status != RemoteDeviceStatus.CONNECTED) return@launch
                 try {
                     val desktop = checkSlots.withPermit { client.connect() }
                     if (generation != observationGeneration || mutableClients[observedId] !== client) return@launch
@@ -175,21 +182,30 @@ internal class RemoteDeviceDirectory(
         }
     }
 
+    /** New authenticated unavailability supersedes all older status reads on this page. */
+    fun desktopUnavailable(id: String) {
+        if (observedDevice == id) observeDesktop(null)
+        checks.remove(id)?.cancel()
+        updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
+            desktopStatus = RemoteDeviceStatus.ERROR) }
+        observeDesktop(id)
+    }
     fun checkDevice(id: String) {
         val client = mutableClients[id] ?: return
         if (checks[id]?.isActive == true) return
+        if (observedDevice == id) observeDesktop(null)
         updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTING, failure = null,
             desktopStatus = RemoteDeviceStatus.IDLE) }
         checks[id] = scope.launch {
             try {
                 val desktop = checkSlots.withPermit { client.connect() }
-                if (mutableClients[id] !== client) return@launch
+                if (!isActive || mutableClients[id] !== client) return@launch
                 updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
                     desktopStatus = desktop) }
                 if (state.value.deviceId == id) refresh()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                if (mutableClients[id] !== client) return@launch
+                if (!isActive || mutableClients[id] !== client) return@launch
                 val failure = report("check_failed", error)
                 updateDevice(id) { it.copy(status = RemoteDeviceStatus.ERROR, failure = failure,
                     desktopStatus = RemoteDeviceStatus.IDLE) }

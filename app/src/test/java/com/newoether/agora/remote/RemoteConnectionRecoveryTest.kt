@@ -10,7 +10,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -104,7 +103,64 @@ class RemoteConnectionRecoveryTest {
         repeat(2) { advanceTimeBy(3000); runCurrent() }
         assertEquals(RemoteDeviceStatus.CONNECTED, vm.state.value.devices.single().status)
         assertEquals(listOf(RemoteFailure.SERVICE), notices.map { it.failure })
+        coVerify(exactly = 3) { client.connect() }
+        vm.setVisible(false)
+    }
+
+    @Test fun desktopUnavailableReadImmediatelyUpdatesNativeStatusAndSafeRetryPreservesHistoryAndDraft() = runTest(dispatcher) {
+        val disconnect = CompletableDeferred<Unit>()
+        // Native user history avoids Markdown's independent dispatcher in the timed assertions.
+        val message = RemoteMessage("input", "turn", null, "user", "Retained native input", 1)
+        val history = bodyPage(listOf(message), null, emptyList(), page.runtime)
+        var reads = 0
+        every { client.events(any()) } answers { flow {
+            emit(history)
+            if (++reads == 1) {
+                disconnect.await()
+                throw FiloHttpException(502, code = "desktop_unavailable")
+            }
+            awaitCancellation()
+        } }
+        val vm = open()
+        assertEquals(listOf(message.id), vm.state.value.nodes.map { it.id })
+        val notices = notices(vm)
+        val owner = requireNotNull(vm.state.value.owner)
+        vm.editDraft(owner, "Keep the unsent draft")
+        val loaded = vm.state.value
+        assertEquals(RemoteDeviceStatus.CONNECTED, loaded.devices.single().desktopStatus)
+        disconnect.complete(Unit)
+        runCurrent()
+        val failed = vm.state.value
+        assertEquals(RemoteDeviceStatus.CONNECTED, failed.devices.single().status)
+        assertEquals(RemoteDeviceStatus.ERROR, failed.devices.single().desktopStatus)
+        assertNull(failed.devices.single().failure)
+        assertEquals(RemoteFailure.SERVICE, failed.failure)
+        assertEquals(loaded.nodes, failed.nodes)
+        assertEquals(loaded.drafts, failed.drafts)
+        assertEquals(loaded.owner, failed.owner)
+        assertFalse(failed.loading)
+        val notice = notices.single()
+        assertEquals("read_failed", notice.stage)
+        assertEquals("desktop_unavailable", notice.code)
+        assertTrue(notice.canRetryRead)
+        assertTrue(vm.isNoticeCurrent(notice))
         coVerify(exactly = 1) { client.connect() }
+        coVerify(exactly = 1) { client.conversation(session.id, null) }
+        vm.retryNotice(notice)
+        runCurrent()
+        assertEquals(2, reads)
+        assertNull(vm.state.value.failure)
+        assertEquals(loaded.nodes, vm.state.value.nodes)
+        assertEquals(loaded.drafts, vm.state.value.drafts)
+        assertEquals(RemoteDeviceStatus.ERROR, vm.state.value.devices.single().desktopStatus)
+        coVerify(exactly = 1) { client.connect() }
+        advanceTimeBy(3000)
+        runCurrent()
+        assertEquals(RemoteDeviceStatus.CONNECTED, vm.state.value.devices.single().desktopStatus)
+        assertEquals(loaded.drafts, vm.state.value.drafts)
+        coVerify(exactly = 2) { client.connect() }
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()); client.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { client.updateSettings(any(), any()); client.setModel(any(), any()); client.stop(any(), any()) }
         vm.setVisible(false)
     }
 
@@ -203,12 +259,12 @@ class RemoteConnectionRecoveryTest {
 
     @Test fun historyIsReadableWhenStreamFailsButSameOwnersSnapshotIsAvailable() = runTest(dispatcher) {
         every { client.events(any()) } returns flow { throw IOException("stream unavailable") }
-        val message = RemoteMessage("answer", "turn", null, "assistant", "Retained native history", 1)
+        // Native input keeps this fallback status test on the injected dispatcher.
+        val message = RemoteMessage("input", "turn", null, "user", "Retained native input", 1)
         coEvery { client.conversation("session", null) } returns bodyPage(listOf(message), null, emptyList(), page.runtime)
         val vm = open()
-        vm.state.first { it.nodes.isNotEmpty() }
         val notices = notices(vm)
-        assertEquals(listOf("answer"), vm.state.value.nodes.map { it.id })
+        assertEquals(listOf(message.id), vm.state.value.nodes.map { it.id })
         assertEquals(RemoteDeviceStatus.CONNECTED, vm.state.value.devices.single().status)
         assertFalse(vm.state.value.loading)
         assertNull(vm.state.value.runtime)
@@ -216,9 +272,9 @@ class RemoteConnectionRecoveryTest {
         assertFalse(vm.state.value.canEditSettings)
         assertTrue(notices.isEmpty())
         advanceTimeBy(3000); runCurrent()
-        assertEquals(listOf("answer"), vm.state.value.nodes.map { it.id })
+        assertEquals(listOf(message.id), vm.state.value.nodes.map { it.id })
         assertEquals(RemoteFailure.SERVICE, notices.single().failure)
-        coVerify(exactly = 1) { client.connect() }
+        coVerify(exactly = 2) { client.connect() }
         coVerify(exactly = 0) { client.create(any(), any(), any(), any()); client.send(any(), any(), any(), any()) }
         vm.setVisible(false)
     }

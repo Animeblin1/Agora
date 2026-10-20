@@ -426,21 +426,37 @@ internal class RemoteDesktopStatusTest : RemoteViewModelFixture() {
         vm.setVisible(false)
     }
 
-    @Test fun selectingHistoryStopsObservationAndDesktopUnavailableKeepsNativeReadiness() = runTest(dispatcher) {
-        coEvery { client.connect() } returns RemoteDeviceStatus.ERROR
+    @Test fun visibleHistoryObservesDesktopWithoutChangingItsMessagesOrNativeReadiness() = runTest(dispatcher) {
+        // This lifecycle regression retains native input without invoking the Markdown dispatcher.
+        val message = RemoteMessage("input", "turn", null, "user", "Retained native input", 1)
+        coEvery { client.conversation(session.id, null) } returns bodyPage(listOf(message), null, emptyList())
         val vm = openCatalog()
         vm.selectSession(session)
         runCurrent()
-        assertEquals(RemoteDeviceStatus.CONNECTED, vm.state.value.devices.single().status)
-        assertEquals(RemoteDeviceStatus.ERROR, vm.state.value.devices.single().desktopStatus)
-        assertEquals("idle", vm.state.value.runtime?.status)
-        assertTrue(vm.state.value.canChooseModel)
-        assertTrue(vm.state.value.canEditSettings)
-        val before = vm.state.value
-        advanceTimeBy(9000)
-        runCurrent()
-        assertEquals(before, vm.state.value)
+        val admitted = vm.state.value
+        assertEquals(listOf(message.id), admitted.nodes.map { it.id })
+        assertEquals("idle", admitted.runtime?.status)
+        assertTrue(admitted.canChooseModel)
+        assertTrue(admitted.canEditSettings)
         coVerify(exactly = 1) { client.connect() }
+        for (desktop in listOf(RemoteDeviceStatus.IDLE, RemoteDeviceStatus.ERROR, RemoteDeviceStatus.CONNECTING)) {
+            coEvery { client.connect() } returns desktop
+            advanceTimeBy(3000)
+            runCurrent()
+            assertEquals(admitted.copy(devices = admitted.devices.map {
+                it.copy(desktopStatus = desktop)
+            }), vm.state.value)
+        }
+        coEvery { client.connect() } throws IOException("Desktop observation unavailable")
+        advanceTimeBy(3000)
+        runCurrent()
+        assertEquals(admitted.copy(devices = admitted.devices.map {
+            it.copy(desktopStatus = RemoteDeviceStatus.IDLE)
+        }), vm.state.value)
+        coVerify(exactly = 5) { client.connect() }
+        coVerify(exactly = 1) { client.sessions(any()) }
+        coVerify(exactly = 1) { client.conversation(any(), any()) }
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()); client.send(any(), any(), any(), any()) }
         vm.setVisible(false)
     }
 
@@ -456,16 +472,23 @@ internal class RemoteDesktopStatusTest : RemoteViewModelFixture() {
         val history = vm.state.value
         assertEquals(session, history.session)
         assertEquals("idle", history.runtime?.status)
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTING
         stale.complete(RemoteDeviceStatus.ERROR)
         runCurrent()
         assertEquals(history, vm.state.value)
-        advanceTimeBy(9000)
+        advanceTimeBy(2999)
         runCurrent()
         coVerify(exactly = 2) { client.connect() }
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(history.copy(devices = history.devices.map {
+            it.copy(desktopStatus = RemoteDeviceStatus.CONNECTING)
+        }), vm.state.value)
+        coVerify(exactly = 3) { client.connect() }
         vm.setVisible(false)
     }
 
-    @Test fun localDraftStopsObservationAndRetainsItsOwnerTextAndSettings() = runTest(dispatcher) {
+    @Test fun localDraftObservesDesktopWithoutImmediateRequestsOrNativeMutations() = runTest(dispatcher) {
         coEvery { client.models() } returns listOf(RemoteModel("model", "Model", true,
             reasoningEfforts = listOf("low", "high"), defaultReasoningEffort = "low",
             serviceTiers = listOf(RemoteServiceTier("priority", "Priority"))))
@@ -479,19 +502,80 @@ internal class RemoteDesktopStatusTest : RemoteViewModelFixture() {
         assertEquals("high", vm.state.value.selectedEffort)
         assertEquals("priority", vm.state.value.selectedServiceTier)
         val before = vm.state.value
-        advanceTimeBy(9000)
+        vm.newSession()
+        vm.refresh()
         runCurrent()
         assertEquals(before, vm.state.value)
         coVerify(exactly = 1) { client.connect() }
+        coEvery { client.connect() } returns RemoteDeviceStatus.IDLE
+        advanceTimeBy(2999)
+        runCurrent()
+        coVerify(exactly = 1) { client.connect() }
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(before.copy(devices = before.devices.map {
+            it.copy(desktopStatus = RemoteDeviceStatus.IDLE)
+        }), vm.state.value)
+        vm.setVisible(false)
+        advanceTimeBy(9000)
+        runCurrent()
+        coVerify(exactly = 2) { client.connect() }
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
+        vm.setVisible(true)
+        runCurrent()
+        coVerify(exactly = 2) { client.connect() }
+        advanceTimeBy(2999)
+        runCurrent()
+        coVerify(exactly = 2) { client.connect() }
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(before, vm.state.value)
+        coVerify(exactly = 3) { client.connect() }
         coVerify(exactly = 1) { client.sessions(any()) }
+        coVerify(exactly = 1) { client.models() }
+        coVerify(exactly = 0) { client.conversation(any(), any()) }
         coVerify(exactly = 0) { client.create(any(), any(), any(), any()) }
         coVerify(exactly = 0) { client.send(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { client.updateSettings(any(), any()) }
+        coVerify(exactly = 0) { client.updateSettings(any(), any()); client.setModel(any(), any()) }
         vm.setVisible(false)
     }
 
-    private fun TestScope.rejectStaleObservation(fail: Boolean) {
+    @Test fun localDraftObservationCoalescesWithExplicitPendingGatewayCheck() = runTest(dispatcher) {
         val vm = openCatalog()
+        vm.newSession()
+        vm.editDraft(requireNotNull(vm.state.value.owner), "Unsent draft")
+        runCurrent()
+        val pending = CompletableDeferred<RemoteDeviceStatus>(backgroundScope.coroutineContext[Job])
+        coEvery { client.connect() } coAnswers { pending.await() }
+        vm.retryConnection()
+        vm.retryConnection()
+        runCurrent()
+        assertEquals(RemoteDeviceStatus.CONNECTING, vm.state.value.devices.single().status)
+        advanceTimeBy(9000)
+        runCurrent()
+        coVerify(exactly = 2) { client.connect() }
+        pending.complete(RemoteDeviceStatus.IDLE)
+        runCurrent()
+        val reconnected = vm.state.value
+        assertEquals(RemoteDeviceStatus.CONNECTED, reconnected.devices.single().status)
+        assertEquals(RemoteDeviceStatus.IDLE, reconnected.devices.single().desktopStatus)
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
+        advanceTimeBy(3000)
+        runCurrent()
+        assertEquals(reconnected.copy(devices = reconnected.devices.map {
+            it.copy(desktopStatus = RemoteDeviceStatus.CONNECTED)
+        }), vm.state.value)
+        coVerify(exactly = 3) { client.connect() }
+        coVerify(exactly = 1) { client.models(); client.sessions(any()) }
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()); client.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { client.updateSettings(any(), any()); client.setModel(any(), any()) }
+        vm.setVisible(false)
+    }
+
+    private fun TestScope.rejectStaleObservation(fail: Boolean, draft: Boolean? = null) {
+        val vm = openCatalog()
+        if (draft == true) vm.newSession() else if (draft == false) vm.selectSession(session)
+        runCurrent()
         val stale = CompletableDeferred<Result<RemoteDeviceStatus>>(backgroundScope.coroutineContext[Job])
         var staleResumed = false
         coEvery { client.connect() } coAnswers {
@@ -532,13 +616,100 @@ internal class RemoteDesktopStatusTest : RemoteViewModelFixture() {
         rejectStaleObservation(fail = true)
     }
 
-    @Test fun replacingCredentialsAtSameAddressRejectsTheOldClientsLateDesktopResult() = runTest(dispatcher) {
+    @Test fun directlyOpenedSessionObservesDesktopAfterGatewayAdmissionWithoutLoadingTheCatalog() = runTest(dispatcher) {
+        coEvery { connections.load() } returns listOf(RemoteConnection("Computer", address, "token"))
+        coEvery { client.connect() } returns RemoteDeviceStatus.IDLE
+        val vm = RemoteViewModel(connections, projectionDispatcher = dispatcher) { _, _ -> client }
+        backgroundScope.launch(dispatcher, start = CoroutineStart.UNDISPATCHED) {
+            try { awaitCancellation() } finally { vm.setVisible(false) }
+        }
+        runCurrent()
+        vm.selectDevice(address)
+        vm.selectSession(session)
+        vm.setVisible(true)
+        runCurrent()
+        val admitted = vm.state.value
+        assertEquals(session, admitted.session)
+        assertEquals(RemoteDeviceStatus.CONNECTED, admitted.devices.single().status)
+        assertEquals(RemoteDeviceStatus.IDLE, admitted.devices.single().desktopStatus)
+        assertEquals("idle", admitted.runtime?.status)
+        coVerify(exactly = 1) { client.connect() }
+        coVerify(exactly = 0) { client.sessions(any()) }
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
+        advanceTimeBy(2999)
+        runCurrent()
+        coVerify(exactly = 1) { client.connect() }
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(admitted.copy(devices = admitted.devices.map {
+            it.copy(desktopStatus = RemoteDeviceStatus.CONNECTED)
+        }), vm.state.value)
+        coVerify(exactly = 2) { client.connect() }
+        coVerify(exactly = 0) { client.sessions(any()) }
+        coVerify(exactly = 0) { connections.save(any(), any()) }
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()); client.send(any(), any(), any(), any()) }
+        vm.setVisible(false)
+    }
+
+    @Test fun openingAnotherSessionRejectsLateDesktopObservationAndStartsOneNewInterval() = runTest(dispatcher) {
+        val vm = openCatalog()
+        vm.selectSession(session)
+        runCurrent()
+        val stale = CompletableDeferred<Result<RemoteDeviceStatus>>(backgroundScope.coroutineContext[Job])
+        var staleResumed = false
+        coEvery { client.connect() } coAnswers { withContext(NonCancellable) {
+            val result = stale.await()
+            staleResumed = true
+            result.getOrThrow()
+        } }
+        advanceTimeBy(3000)
+        runCurrent()
+        coVerify(exactly = 2) { client.connect() }
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTING
+        vm.selectSession(session.copy(id = "second-session"))
+        runCurrent()
+        val selected = vm.state.value
+        assertEquals("second-session", selected.session?.id)
+        stale.complete(Result.failure(IOException("Old session observation failed")))
+        runCurrent()
+        assertTrue(staleResumed)
+        assertEquals(selected, vm.state.value)
+        advanceTimeBy(2999)
+        runCurrent()
+        coVerify(exactly = 2) { client.connect() }
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(selected.copy(devices = selected.devices.map {
+            it.copy(desktopStatus = RemoteDeviceStatus.CONNECTING)
+        }), vm.state.value)
+        coVerify(exactly = 3) { client.connect() }
+        vm.editDevice(address)
+        runCurrent()
+        val editor = vm.state.value
+        advanceTimeBy(9000)
+        runCurrent()
+        assertEquals(editor, vm.state.value)
+        coVerify(exactly = 3) { client.connect() }
+        vm.setVisible(false)
+    }
+
+    @Test fun hiddenConversationRejectsLateFailureAndResumesObservationAfterReentry() = runTest(dispatcher) {
+        rejectStaleObservation(fail = true, draft = false)
+    }
+
+    @Test fun hiddenLocalDraftRejectsLateSuccessAndResumesObservationAfterReentry() = runTest(dispatcher) {
+        rejectStaleObservation(fail = false, draft = true)
+    }
+
+    @Test fun replacingCredentialsAtSameAddressRejectsTheOldChatsLateDesktopResult() = runTest(dispatcher) {
         val replacement = mockk<FiloClient>()
         every { replacement.address } returns address
         coEvery { replacement.connect() } returns RemoteDeviceStatus.ERROR
         coEvery { replacement.sessions(any()) } returns RemoteSessionPage(emptyList(), null)
         coEvery { replacement.models() } returns emptyList()
         val vm = openCatalog(replacement)
+        vm.selectSession(session)
+        runCurrent()
         val stale = CompletableDeferred<RemoteDeviceStatus>(backgroundScope.coroutineContext[Job])
         coEvery { client.connect() } coAnswers { withContext(NonCancellable) { stale.await() } }
         advanceTimeBy(3000)
@@ -549,7 +720,10 @@ internal class RemoteDesktopStatusTest : RemoteViewModelFixture() {
         runCurrent()
         vm.selectDevice(address)
         runCurrent()
+        vm.newSession()
+        runCurrent()
         val current = vm.state.value
+        assertTrue(current.isDraft)
         assertEquals(RemoteDeviceStatus.CONNECTED, current.devices.single().status)
         assertEquals(RemoteDeviceStatus.ERROR, current.devices.single().desktopStatus)
         assertEquals("Replacement device", current.devices.single().name)

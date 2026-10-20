@@ -139,14 +139,20 @@ alongside Codex Desktop. Dot changes use a 200ms opacity Crossfade in fixed geom
 Reduced Motion. A successful gateway, model catalog or history read cannot fabricate native readiness.
 
 The existing device directory owns at most one serial Desktop observer, scoped to the selected,
-visible catalog, including an empty catalog. Initial gateway admission supplies its first snapshot;
-later info reads start after the normal three-second interval. They share the existing two-permit
-read admission, coalesce around a pending gateway check and never start session, model or native
-mutations. Hiding, selection changes, editor entry and New Chat cancel observation; exact client and
-observation generation reject late results. Failed observation removes a stale Online claim using
-neutral idle without hiding history, changing gateway health or replaying any input. Devices retains
-its entry/save-only gateway checks, and chat subtitle/empty/read readiness retain their existing
-connection semantics. No backend discovery or future-provider registry is introduced.
+visible catalog or conversation, including an empty catalog and local New Chat. Initial gateway
+admission supplies its first snapshot; later info reads start after the normal three-second interval.
+They share the existing two-permit read admission, coalesce around a pending gateway check and never
+start session, model or native mutations. Hiding, device/owner selection changes and editor entry
+cancel the previous observation; exact client and observation generation reject late results. A new
+chat starts only this delayed read observer and creates no native session or immediate request.
+Failed observation removes a stale Online claim using neutral idle without hiding history, changing
+gateway health or replaying any input. An authenticated `desktop_unavailable` error immediately
+marks Desktop unavailable before waiting for fallback history. It supersedes older observation or
+pending health results, then resumes the same delayed observer. Explicit reconnect similarly fences
+older periodic results before starting its coalesced check. Devices retains entry/save-only gateway checks. The chat
+subtitle and empty guidance use the actual Desktop state; a gateway connection in progress/failure
+can remove readiness but cannot establish Online. Native read admission, history and control retain
+their independent runtime/gateway semantics. No backend discovery or future-provider registry is introduced.
 
 Sessions keeps row detail/More menus and read-only navigation available while rename, archive
 or another native mutation is pending. Busy admission belongs to the conflicting mutation,
@@ -263,7 +269,9 @@ auto-follow and competing-scroll exclusions. Do not add a Remote-only latch or v
 Unsupported message mutations are hidden; Copy, Select text and Info remain available.
 Top More contains Search only, with original highlights and navigation. Absent/ID titles
 display New Chat. Remote title subtitle uses the shared Devices status dot beside Online, Offline or Connecting
-from its real connection/read state, replacing context usage there. The composer context
+from the selected device's actual Codex Desktop state. Gateway Connecting/Offline overrides a stale
+Desktop snapshot; only authenticated native `connected` establishes Online. It replaces context
+usage there. The composer context
 indicator retains native telemetry; unknown context shows an empty circular indicator
 without a dash or fabricated numeric usage.
 Remote context shows only one Used category in the theme's primary color. Reserved, System Prompt,
@@ -312,14 +320,18 @@ scroll. Navigation and repeated reconciliation cannot duplicate it.
 
 ## New Chat, models and settings
 
-New Chat is local until Send: immediate original keyboard, no background creation/request.
-Its empty body shows a localized prompt to send the first message while online. Empty existing
-sessions, connecting and offline/failed reads have distinct neutral guidance in the original
-content area; they never conceal loaded messages or replace the original composer. The existing
-initial loading cover retains its indicator and touch exclusion. Explicit reconnect on an offline
+New Chat is local until Send: immediate original keyboard, no background creation or immediate
+request. Its visible Desktop-status observer follows the delayed info-read contract above.
+Its empty body follows the WebUI homepage welcome: centered OpenAI mark, 16dp spacing, bold
+headlineMedium text with 35sp line height and onBackground color. Use short localized new-chat,
+empty-history, offline and failed-read headlines instead of paragraph instructions. Keep the block
+inside the original measured top-bar/composer range, including IME changes; a short viewport bounds
+the mark. The initial opening cover retains its single centered indicator and passive bodyMedium
+hint below it, without an additional mark or loading ring. Empty guidance never hides loaded messages
+or replaces the original composer. Explicit reconnect on an offline
 local draft performs only the coalesced authenticated device check, preserving its identity, text,
 attachments and model/settings choices. Repeated requests coalesce, and late checks retain existing
-client/selection fences. Entering New Chat itself starts no check, creation or Send.
+client/selection fences. Entering New Chat itself starts no immediate check, creation or Send.
 Within chat, New Chat replaces the current conversation in place using the original title,
 composer and scroll owners; the enclosing settings navigation must not create another page.
 The Sessions FAB enters that same local draft. The original attachment plus/menu offers

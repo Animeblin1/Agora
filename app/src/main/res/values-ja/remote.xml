@@ -31,9 +31,9 @@
     <string name="remote_archive">アーカイブ</string>
     <string name="remote_archive_title">タスクをアーカイブしますか？</string>
     <string name="remote_archive_message">このタスクを Codex と Remote のアクティブな一覧から削除しますか？履歴は保持されます。</string>
-    <string name="remote_new_chat_hint">メッセージを送信して、このデバイスで会話を始めましょう。</string>
-    <string name="remote_empty_connecting_hint">このデバイスに接続しています。下の入力欄で引き続き入力できます。</string>
-    <string name="remote_empty_offline_hint">会話を読み込むには、このデバイスに再接続してください。下書きはここに保持されます。</string>
-    <string name="remote_empty_retry_hint">もう一度読み込んでください。下書きはここに保持されます。</string>
-    <string name="remote_empty_conversation_hint">この会話にはまだメッセージがありません。</string>
+    <string name="remote_new_chat_hint">会話を始める</string>
+    <string name="remote_empty_connecting_hint">Codex に接続中</string>
+    <string name="remote_empty_offline_hint">Codex はオフラインです</string>
+    <string name="remote_empty_retry_hint">会話を読み込めません</string>
+    <string name="remote_empty_conversation_hint">まだメッセージはありません</string>
 </resources>

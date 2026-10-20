@@ -34,7 +34,8 @@ class RemoteConversationPresentationTest {
     @get:Rule val compose = createComposeRule()
     private var state by mutableStateOf(RemoteState(
         restoring = false, deviceId = "device",
-        devices = listOf(RemoteDevice("device", "Computer", "http://computer", RemoteDeviceStatus.CONNECTED)),
+        devices = listOf(RemoteDevice("device", "Computer", "http://computer", RemoteDeviceStatus.CONNECTED,
+            desktopStatus = RemoteDeviceStatus.CONNECTED)),
         session = RemoteSession("draft", "", "", 0), draftSessionId = "draft",
         drafts = mapOf("device/draft" to "Unsent draft"),
     ))
@@ -64,6 +65,8 @@ class RemoteConversationPresentationTest {
     @Test fun draftStaysEditableThroughFailureAndSafeRetryWithoutASecondSubmissionPath() {
         show()
         compose.onNodeWithText(text(R.string.remote_new_chat_hint)).assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-mark").assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_new_chat_hint))
         compose.onNode(hasSetTextAction()).assertTextContains("Unsent draft").performTextReplacement("Unsent draft continued")
         compose.runOnIdle {
             state = state.copy(failure = RemoteFailure.NETWORK,
