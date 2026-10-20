@@ -64,9 +64,9 @@ class RemoteConversationPresentationTest {
 
     @Test fun draftStaysEditableThroughFailureAndSafeRetryWithoutASecondSubmissionPath() {
         show()
-        compose.onNodeWithText(text(R.string.remote_new_chat_hint)).assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Computer")
         compose.onNodeWithTag("remote-welcome-mark").assertIsDisplayed()
-        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_new_chat_hint))
         compose.onNode(hasSetTextAction()).assertTextContains("Unsent draft").performTextReplacement("Unsent draft continued")
         compose.runOnIdle {
             state = state.copy(failure = RemoteFailure.NETWORK,
@@ -90,13 +90,16 @@ class RemoteConversationPresentationTest {
         verify { vm.editDraft("device/draft", "Unsent draft continued more") }
     }
 
-    @Test fun existingOpeningShowsConnectionGuidanceAlongsideTheCanonicalLoadingIndicator() {
+    @Test fun existingOpeningShowsOnlyTheCanonicalLoadingIndicatorWithoutConnectionCopy() {
         state = state.copy(draftSessionId = null, loading = true)
         show()
-        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertIsDisplayed()
-        compose.onNode(SemanticsMatcher.expectValue(
+        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
+        compose.onNodeWithTag("remote-empty-conversation").assertDoesNotExist()
+        compose.onNodeWithTag("remote-welcome-mark").assertDoesNotExist()
+        compose.onNodeWithTag("remote-welcome-device").assertDoesNotExist()
+        compose.onAllNodes(SemanticsMatcher.expectValue(
             SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate,
-        )).assertExists()
+        )).assertCountEquals(1)
         compose.onNode(hasSetTextAction()).assertTextContains("Unsent draft")
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
         compose.runOnIdle { state = state.copy(loading = false, failure = RemoteFailure.SERVICE) }

@@ -11,6 +11,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -20,6 +22,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -41,34 +44,38 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class, qualifiers = "en-w400dp-h700dp-mdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RemoteEmptyConversationTest {
     @get:Rule val compose = createComposeRule()
     private var state by mutableStateOf(RemoteState(
         restoring = false, deviceId = "device",
-        devices = listOf(RemoteDevice("device", "Computer", "http://computer", RemoteDeviceStatus.CONNECTED,
+        devices = listOf(RemoteDevice("device", "Quantum", "http://computer", RemoteDeviceStatus.CONNECTED,
             desktopStatus = RemoteDeviceStatus.CONNECTED)),
         session = RemoteSession("session", "", "", 0), draftSessionId = "session",
     ))
     private var active by mutableStateOf(true)
-    private var opening by mutableStateOf(false)
     private var bottom by mutableStateOf(180.dp)
     private var layoutDirection by mutableStateOf(LayoutDirection.Ltr)
     private var fontScale by mutableStateOf(1f)
+    private var expectedSubtitleColor = Color.Unspecified
     private var retries = 0
     private fun text(id: Int) = RuntimeEnvironment.getApplication().getString(id)
 
     private fun show() {
         compose.setContent {
             MaterialTheme {
+                val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
+                SideEffect { expectedSubtitleColor = subtitleColor }
                 CompositionLocalProvider(
                     LocalDensity provides Density(1f, fontScale),
                     LocalLayoutDirection provides layoutDirection,
                 ) {
                     Box(Modifier.size(400.dp, 700.dp)) {
-                        RemoteEmptyConversation(state, active, 80.dp, bottom, { retries++ }, opening)
+                        RemoteEmptyConversation(state, active, 80.dp, bottom, { retries++ })
                     }
                 }
             }
@@ -77,7 +84,8 @@ class RemoteEmptyConversationTest {
 
     @Test fun onlineNewDraftConnectingOfflineAndConfirmedEmptyUseDistinctLocalizedGuidance() {
         show()
-        compose.onNodeWithText(text(R.string.remote_new_chat_hint)).assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Quantum")
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
         assertEquals(0, retries)
         compose.runOnIdle { state = state.copy(devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTING) }) }
@@ -91,7 +99,9 @@ class RemoteEmptyConversationTest {
             state = state.copy(draftSessionId = null, hydrationEnabled = true,
                 devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTED) })
         }
-        compose.onNodeWithText(text(R.string.remote_empty_conversation_hint)).assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.remote_empty_conversation_hint)).assertDoesNotExist()
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Quantum")
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
     }
 
@@ -128,13 +138,7 @@ class RemoteEmptyConversationTest {
         compose.runOnIdle { bottom = 360.dp }
         val imeBounds = content.getUnclippedBoundsInRoot()
         assertEquals((80f + 700f - 360f) / 2f, (imeBounds.top.value + imeBounds.bottom.value) / 2f, 0.5f)
-        compose.runOnIdle { opening = true; state = state.copy(loading = true) }
-        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertIsDisplayed()
-        assertEquals((80f + 700f - 360f) / 2f + 40f,
-            content.getUnclippedBoundsInRoot().top.value, 0.5f)
-        compose.onNodeWithTag("remote-welcome-mark").assertDoesNotExist()
-        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
-        compose.runOnIdle { opening = false; state = state.copy(loading = false, failure = RemoteFailure.SERVICE) }
+        compose.runOnIdle { state = state.copy(loading = false, failure = RemoteFailure.SERVICE) }
         val failureBounds = content.getUnclippedBoundsInRoot()
         assertEquals((80f + 700f - 360f) / 2f, (failureBounds.top.value + failureBounds.bottom.value) / 2f, 0.5f)
         assertTrue("The full failure block stays above the IME/composer", failureBounds.bottom.value <= 340.5f)
@@ -145,7 +149,7 @@ class RemoteEmptyConversationTest {
         val mark = compose.onNodeWithTag("remote-welcome-mark")
             .assertWidthIsEqualTo(112.dp).assertHeightIsEqualTo(112.dp).getUnclippedBoundsInRoot()
         val headline = compose.onNodeWithTag("remote-welcome-headline")
-            .assertTextEquals(text(R.string.remote_new_chat_hint)).getUnclippedBoundsInRoot()
+            .assertTextEquals("Codex Desktop").getUnclippedBoundsInRoot()
         assertEquals(16f, headline.top.value - mark.bottom.value, 0.5f)
         val layouts = mutableListOf<TextLayoutResult>()
         compose.onNodeWithTag("remote-welcome-headline")
@@ -154,22 +158,25 @@ class RemoteEmptyConversationTest {
         assertEquals(FontWeight.Bold, style.fontWeight)
         assertEquals(28.sp, style.fontSize)
         assertEquals(35.sp, style.lineHeight)
-        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text)).assertCountEquals(1)
+        val device = compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Quantum").getUnclippedBoundsInRoot()
+        assertEquals(8f, device.top.value - headline.bottom.value, 0.5f)
+        val deviceLayouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag("remote-welcome-device")
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(deviceLayouts) }
+        val deviceStyle = deviceLayouts.single().layoutInput.style
+        assertEquals(14.sp, deviceStyle.fontSize)
+        assertEquals(FontWeight.Normal, deviceStyle.fontWeight)
+        assertEquals(expectedSubtitleColor, deviceStyle.color)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text)).assertCountEquals(2)
         compose.runOnIdle { state = state.copy(failure = RemoteFailure.SERVICE) }
         compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_empty_retry_hint))
         compose.onNodeWithTag("remote-welcome-mark").assertWidthIsEqualTo(112.dp)
         compose.onNodeWithText(text(R.string.retry)).assertIsDisplayed()
-        compose.runOnIdle { state = state.copy(loading = true); opening = true }
-        compose.onNodeWithTag("remote-welcome-mark").assertDoesNotExist()
-        val openingLayouts = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithTag("remote-welcome-headline")
-            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(openingLayouts) }
-        assertEquals(FontWeight.Normal, openingLayouts.single().layoutInput.style.fontWeight)
-        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
     }
 
     @Test fun largeTextKeepsFailureHeadlineAndRetryAboveTheComposerByShrinkingOnlyTheMark() {
-        state = state.copy(failure = RemoteFailure.SERVICE)
+        state = state.copy(failure = RemoteFailure.SERVICE,
+            devices = state.devices.map { it.copy(name = "Quantum Workstation with a very long configured device name for two lines") })
         fontScale = 1.5f
         layoutDirection = LayoutDirection.Rtl
         bottom = 360.dp
@@ -184,6 +191,120 @@ class RemoteEmptyConversationTest {
         compose.onNodeWithTag("remote-welcome-headline")
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertEquals(28.sp, layouts.single().layoutInput.style.fontSize)
+        val subtitleLayouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag("remote-welcome-device")
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(subtitleLayouts) }
+        assertTrue(subtitleLayouts.single().lineCount <= 2)
+        val retryBounds = compose.onNodeWithText(text(R.string.retry)).getUnclippedBoundsInRoot()
+        val subtitleBounds = compose.onNodeWithTag("remote-welcome-device").getUnclippedBoundsInRoot()
+        assertTrue("Retry stays below the entire measured subtitle", retryBounds.top.value > subtitleBounds.bottom.value)
+        val headlineBounds = compose.onNodeWithTag("remote-welcome-headline").getUnclippedBoundsInRoot()
+        val markBounds = compose.onNodeWithTag("remote-welcome-mark").getUnclippedBoundsInRoot()
+        val measuredDetailsHeight = bounds.bottom.value - headlineBounds.top.value
+        val availableForMark = (260f - measuredDetailsHeight - 16f).coerceIn(0f, 112f)
+        assertEquals("The mark uses only space left after the complete measured details",
+            availableForMark, (markBounds.bottom - markBounds.top).value, 0.5f)
+    }
+
+    @Test fun veryShortFailureViewportKeepsNaturalDetailsAndMakesRetryReachableByBoundedScrolling() {
+        state = state.copy(failure = RemoteFailure.SERVICE,
+            devices = state.devices.map { it.copy(name = "Quantum Workstation with a very long configured device name for two lines") })
+        fontScale = 1.5f
+        layoutDirection = LayoutDirection.Rtl
+        bottom = 480.dp
+        show()
+        val viewport = compose.onNodeWithTag("remote-empty-conversation")
+        fun assertViewportBounds() {
+            val bounds = viewport.getUnclippedBoundsInRoot()
+            assertEquals(80f, bounds.top.value, 0.5f)
+            assertEquals(220f, bounds.bottom.value, 0.5f)
+            assertEquals(140f, (bounds.bottom - bounds.top).value, 0.5f)
+        }
+        assertViewportBounds()
+        compose.onNodeWithTag("remote-welcome-mark").assertWidthIsEqualTo(0.dp).assertHeightIsEqualTo(0.dp)
+        val headline = compose.onNodeWithTag("remote-welcome-headline")
+            .assertTextEquals(text(R.string.remote_empty_retry_hint))
+        val headlineLayouts = mutableListOf<TextLayoutResult>()
+        headline.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(headlineLayouts) }
+        assertEquals(28.sp, headlineLayouts.single().layoutInput.style.fontSize)
+        val subtitleLayouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag("remote-welcome-device")
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(subtitleLayouts) }
+        assertEquals(2, subtitleLayouts.single().lineCount)
+        val retry = compose.onNodeWithText(text(R.string.retry)).assertIsEnabled()
+        val initialRetryBounds = retry.getUnclippedBoundsInRoot()
+        assertTrue("Retry keeps a nonzero natural text height", (initialRetryBounds.bottom - initialRetryBounds.top).value > 0f)
+        assertTrue("Retry initially lies below the short viewport", initialRetryBounds.top.value >= 220f)
+        retry.assertIsNotDisplayed()
+        val initialScrollRange = viewport.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+        assertEquals(0f, initialScrollRange.value(), 0.5f)
+        assertTrue("Natural details exceed the available 140dp", initialScrollRange.maxValue() > 0f)
+        retry.performScrollTo().assertIsDisplayed()
+        val scrolledRange = viewport.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+        assertTrue("Reaching Retry performs a real scroll", scrolledRange.value() > 0f)
+        val retryBounds = retry.getUnclippedBoundsInRoot()
+        assertEquals((initialRetryBounds.bottom - initialRetryBounds.top).value,
+            (retryBounds.bottom - retryBounds.top).value, 0.5f)
+        assertTrue(retryBounds.top.value >= 79.5f)
+        assertTrue(retryBounds.bottom.value <= 220.5f)
+        assertTrue("Headline above the viewport is clipped after scrolling",
+            headline.fetchSemanticsNode().boundsInRoot.top >= 79.5f)
+        assertViewportBounds()
+        retry.performTouchInput { click() }
+        assertEquals(1, retries)
+        headline.performScrollTo().assertIsDisplayed()
+        assertViewportBounds()
+    }
+
+    @Test fun selectedDeviceNameUpdatesInPlaceWithoutInferringIdentityFromAddressOrRowOrder() {
+        val other = RemoteDevice("other", "Render Station", "http://unrelated-host", RemoteDeviceStatus.CONNECTED,
+            desktopStatus = RemoteDeviceStatus.CONNECTED)
+        state = state.copy(devices = listOf(other) + state.devices)
+        show()
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Quantum")
+        compose.onNodeWithText("http://computer").assertDoesNotExist()
+        compose.onNodeWithText("http://unrelated-host").assertDoesNotExist()
+        compose.runOnIdle { state = state.copy(deviceId = "other") }
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Render Station")
+        compose.onNodeWithText("Quantum").assertDoesNotExist()
+        compose.runOnIdle {
+            state = state.copy(devices = state.devices.map { if (it.id == "other") it.copy(name = "  Renamed Workstation  ") else it })
+        }
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Renamed Workstation")
+        assertEquals(0, retries)
+    }
+
+    @Test fun unnamedLegacyUrlAndMissingDeviceUseTheLocalizedDeviceFallback() {
+        show()
+        for (name in listOf("", "   ", "http://legacy-name", "HTTPS://legacy-name")) {
+            compose.runOnIdle { state = state.copy(devices = state.devices.map { it.copy(name = name) }) }
+            compose.onNodeWithTag("remote-welcome-device").assertTextEquals(text(R.string.remote_device))
+            compose.onNodeWithText("http://computer").assertDoesNotExist()
+            compose.onNodeWithText("http://legacy-name").assertDoesNotExist()
+            compose.onNodeWithText("HTTPS://legacy-name").assertDoesNotExist()
+        }
+        compose.runOnIdle { state = state.copy(deviceId = "missing") }
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals(text(R.string.remote_device))
+        compose.onNodeWithText(text(R.string.remote_empty_offline_hint)).assertIsDisplayed()
+    }
+
+    @Test fun longDeviceNameWrapsAtTwoLinesWithoutChangingTheProductHeadline() {
+        val name = "Quantum Production Workstation with a deliberately long configured name repeated for a two line ellipsis test"
+        state = state.copy(devices = state.devices.map { it.copy(name = name) })
+        show()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals(name)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        assertEquals(name, layout.layoutInput.text.text)
+        assertEquals(312, layout.layoutInput.constraints.maxWidth)
+        assertEquals(2, layout.layoutInput.maxLines)
+        assertEquals(TextOverflow.Ellipsis, layout.layoutInput.overflow)
+        assertEquals(2, layout.lineCount)
+        assertTrue(layout.isLineEllipsized(1))
+        compose.onNodeWithTag("remote-welcome-mark").assertHeightIsEqualTo(112.dp)
     }
 
     @Test fun shortEnglishAndChineseHeadlinesUseTheSameExistingResourceKeys() {
@@ -207,7 +328,7 @@ class RemoteEmptyConversationTest {
         }
     }
 
-    @Test fun passiveOpeningHintCannotStealTheOriginalLoadingCoversGestureBarrier() {
+    @Test fun loadingCoverWithoutConnectionHintRetainsItsOriginalGeometryAndGestureBarrier() {
         state = state.copy(draftSessionId = null, loading = true)
         var clicks = 0
         var drags = 0
@@ -219,20 +340,26 @@ class RemoteEmptyConversationTest {
                             detectVerticalDragGestures { _, _ -> drags++ }
                         })
                     ChatSwitchingOverlay(true, false, 80.dp, 180.dp)
-                    RemoteEmptyConversation(state, true, 80.dp, 180.dp, { retries++ }, opening = true)
                 }
             }
         }
-        val hint = compose.onNodeWithTag("remote-empty-conversation")
-        val hintCenter = hint.fetchSemanticsNode().boundsInRoot.center
+        val indicator = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+        val indicatorBounds = indicator.getUnclippedBoundsInRoot()
+        assertEquals((80f + 700f - 180f) / 2f,
+            (indicatorBounds.top.value + indicatorBounds.bottom.value) / 2f, 0.5f)
+        val formerHintCenter = indicator.fetchSemanticsNode().boundsInRoot.center + androidx.compose.ui.geometry.Offset(0f, 40f)
         compose.onNodeWithTag("underlying-content").performTouchInput {
-            click(hintCenter)
-            swipe(hintCenter, androidx.compose.ui.geometry.Offset(hintCenter.x, hintCenter.y - 120f))
+            click(formerHintCenter)
+            swipe(formerHintCenter, androidx.compose.ui.geometry.Offset(formerHintCenter.x, formerHintCenter.y - 120f))
         }
         assertEquals(0, clicks)
         assertEquals(0, drags)
         assertEquals(0, retries)
-        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertExists()
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(1)
+        compose.onNodeWithTag("remote-empty-conversation").assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
+        compose.onNodeWithTag("remote-welcome-mark").assertDoesNotExist()
+        compose.onNodeWithTag("remote-welcome-device").assertDoesNotExist()
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
     }
 }

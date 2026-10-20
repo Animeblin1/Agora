@@ -322,13 +322,24 @@ scroll. Navigation and repeated reconciliation cannot duplicate it.
 
 New Chat is local until Send: immediate original keyboard, no background creation or immediate
 request. Its visible Desktop-status observer follows the delayed info-read contract above.
-Its empty body follows the WebUI homepage welcome: centered OpenAI mark, 16dp spacing, bold
-headlineMedium text with 35sp line height and onBackground color. Use short localized new-chat,
-empty-history, offline and failed-read headlines instead of paragraph instructions. Keep the block
-inside the original measured top-bar/composer range, including IME changes; a short viewport bounds
-the mark. The initial opening cover retains its single centered indicator and passive bodyMedium
-hint below it, without an additional mark or loading ring. Empty guidance never hides loaded messages
-or replaces the original composer. Explicit reconnect on an offline
+Its empty body follows the WebUI homepage welcome: centered OpenAI mark with a 112dp maximum,
+16dp mark-to-title spacing, and a 28sp Bold headlineMedium title with 35sp line height and
+onBackground color. In an online local draft or confirmed-empty history, that title is the technical
+product name `Codex Desktop`. An 8dp gap separates it from the selected device's configured name in
+bodyMedium/onSurfaceVariant, centered with at most two lines and ellipsis. Resolve that name through
+remoteDeviceName and the localized Device fallback; never derive it from an address or hostname,
+or hard-code a particular device. Device selection/name changes immediately update the subtitle.
+Connecting, offline and failed-read states retain their localized state headline and existing safe
+Retry action, with the same selected-device subtitle. Keep the block inside the original measured
+top-bar/composer range, including IME changes. Measure the actual title, subtitle, gaps and Retry
+at their natural height before assigning remaining space to the decorative mark, preserving text
+and action geometry for large fonts, long names and RTL. When those details alone exceed the
+available height, the mark becomes zero-sized and ordinary vertical scrolling keeps every detail
+and Retry reachable inside a clipped viewport bounded by that same top-bar/composer range.
+Content that fits retains the original centered block. Initial history opening keeps only the
+original single centered loading indicator and its gesture barrier. It displays no connection hint,
+welcome mark, device subtitle, action or additional scrolling content below that indicator.
+Empty guidance never hides loaded messages or replaces the original composer. Explicit reconnect on an offline
 local draft performs only the coalesced authenticated device check, preserving its identity, text,
 attachments and model/settings choices. Repeated requests coalesce, and late checks retain existing
 client/selection fences. Entering New Chat itself starts no immediate check, creation or Send.

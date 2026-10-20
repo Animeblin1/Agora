@@ -335,16 +335,6 @@ internal fun RemoteConversation(
                         topBarHeight = topBarHeight,
                         bottomBarHeight = barHeight,
                     )
-                    if (switching && !state.error && !newChatEntry) {
-                        RemoteEmptyConversation(
-                            state = state,
-                            active = active,
-                            topBarHeight = topBarHeight,
-                            bottomBarHeight = barHeight,
-                            onRetry = vm::retryConnection,
-                            opening = true,
-                        )
-                    }
                 }
             }
         }

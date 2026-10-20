@@ -1,12 +1,14 @@
 package com.newoether.agora.ui.remote
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -15,23 +17,24 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.newoether.agora.R
 import com.newoether.agora.remote.RemoteState
+import com.newoether.agora.remote.remoteDeviceName
 
-/** The WebUI welcome hierarchy stays inside chat's existing top/composer range. */
+/** Product and configured device identity share chat's existing top/composer range. */
 @Composable
 internal fun RemoteEmptyConversation(
     state: RemoteState,
@@ -39,60 +42,69 @@ internal fun RemoteEmptyConversation(
     topBarHeight: Dp,
     bottomBarHeight: Dp,
     onRetry: () -> Unit,
-    opening: Boolean = false,
 ) {
-    val headline = state.remoteEmptyConversationHint() ?: return
-    val headlineText = stringResource(headline)
-    val headlineStyle = if (opening) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.headlineMedium.copy(
-        fontWeight = FontWeight.Bold, lineHeight = 35.sp,
-    )
-    val retryVisible = !opening && state.canRetryEmptyConnection()
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
+    val hint = state.remoteEmptyConversationHint() ?: return
+    val normalWelcome = hint == R.string.remote_new_chat_hint || hint == R.string.remote_empty_conversation_hint
+    val headline = if (normalWelcome) "Codex Desktop" else stringResource(hint)
+    val deviceName = remoteDeviceName(state.devices.firstOrNull { it.id == state.deviceId }?.name.orEmpty())
+        .ifEmpty { stringResource(R.string.remote_device) }
+    val retryVisible = state.canRetryEmptyConnection()
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().padding(top = topBarHeight, bottom = bottomBarHeight),
     ) {
-        val headlineHeight = with(density) {
-            textMeasurer.measure(
-                text = headlineText,
-                style = headlineStyle,
-                constraints = Constraints(maxWidth = (minOf(360.dp, maxWidth) - 48.dp).coerceAtLeast(0.dp).roundToPx()),
-            ).size.height.toDp()
-        }
-        // Preserve the reference's 112dp mark whenever it fits. Only the decorative mark gives
-        // space back to wrapped/localized text and the 48dp retry target above a tall IME.
-        val markSize = minOf(112.dp,
-            (maxHeight - headlineHeight - if (retryVisible) 80.dp else 16.dp).coerceAtLeast(0.dp))
-        Column(
-            modifier = Modifier.align(if (opening) Alignment.TopCenter else Alignment.Center)
-                // Opening retains the original centered 48dp ring and its gesture barrier.
-                // Only passive text appears below it; the welcome mark never duplicates that ring.
-                .padding(top = if (opening) maxHeight / 2 + 24.dp + 16.dp else 0.dp)
+        val availableHeight = maxHeight
+        val scrollState = rememberScrollState()
+        Layout(
+            modifier = Modifier.align(Alignment.Center)
                 .widthIn(max = 360.dp).fillMaxWidth().padding(horizontal = 24.dp)
-                .testTag("remote-empty-conversation"),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            if (!opening && markSize > 0.dp) {
+                .testTag("remote-empty-conversation")
+                .verticalScroll(scrollState, overscrollEffect = null),
+            content = {
                 Icon(
                     painter = painterResource(R.drawable.provider_openai),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(markSize)
-                        .testTag("remote-welcome-mark"),
+                    modifier = Modifier.testTag("remote-welcome-mark"),
                 )
-            }
-            Text(
-                text = headlineText,
-                modifier = Modifier.semantics { heading() }.testTag("remote-welcome-headline"),
-                style = headlineStyle,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-            )
-            if (retryVisible) {
-                TextButton(enabled = active, onClick = onRetry) {
-                    Text(stringResource(R.string.retry))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = headline,
+                        modifier = Modifier.semantics { heading() }.testTag("remote-welcome-headline"),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 35.sp),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = deviceName,
+                        modifier = Modifier.testTag("remote-welcome-device"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (retryVisible) {
+                        Spacer(Modifier.height(16.dp))
+                        TextButton(enabled = active, onClick = onRetry) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
                 }
+            },
+        ) { measurables, constraints ->
+            // Preserve natural text and action height inside the bounded scroll viewport.
+            val details = measurables.last().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+            val markSize = minOf(112.dp.roundToPx(),
+                (availableHeight.roundToPx() - details.height - 16.dp.roundToPx()).coerceAtLeast(0))
+            val mark = measurables.first().measure(Constraints.fixed(markSize, markSize))
+            val markGap = if (markSize > 0) 16.dp.roundToPx() else 0
+            layout(constraints.maxWidth, markSize + markGap + details.height) {
+                mark.placeRelative((constraints.maxWidth - markSize) / 2, 0)
+                details.placeRelative((constraints.maxWidth - details.width) / 2, markSize + markGap)
             }
         }
     }
