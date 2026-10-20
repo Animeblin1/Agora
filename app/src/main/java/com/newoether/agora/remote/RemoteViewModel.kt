@@ -213,6 +213,7 @@ internal class RemoteViewModel(
         polling?.cancel()
         paging?.cancel()
         statusPolling?.cancel()
+        deviceDirectory.observeDesktop(null)
         // Suspend control readiness, not the last native presentation. Reconnecting is not completion.
         mutableState.value = state.value.copy(loading = false, loadingMore = false,
             runtime = state.value.runtime.takeIf { preserveRuntime }, hydrationEnabled = false)
@@ -273,6 +274,7 @@ internal class RemoteViewModel(
             checkDevice(id)
             return
         }
+        deviceDirectory.observeDesktop(id.takeIf { state.value.session == null })
         val generation = epoch
         val session = state.value.session
         loadModels(id, client)
@@ -326,21 +328,24 @@ internal class RemoteViewModel(
                         val failure = if (readFailure == RemoteFailure.NETWORK && !reachable) {
                             updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTING, failure = null) }
                             try {
-                                checkSlots.withPermit { client.connect() }
+                                val desktop = checkSlots.withPermit { client.connect() }
                                 if (generation != epoch) return@launch
-                                updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null) }
+                                updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
+                                    desktopStatus = desktop) }
                                 reachable = true
                                 RemoteFailure.SERVICE
                             } catch (cancelled: CancellationException) { throw cancelled }
                             catch (healthError: Exception) {
                                 if (generation != epoch) return@launch
                                 val healthFailure = requireNotNull(trace("read_health_failed", healthError, notify = false))
-                                updateDevice(id) { it.copy(status = RemoteDeviceStatus.ERROR, failure = healthFailure) }
+                                updateDevice(id) { it.copy(status = RemoteDeviceStatus.ERROR, failure = healthFailure,
+                                    desktopStatus = RemoteDeviceStatus.IDLE) }
                                 healthFailure
                             }
                         } else {
                             if (readFailure == RemoteFailure.AUTHENTICATION) {
-                                updateDevice(id) { it.copy(status = RemoteDeviceStatus.ERROR, failure = readFailure) }
+                                updateDevice(id) { it.copy(status = RemoteDeviceStatus.ERROR, failure = readFailure,
+                                    desktopStatus = RemoteDeviceStatus.IDLE) }
                             } else if (readFailure in setOf(RemoteFailure.SERVICE, RemoteFailure.PROTOCOL,
                                     RemoteFailure.SESSION_BUSY, RemoteFailure.CONTENT_TOO_LARGE)) {
                                 updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null) }
@@ -453,7 +458,9 @@ internal class RemoteViewModel(
         val snapshot = state.value
         if (!visible || snapshot.session != null || snapshot.addingDevice) return
         val address = snapshot.deviceId ?: return
+        if (snapshot.devices.firstOrNull { it.id == address }?.status != RemoteDeviceStatus.CONNECTED) return
         val client = clients[address] ?: return
+        deviceDirectory.observeDesktop(address)
         val ids = visibleSessions.filter { id -> snapshot.sessions.any { it.id == id } }
         if (ids.isEmpty()) return
         val selected = selectionEpoch

@@ -39,6 +39,7 @@ private data class FiloInfo(
     val protocolVersion: Int, val agent: String, val sessionMode: String,
     val messageDelivery: String, val outputMode: String, val device: String,
     val supportsLazyMessages: Boolean = false,
+    val desktop: JsonObject? = null,
 )
 @Serializable
 private data class SendInput(val text: String, val clientId: String, val attachments: List<String> = emptyList())
@@ -126,12 +127,18 @@ internal class FiloClient(
         ?.readTimeout(mutationTimeoutMillis, TimeUnit.MILLISECONDS)
         ?.callTimeout(mutationTimeoutMillis, TimeUnit.MILLISECONDS)?.build() ?: calls
 
-    suspend fun connect(): String {
+    suspend fun connect(): RemoteDeviceStatus {
         val info = json.decodeFromString<FiloInfo>(request("v1/info"))
         require(info.protocolVersion == 2 && info.agent == "codex" &&
             info.sessionMode == "existing" && info.messageDelivery == "native-steer" &&
             info.outputMode == "live-messages" && info.supportsLazyMessages) { "Incompatible Filo service" }
-        return info.device
+        // Gateway reachability does not establish a native Desktop connection.
+        return when ((info.desktop?.get("state") as? JsonPrimitive)?.contentOrNull) {
+            "connected" -> RemoteDeviceStatus.CONNECTED
+            "connecting" -> RemoteDeviceStatus.CONNECTING
+            "unavailable" -> RemoteDeviceStatus.ERROR
+            else -> RemoteDeviceStatus.IDLE
+        }
     }
 
     suspend fun sessions(cursor: String? = null): RemoteSessionPage = withContext(Dispatchers.Default) {

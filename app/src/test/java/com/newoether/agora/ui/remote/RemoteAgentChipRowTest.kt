@@ -12,6 +12,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
@@ -46,27 +47,39 @@ class RemoteAgentChipRowTest {
     @Test fun statusChangesRetainOneInformationalChipAndItsGeometry() {
         var status by mutableStateOf(RemoteDeviceStatus.CONNECTED)
         compose.setContent { MaterialTheme { RemoteAgentChipRow(status) } }
+        fun assertNoVisibleStatus() {
+            for (label in listOf("Online", "Offline", "Connecting")) {
+                compose.onNodeWithText(label, useUnmergedTree = true).assertDoesNotExist()
+            }
+        }
         compose.onNodeWithContentDescription("Codex Desktop, Online").assertExists().assertHasNoClickAction()
-        compose.onNodeWithText("Online", useUnmergedTree = true).assertExists()
+        assertNoVisibleStatus()
         val initial = compose.onNodeWithText("Codex Desktop").getUnclippedBoundsInRoot()
         val initialChip = compose.onNodeWithTag("remote-agent-chip", useUnmergedTree = true).getUnclippedBoundsInRoot()
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { status = RemoteDeviceStatus.ERROR }
-        compose.mainClock.advanceTimeByFrame()
-        repeat(4) {
-            compose.mainClock.advanceTimeBy(50)
-            assertEquals(initial, compose.onNodeWithText("Codex Desktop").getUnclippedBoundsInRoot())
-            assertEquals(initialChip, compose.onNodeWithTag("remote-agent-chip", useUnmergedTree = true).getUnclippedBoundsInRoot())
+        for ((next, label) in listOf(
+            RemoteDeviceStatus.ERROR to "Offline",
+            RemoteDeviceStatus.CONNECTING to "Connecting",
+            RemoteDeviceStatus.IDLE to "Offline",
+        )) {
+            compose.runOnIdle {
+                status = next
+                // With a paused clock, publish the write before requesting the recomposition frame.
+                Snapshot.sendApplyNotifications()
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            repeat(4) {
+                compose.mainClock.advanceTimeBy(50)
+                compose.waitForIdle()
+                assertNoVisibleStatus()
+                assertEquals(initial, compose.onNodeWithText("Codex Desktop").getUnclippedBoundsInRoot())
+                assertEquals(initialChip, compose.onNodeWithTag("remote-agent-chip", useUnmergedTree = true).getUnclippedBoundsInRoot())
+            }
+            compose.onNodeWithContentDescription("Codex Desktop, $label").assertExists().assertHasNoClickAction()
+            assertNoVisibleStatus()
         }
-        compose.onNodeWithContentDescription("Codex Desktop, Offline").assertExists()
-        compose.onNodeWithText("Offline", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Claude Code").assertDoesNotExist()
-        compose.runOnIdle { status = RemoteDeviceStatus.CONNECTING }
-        compose.mainClock.advanceTimeBy(240)
-        compose.onNodeWithContentDescription("Codex Desktop, Connecting").assertExists()
-        compose.onNodeWithText("Connecting", useUnmergedTree = true).assertExists()
-        assertEquals(initialChip, compose.onNodeWithTag("remote-agent-chip", useUnmergedTree = true).getUnclippedBoundsInRoot())
-        assertEquals(initial, compose.onNodeWithText("Codex Desktop").getUnclippedBoundsInRoot())
     }
 
     @Test fun errorAndIdleRetainDistinctSharedDotColorsWithReducedMotionAndNoAction() {

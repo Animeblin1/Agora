@@ -3,6 +3,8 @@ package com.newoether.agora.remote
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -27,10 +29,14 @@ internal class RemoteDeviceDirectory(
     val clients: Map<String, FiloClient> get() = mutableClients
     private val configurations = mutableMapOf<String, RemoteConnection>()
     private val checks = mutableMapOf<String, Job>()
+    private var desktopObservation: Job? = null
+    private var observedDevice: String? = null
+    private var observationGeneration = 0L
     private var storing: Job? = null
 
     fun restoreConnections() {
         if (storing?.isActive == true) return
+        observeDesktop(null)
         report("restore_started", null)
         mutableState.value = state.value.copy(restoring = true, storageError = false)
         selectDevice(null)
@@ -79,6 +85,7 @@ internal class RemoteDeviceDirectory(
                 val connection = RemoteConnection(savedName, id, token.trim())
                 connections.save(connection, previous)
                 val replaced = previous ?: id
+                if (observedDevice == replaced) observeDesktop(null)
                 checks.remove(replaced)?.cancel()
                 mutableClients.remove(replaced)
                 configurations.remove(replaced)
@@ -119,6 +126,7 @@ internal class RemoteDeviceDirectory(
         storing = scope.launch {
             try {
                 connections.remove(id)
+                if (observedDevice == id) observeDesktop(null)
                 checks.remove(id)?.cancel()
                 mutableClients.remove(id)
                 configurations.remove(id)
@@ -140,21 +148,51 @@ internal class RemoteDeviceDirectory(
         }
     }
 
+    /** Only the visible catalog observes native Desktop state; Devices and chats do not poll it. */
+    fun observeDesktop(id: String?) {
+        if (observedDevice == id && (id == null || desktopObservation?.isActive == true)) return
+        desktopObservation?.cancel()
+        observedDevice = id
+        val generation = ++observationGeneration
+        val observedId = id ?: return
+        val client = mutableClients[observedId] ?: return
+        desktopObservation = scope.launch {
+            while (isActive) {
+                // Initial gateway admission already supplied the first Desktop snapshot.
+                delay(3000)
+                if (checks[observedId]?.isActive == true) continue
+                try {
+                    val desktop = checkSlots.withPermit { client.connect() }
+                    if (generation != observationGeneration || mutableClients[observedId] !== client) return@launch
+                    updateDevice(observedId) { it.copy(desktopStatus = desktop) }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) {
+                    if (generation != observationGeneration || mutableClients[observedId] !== client) return@launch
+                    // Failed observation cannot keep claiming an online Desktop or erase readable history.
+                    updateDevice(observedId) { it.copy(desktopStatus = RemoteDeviceStatus.IDLE) }
+                }
+            }
+        }
+    }
+
     fun checkDevice(id: String) {
         val client = mutableClients[id] ?: return
         if (checks[id]?.isActive == true) return
-        updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTING, failure = null) }
+        updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTING, failure = null,
+            desktopStatus = RemoteDeviceStatus.IDLE) }
         checks[id] = scope.launch {
             try {
-                checkSlots.withPermit { client.connect() }
+                val desktop = checkSlots.withPermit { client.connect() }
                 if (mutableClients[id] !== client) return@launch
-                updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null) }
+                updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
+                    desktopStatus = desktop) }
                 if (state.value.deviceId == id) refresh()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (mutableClients[id] !== client) return@launch
                 val failure = report("check_failed", error)
-                updateDevice(id) { it.copy(status = RemoteDeviceStatus.ERROR, failure = failure) }
+                updateDevice(id) { it.copy(status = RemoteDeviceStatus.ERROR, failure = failure,
+                    desktopStatus = RemoteDeviceStatus.IDLE) }
                 if (state.value.deviceId == id) mutableState.value = state.value.copy(loading = false, failure = failure)
             }
         }

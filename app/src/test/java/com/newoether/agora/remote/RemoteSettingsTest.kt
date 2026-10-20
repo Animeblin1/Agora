@@ -27,7 +27,7 @@ class RemoteSettingsTest {
         Dispatchers.setMain(dispatcher)
         coEvery { store.load() } returns emptyList()
         every { client.address } returns "http://computer/"
-        coEvery { client.connect() } returns "Computer"
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { client.sessions(any()) } returns RemoteSessionPage(listOf(session), null)
         coEvery { client.models() } returns listOf(model)
         coEvery { client.conversation(any(), any()) } answers { bodyPage(emptyList(), null, emptyList(), runtime) }

@@ -32,10 +32,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.ui.settings.McpStatusDot
 import com.newoether.agora.R
@@ -45,17 +42,6 @@ import com.newoether.agora.remote.RemoteDeviceStatus
 internal fun RemoteAgentChipRow(status: RemoteDeviceStatus, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
     val statusLabel = stringResource(remoteConnectionStatusLabel(status.toMcpConnectionStatus()))
-    val statusLabels = listOf(
-        stringResource(R.string.remote_online),
-        stringResource(R.string.remote_connecting),
-        stringResource(R.string.remote_offline),
-    )
-    val statusStyle = MaterialTheme.typography.labelLarge
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val statusWidth = with(density) {
-        statusLabels.maxOf { measurer.measure(it, statusStyle, maxLines = 1).size.width }.toDp()
-    }
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()).padding(bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -87,19 +73,8 @@ internal fun RemoteAgentChipRow(status: RemoteDeviceStatus, modifier: Modifier =
                 Icon(painterResource(R.drawable.provider_openai), null, Modifier.size(18.dp))
                 Text("Codex Desktop", style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 Crossfade(targetState = status.toMcpConnectionStatus(), animationSpec = tween(200), label = "remoteAgentStatus") { value ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Box(Modifier.clearAndSetSemantics { testTag = "remote-agent-status-dot" }) {
-                            McpStatusDot(value)
-                        }
-                        Text(
-                            text = stringResource(remoteConnectionStatusLabel(value)),
-                            modifier = Modifier.width(statusWidth),
-                            style = statusStyle,
-                            maxLines = 1,
-                        )
+                    Box(Modifier.clearAndSetSemantics { testTag = "remote-agent-status-dot" }) {
+                        McpStatusDot(value)
                     }
                 }
             }

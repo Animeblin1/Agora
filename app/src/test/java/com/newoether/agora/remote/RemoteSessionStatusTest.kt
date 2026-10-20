@@ -23,7 +23,7 @@ class RemoteSessionStatusTest {
         Dispatchers.setMain(dispatcher)
         coEvery { store.load() } returns listOf(RemoteConnection("Computer", address, "token"))
         every { client.address } returns address
-        coEvery { client.connect() } returns "Computer"
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { client.sessions(any()) } answers { page() }
         coEvery { client.models() } returns emptyList()
         every { client.events(any()) } returns flow { awaitCancellation() }
@@ -83,7 +83,7 @@ class RemoteSessionStatusTest {
         val otherAddress = "http://second/"
         val otherClient = mockk<FiloClient>()
         every { otherClient.address } returns otherAddress
-        coEvery { otherClient.connect() } returns "Second"
+        coEvery { otherClient.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { otherClient.sessions(any()) } returns RemoteSessionPage(
             listOf(session), null, listOf(RemoteSessionStatus("session", "idle", completedTurnId = "second-turn")),
         )

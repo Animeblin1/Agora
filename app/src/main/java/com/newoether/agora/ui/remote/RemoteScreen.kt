@@ -171,7 +171,7 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                     },
                 ) {
                     item(key = "agents") {
-                        RemoteAgentChipRow(displayed.devices.firstOrNull { it.id == displayed.deviceId }?.status
+                        RemoteAgentChipRow(displayed.devices.firstOrNull { it.id == displayed.deviceId }?.desktopStatus
                             ?: RemoteDeviceStatus.IDLE)
                     }
                     if (!displayed.loading && displayed.sessions.isEmpty() && !displayed.error) {

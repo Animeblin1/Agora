@@ -73,7 +73,8 @@ and removes only that local connection. Failure retains it. The row menu is Edit
 Fields reuse MCP labeled inputs and gray URL/token examples, with no submitted defaults.
 Placeholder text inherits the original field defaults without an extra opacity reduction.
 Helper copy explains installing Filo on the target and entering its IP or URL, not Tailscale.
-Visible entry/save starts coalesced connection checks; no periodic device-health loop.
+Visible entry/save starts coalesced connection checks; no periodic device-health loop. The
+selected visible session catalog additionally observes native Desktop state as specified below.
 
 Load failures use the original application Snackbar, positioned by the original composer
 inset owner in chat and the system inset on Devices/Sessions. Preserve the current page and
@@ -125,19 +126,27 @@ This is presentation state only; Filo verifies native ownership/state at dispatc
 
 The session catalog title is the configured device name (localized Device fallback), replacing
 Sessions. Immediately below it, a horizontally scrollable chip row currently contains one
-informational Codex Desktop chip with the existing OpenAI icon, an 8dp status dot and visible
-localized connection status. The chip
-has a 40dp-high capsule shape with secondaryContainer/onSecondaryContainer colors, no outline,
-and a bounded press ripple. Press feedback
-never navigates, selects a provider, changes connection state or sends a request; the chip retains
-its informational accessibility semantics. The dot
-reflects the selected device's existing authenticated Filo connection state: connected is Online,
-connecting is Connecting, otherwise Offline. Error uses the shared error-red status dot and
-Offline remains neutral gray. Visible status and accessibility describe the same state.
-It does not claim a separate native Desktop writer
-health check. Keep the chip visible during load, failure and native mutations; status uses a
-200ms opacity Crossfade in fixed geometry, including Reduced Motion. Do not add discovery,
-provider registries, extra requests or inactive future providers for this presentation.
+informational Codex Desktop chip with the existing OpenAI icon and an 8dp status dot. No visible
+Online, Connecting or Offline label belongs inside the capsule. It retains its 40dp height,
+secondaryContainer/onSecondaryContainer colors, no outline and bounded informational press ripple.
+Pressing never navigates, selects a provider, changes state or sends a request.
+
+The dot reports authenticated `/v1/info` `desktop.state`, independently of gateway reachability:
+`connected` uses the shared connected dot; `connecting` uses connecting; `unavailable` uses the
+shared error dot; `disconnected`, absent or unknown state uses neutral idle. Only an actual native
+`connected` snapshot establishes Online. Accessibility includes the corresponding localized status
+alongside Codex Desktop. Dot changes use a 200ms opacity Crossfade in fixed geometry, including
+Reduced Motion. A successful gateway, model catalog or history read cannot fabricate native readiness.
+
+The existing device directory owns at most one serial Desktop observer, scoped to the selected,
+visible catalog, including an empty catalog. Initial gateway admission supplies its first snapshot;
+later info reads start after the normal three-second interval. They share the existing two-permit
+read admission, coalesce around a pending gateway check and never start session, model or native
+mutations. Hiding, selection changes, editor entry and New Chat cancel observation; exact client and
+observation generation reject late results. Failed observation removes a stale Online claim using
+neutral idle without hiding history, changing gateway health or replaying any input. Devices retains
+its entry/save-only gateway checks, and chat subtitle/empty/read readiness retain their existing
+connection semantics. No backend discovery or future-provider registry is introduced.
 
 Sessions keeps row detail/More menus and read-only navigation available while rename, archive
 or another native mutation is pending. Busy admission belongs to the conflicting mutation,

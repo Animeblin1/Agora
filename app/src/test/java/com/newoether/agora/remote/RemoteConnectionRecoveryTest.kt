@@ -38,7 +38,7 @@ class RemoteConnectionRecoveryTest {
         Dispatchers.setMain(dispatcher)
         coEvery { connections.load() } returns emptyList()
         every { client.address } returns "http://computer/"
-        coEvery { client.connect() } returns "Computer"
+        coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { client.sessions(any()) } returns RemoteSessionPage(listOf(session), null)
         coEvery { client.models() } returns listOf(RemoteModel("model", "Model", true))
         coEvery { client.conversation(any(), any()) } throws FiloHttpException(503)
@@ -168,7 +168,7 @@ class RemoteConnectionRecoveryTest {
 
     @Test fun staleHealthResultCannotOverwriteNewSelectionOrStartAnotherRead() = runTest(dispatcher) {
         val disconnect = CompletableDeferred<Unit>()
-        val health = CompletableDeferred<String>()
+        val health = CompletableDeferred<RemoteDeviceStatus>()
         every { client.events(any()) } returns flow { disconnect.await(); throw IOException("reset") }
         val vm = open()
         val notices = notices(vm)

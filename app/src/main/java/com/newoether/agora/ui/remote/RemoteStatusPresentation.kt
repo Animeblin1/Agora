@@ -20,7 +20,7 @@ internal fun remoteConnectionStatusLabel(status: McpConnectionStatus): Int = whe
     McpConnectionStatus.IDLE, McpConnectionStatus.ERROR -> R.string.remote_offline
 }
 
-/** Both Remote surfaces report the selected authenticated gateway, never Desktop writer readiness. */
+/** Chat reachability stays independent of the catalog's native Desktop status. */
 internal fun RemoteState.remoteConnectionStatus(): McpConnectionStatus =
     (devices.firstOrNull { it.id == deviceId }?.status ?: RemoteDeviceStatus.IDLE).toMcpConnectionStatus()
 
