@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.*
@@ -21,6 +22,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -83,7 +85,9 @@ class RemoteConversationPresentationTest {
             state = state.copy(failure = null,
                 devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTING) })
         }
-        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.remote_connecting), useUnmergedTree = true).assertExists()
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
         compose.onNode(hasSetTextAction()).assertTextContains("Unsent draft continued").performTextReplacement("Unsent draft continued more")
         compose.waitForIdle()
@@ -107,6 +111,52 @@ class RemoteConversationPresentationTest {
         compose.onNodeWithText(text(R.string.remote_online), useUnmergedTree = true).assertExists()
         compose.onNodeWithText(text(R.string.retry)).assertIsEnabled().performClick()
         verify(exactly = 1) { vm.retryConnection() }
+        verify(exactly = 0) { vm.send() }
+    }
+
+    @Test fun pendingDraftKeepsActualTopBarStatusAndLoadingHistoryImmediatelySuppressesAnEnteringEmptyBody() {
+        state = state.copy(loading = true,
+            devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTING) })
+        show()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Computer")
+        compose.onNodeWithText(text(R.string.remote_connecting), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            state = state.copy(session = RemoteSession("history", "", "", 0), draftSessionId = null)
+            Snapshot.sendApplyNotifications()
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.onNodeWithTag("remote-empty-conversation").assertDoesNotExist()
+        compose.onAllNodes(SemanticsMatcher.expectValue(
+            SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate,
+        )).assertCountEquals(1)
+        compose.runOnIdle { state = state.copy(loading = false, failure = RemoteFailure.SERVICE); Snapshot.sendApplyNotifications() }
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
+        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
+        val message = ChatMessage(id = "arriving", text = "Arrived during entry", participant = Participant.USER)
+        every { vm.observeMessage(any(), "arriving") } returns flowOf(message)
+        every { vm.cachedMessage(any(), "arriving") } returns message
+        val groups = listOf(RemoteMessageGroup(message, emptyList()))
+        compose.runOnIdle {
+            state = state.copy(hydrationEnabled = true, runtime = RemoteRuntime("idle"), messageGroups = groups)
+            Snapshot.sendApplyNotifications()
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(320)
+        compose.waitForIdle()
+        compose.onNodeWithText("Arrived during entry", substring = true).assertExists()
+        compose.onNodeWithTag("remote-empty-conversation").assertDoesNotExist()
+        compose.onNodeWithTag("remote-welcome-mark").assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
+        assertEquals(groups, state.messageGroups)
+        verify(exactly = 0) { vm.retryConnection() }
         verify(exactly = 0) { vm.send() }
     }
 

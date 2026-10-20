@@ -280,6 +280,12 @@ and WebUI share this contract.
 
 ## SSH private-key authentication
 
+- New SSH drafts leave Username empty and show the technical identity `root` only as a gray
+  bodyMedium placeholder through McpLabeledField. A new editor projects the default root value to
+  an empty opening snapshot; untouched Back does not report a false change. Explicit supplied
+  non-default usernames and all saved usernames, including root, remain actual editable values.
+  Switching connection type initializes an empty username. Save and host-key Verify normalize an
+  empty or whitespace-only username to root without inserting it into the visible draft.
 - The explicit-save Shell detail editor offers Password and Private Key authentication.
   The private-key choice replaces the password field with an import action and the selected
   filename, using the shared two-line Settings import/action presentation with a fixed leading

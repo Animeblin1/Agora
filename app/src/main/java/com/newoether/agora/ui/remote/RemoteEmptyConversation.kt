@@ -1,5 +1,10 @@
 package com.newoether.agora.ui.remote
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
@@ -44,7 +50,8 @@ internal fun RemoteEmptyConversation(
     onRetry: () -> Unit,
 ) {
     val hint = state.remoteEmptyConversationHint() ?: return
-    val normalWelcome = hint == R.string.remote_new_chat_hint || hint == R.string.remote_empty_conversation_hint
+    val normalWelcome = hint == R.string.remote_new_chat_hint || hint == R.string.remote_empty_conversation_hint ||
+        hint == R.string.remote_empty_connecting_hint
     val headline = if (normalWelcome) "Codex Desktop" else stringResource(hint)
     val deviceName = remoteDeviceName(state.devices.firstOrNull { it.id == state.deviceId }?.name.orEmpty())
         .ifEmpty { stringResource(R.string.remote_device) }
@@ -54,57 +61,67 @@ internal fun RemoteEmptyConversation(
     ) {
         val availableHeight = maxHeight
         val scrollState = rememberScrollState()
-        Layout(
-            modifier = Modifier.align(Alignment.Center)
-                .widthIn(max = 360.dp).fillMaxWidth().padding(horizontal = 24.dp)
-                .testTag("remote-empty-conversation")
-                .verticalScroll(scrollState, overscrollEffect = null),
-            content = {
-                Icon(
-                    painter = painterResource(R.drawable.provider_openai),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.testTag("remote-welcome-mark"),
-                )
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = headline,
-                        modifier = Modifier.semantics { heading() }.testTag("remote-welcome-headline"),
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 35.sp),
-                        color = MaterialTheme.colorScheme.onBackground,
-                        textAlign = TextAlign.Center,
+        val appearance = remember { MutableTransitionState(false).apply { targetState = true } }
+        // Re-enter from transparent after absence; live state updates keep one current body.
+        // Opacity remains available with Reduced Motion, matching the original loading cover.
+        AnimatedVisibility(
+            visibleState = appearance,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(animationSpec = tween(200)),
+            exit = ExitTransition.None,
+        ) {
+            Layout(
+                modifier = Modifier
+                    .widthIn(max = 360.dp).fillMaxWidth().padding(horizontal = 24.dp)
+                    .testTag("remote-empty-conversation")
+                    .verticalScroll(scrollState, overscrollEffect = null),
+                content = {
+                    Icon(
+                        painter = painterResource(R.drawable.provider_openai),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.testTag("remote-welcome-mark"),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = deviceName,
-                        modifier = Modifier.testTag("remote-welcome-device"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (retryVisible) {
-                        Spacer(Modifier.height(16.dp))
-                        TextButton(enabled = active, onClick = onRetry) {
-                            Text(stringResource(R.string.retry))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = headline,
+                            modifier = Modifier.semantics { heading() }.testTag("remote-welcome-headline"),
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 35.sp),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = deviceName,
+                            modifier = Modifier.testTag("remote-welcome-device"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (retryVisible) {
+                            Spacer(Modifier.height(16.dp))
+                            TextButton(enabled = active, onClick = onRetry) {
+                                Text(stringResource(R.string.retry))
+                            }
                         }
                     }
+                },
+            ) { measurables, constraints ->
+                // Preserve natural text and action height inside the bounded scroll viewport.
+                val details = measurables.last().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                val markSize = minOf(80.dp.roundToPx(),
+                    (availableHeight.roundToPx() - details.height - 16.dp.roundToPx()).coerceAtLeast(0))
+                val mark = measurables.first().measure(Constraints.fixed(markSize, markSize))
+                val markGap = if (markSize > 0) 16.dp.roundToPx() else 0
+                layout(constraints.maxWidth, markSize + markGap + details.height) {
+                    mark.placeRelative((constraints.maxWidth - markSize) / 2, 0)
+                    details.placeRelative((constraints.maxWidth - details.width) / 2, markSize + markGap)
                 }
-            },
-        ) { measurables, constraints ->
-            // Preserve natural text and action height inside the bounded scroll viewport.
-            val details = measurables.last().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-            val markSize = minOf(80.dp.roundToPx(),
-                (availableHeight.roundToPx() - details.height - 16.dp.roundToPx()).coerceAtLeast(0))
-            val mark = measurables.first().measure(Constraints.fixed(markSize, markSize))
-            val markGap = if (markSize > 0) 16.dp.roundToPx() else 0
-            layout(constraints.maxWidth, markSize + markGap + details.height) {
-                mark.placeRelative((constraints.maxWidth - markSize) / 2, 0)
-                details.placeRelative((constraints.maxWidth - details.width) / 2, markSize + markGap)
             }
         }
     }

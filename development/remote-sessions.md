@@ -324,13 +324,20 @@ New Chat is local until Send: immediate original keyboard, no background creatio
 request. Its visible Desktop-status observer follows the delayed info-read contract above.
 Its empty body follows the WebUI homepage welcome: centered OpenAI mark with an 80dp maximum,
 16dp mark-to-title spacing, and a 28sp Bold headlineMedium title with 35sp line height and
-onBackground color. In an online local draft or confirmed-empty history, that title is the technical
-product name `Codex Desktop`. An 8dp gap separates it from the selected device's configured name in
+onBackground color. In an online local draft, confirmed-empty history, or pending/reconnecting empty
+body, that title is the technical product name `Codex Desktop`; never show the central Connecting
+headline. An 8dp gap separates it from the selected device's configured name in
 bodyMedium/onSurfaceVariant, centered with at most two lines and ellipsis. Resolve that name through
 remoteDeviceName and the localized Device fallback; never derive it from an address or hostname,
 or hard-code a particular device. Device selection/name changes immediately update the subtitle.
-Connecting, offline and failed-read states retain their localized state headline and existing safe
-Retry action, with the same selected-device subtitle. Keep the block inside the original measured
+Offline and failed-read states retain their localized state headline and existing safe Retry action,
+with the same selected-device subtitle. The top bar continues to show actual connection status.
+Every empty-body appearance, including its first composition and return after absence, fades from
+transparent to opaque over 200ms using the original loading cover's opacity timing. Reduced Motion
+retains this fade without any scale, translation or geometry animation. Live state updates use one
+current body without restarting its entrance or retaining stale Retry actions. Loaded messages,
+a missing session or initial-history opening remove the empty body immediately, including during
+an interrupted entrance. Keep the block inside the original measured
 top-bar/composer range, including IME changes. Measure the actual title, subtitle, gaps and Retry
 at their natural height before assigning remaining space to the decorative mark, preserving text
 and action geometry for large fonts, long names and RTL. When those details alone exceed the

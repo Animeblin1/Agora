@@ -1,20 +1,27 @@
 package com.newoether.agora.ui.remote
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -32,6 +39,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.newoether.agora.ui.chat.ChatSwitchingOverlay
+import com.newoether.agora.ui.motion.AgoraMotionPolicy
+import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
 import com.newoether.agora.R
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.Participant
@@ -62,19 +71,25 @@ class RemoteEmptyConversationTest {
     private var layoutDirection by mutableStateOf(LayoutDirection.Ltr)
     private var fontScale by mutableStateOf(1f)
     private var expectedSubtitleColor = Color.Unspecified
+    private lateinit var drawingView: View
     private var retries = 0
     private fun text(id: Int) = RuntimeEnvironment.getApplication().getString(id)
 
-    private fun show() {
+    private fun show(reduceMotion: Boolean = false, opacityProbe: Boolean = false) {
         compose.setContent {
-            MaterialTheme {
+            val colors = if (opacityProbe) lightColorScheme(background = Color.White, onBackground = Color.Red)
+                else MaterialTheme.colorScheme
+            MaterialTheme(colorScheme = colors) {
+                drawingView = LocalView.current
                 val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
                 SideEffect { expectedSubtitleColor = subtitleColor }
                 CompositionLocalProvider(
                     LocalDensity provides Density(1f, fontScale),
                     LocalLayoutDirection provides layoutDirection,
+                    LocalAgoraMotionPolicy provides AgoraMotionPolicy(reduceMotion),
                 ) {
-                    Box(Modifier.size(400.dp, 700.dp)) {
+                    Box(Modifier.size(400.dp, 700.dp).background(MaterialTheme.colorScheme.background)
+                        .testTag("remote-empty-test-host")) {
                         RemoteEmptyConversation(state, active, 80.dp, bottom, { retries++ })
                     }
                 }
@@ -82,14 +97,143 @@ class RemoteEmptyConversationTest {
         }
     }
 
-    @Test fun onlineNewDraftConnectingOfflineAndConfirmedEmptyUseDistinctLocalizedGuidance() {
+    @Test fun emptyAppearanceFadesOnInitialCompositionAndAfterAbsenceWithoutSpatialMotion() {
+        assertInitialAndLaterAppearance(reduceMotion = false)
+    }
+
+    @Test fun reducedMotionRetainsTheSameGradualEmptyAppearance() {
+        assertInitialAndLaterAppearance(reduceMotion = true)
+    }
+
+    private fun assertInitialAndLaterAppearance(reduceMotion: Boolean) {
+        state = state.copy(loading = true,
+            devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTING) })
+        compose.mainClock.autoAdvance = false
+        show(reduceMotion = reduceMotion, opacityProbe = true)
+        compose.waitForIdle()
+        assertEquals("Initial composition starts transparent", 0, strongestWelcomeRed())
+        val body = compose.onNodeWithTag("remote-empty-conversation")
+        val initialBounds = body.getUnclippedBoundsInRoot()
+        frame()
+        compose.mainClock.advanceTimeBy(80)
+        compose.waitForIdle()
+        val middle = strongestWelcomeRed()
+        assertTrue("Initial appearance has intermediate opacity: $middle", middle in 1..254)
+        assertEquals(initialBounds, body.getUnclippedBoundsInRoot())
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        val later = strongestWelcomeRed()
+        assertTrue("Opacity grows through the 200ms entrance: $middle -> $later", later > middle && later < 255)
+        compose.mainClock.advanceTimeBy(160)
+        compose.waitForIdle()
+        assertTrue("The entrance reaches full opacity", strongestWelcomeRed() >= 254)
+        assertEquals(initialBounds, body.getUnclippedBoundsInRoot())
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
+        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
+        compose.runOnIdle { state = state.copy(session = null); Snapshot.sendApplyNotifications() }
+        frame()
+        body.assertDoesNotExist()
+        assertEquals(0, strongestWelcomeRed())
+        compose.runOnIdle {
+            state = state.copy(session = RemoteSession("returning", "", "", 0), loading = false,
+                failure = RemoteFailure.SERVICE,
+                devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTED, name = "Renamed Workstation") })
+            Snapshot.sendApplyNotifications()
+        }
+        frame()
+        assertEquals("A later appearance also starts transparent", 0, strongestWelcomeRed())
+        val returningBounds = body.getUnclippedBoundsInRoot()
+        compose.mainClock.advanceTimeBy(80)
+        compose.waitForIdle()
+        val returningMiddle = strongestWelcomeRed()
+        assertTrue("Later appearance has intermediate opacity: $returningMiddle", returningMiddle in 1..254)
+        assertEquals(returningBounds, body.getUnclippedBoundsInRoot())
+        compose.mainClock.advanceTimeBy(160)
+        compose.waitForIdle()
+        assertTrue("Later appearance reaches full opacity", strongestWelcomeRed() >= 254)
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Renamed Workstation")
+        compose.onAllNodesWithText(text(R.string.retry)).assertCountEquals(1)
+        compose.onNodeWithText(text(R.string.retry)).performTouchInput { click() }
+        assertEquals(1, retries)
+    }
+
+    @Test fun interruptedAppearanceUsesLatestStateAndCannotPaintOverLoadedHistory() {
+        compose.mainClock.autoAdvance = false
+        show(opacityProbe = true)
+        frame()
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        val enteringOpacity = strongestWelcomeRed()
+        assertTrue(enteringOpacity in 1..254)
+        compose.runOnIdle {
+            state = state.copy(failure = RemoteFailure.SERVICE,
+                devices = state.devices.map { it.copy(name = "Latest Device") })
+            Snapshot.sendApplyNotifications()
+        }
+        frame()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_empty_retry_hint))
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Latest Device")
+        compose.onNodeWithText("Quantum").assertDoesNotExist()
+        compose.onAllNodesWithText(text(R.string.retry)).assertCountEquals(1)
+        assertTrue("An ordinary state update does not restart or complete the fade", strongestWelcomeRed() in enteringOpacity..254)
+        val groups = listOf(RemoteMessageGroup(ChatMessage("loaded", text = "Retained", participant = Participant.USER), emptyList()))
+        compose.runOnIdle { state = state.copy(messageGroups = groups); Snapshot.sendApplyNotifications() }
+        frame()
+        compose.onNodeWithTag("remote-empty-conversation").assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
+        assertEquals("Loaded history removes partial empty-state paint immediately", 0, strongestWelcomeRed())
+        assertEquals(groups, state.messageGroups)
+        compose.runOnIdle {
+            state = state.copy(messageGroups = emptyList(), loading = true, failure = null,
+                devices = state.devices.map { it.copy(name = "Newest Device") })
+            Snapshot.sendApplyNotifications()
+        }
+        frame()
+        assertEquals("Interrupted entry restarts transparent with only the latest state", 0, strongestWelcomeRed())
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
+        compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Newest Device")
+        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
+        compose.mainClock.advanceTimeBy(240)
+        compose.waitForIdle()
+        assertTrue(strongestWelcomeRed() >= 254)
+        assertEquals(0, retries)
+    }
+
+    private fun frame() {
+        Snapshot.sendApplyNotifications()
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+    }
+
+    private fun strongestWelcomeRed(): Int {
+        val bounds = compose.onNodeWithTag("remote-empty-test-host").fetchSemanticsNode().boundsInRoot
+        val bitmap = Bitmap.createBitmap(bounds.width.toInt(), bounds.height.toInt(), Bitmap.Config.ARGB_8888)
+        return try {
+            compose.runOnUiThread {
+                val canvas = Canvas(bitmap)
+                canvas.translate(-bounds.left, -bounds.top)
+                drawingView.draw(canvas)
+            }
+            var strongest = 0
+            for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
+                val pixel = bitmap.getPixel(x, y)
+                val red = android.graphics.Color.red(pixel)
+                val green = android.graphics.Color.green(pixel)
+                strongest = maxOf(strongest, red - green)
+            }
+            strongest
+        } finally { bitmap.recycle() }
+    }
+
+    @Test fun onlineNewDraftAndPendingConnectionKeepProductIdentityWhileOfflineAndFailureStayLocalized() {
         show()
         compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
         compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Quantum")
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
         assertEquals(0, retries)
         compose.runOnIdle { state = state.copy(devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTING) }) }
-        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
         compose.runOnIdle { state = state.copy(devices = state.devices.map { it.copy(status = RemoteDeviceStatus.IDLE) }) }
         compose.onNodeWithText(text(R.string.remote_empty_offline_hint)).assertIsDisplayed()
@@ -115,7 +259,8 @@ class RemoteEmptyConversationTest {
         compose.onNodeWithText(text(R.string.retry)).assertIsNotEnabled()
         assertEquals(1, retries)
         compose.runOnIdle { state = state.copy(loading = true) }
-        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
     }
 

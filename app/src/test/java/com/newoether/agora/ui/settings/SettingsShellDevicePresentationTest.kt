@@ -325,6 +325,35 @@ class SettingsShellDevicePresentationTest {
     }
 
     @Test
+    fun newSshUsernameIsAnEmptyEditableFieldWithAGrayRootPlaceholder() {
+        compose.setContent {
+            MaterialTheme {
+                onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+                Box(Modifier.size(400.dp, 900.dp)) {
+                    SettingsShellDeviceEditor(
+                        initial = host.copy(type = "ssh", sshHost = "example.test"), isNew = true,
+                        viewModel = viewModel, existingDevices = emptyList(), showDocFab = false,
+                        isCurrent = { true }, onBack = {},
+                    )
+                }
+            }
+        }
+        val field = compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("shell-field-user")))
+        field.performScrollTo()
+        field.assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText,
+            androidx.compose.ui.text.AnnotatedString(""),
+        ))
+        val hint = compose.onNode(hasText("root") and hasAnyAncestor(hasTestTag("shell-field-user")),
+            useUnmergedTree = true).assertIsDisplayed()
+        val style = layout(hint).layoutInput.style
+        assertEquals(14.sp, style.fontSize)
+        assertEquals(onSurfaceVariant, style.color)
+        field.performTextReplacement("builder")
+        hint.assertDoesNotExist()
+        field.assertTextEquals("builder")
+    }
+    @Test
     fun shellUrlValueAndPlaceholderRenderAtTheSameSmallerFontAsTheMcpField() {
         var reference by mutableStateOf("")
         var hint = ""

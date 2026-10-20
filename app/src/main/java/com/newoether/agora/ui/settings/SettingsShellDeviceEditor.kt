@@ -46,8 +46,11 @@ internal fun SettingsShellDeviceEditor(
     isCurrent: () -> Boolean,
     onBack: () -> Unit,
 ) {
-    var draft by remember { mutableStateOf(initial) }
-    var portInput by remember { mutableStateOf(initial.sshPort.toString()) }
+    val openingSnapshot = remember {
+        if (isNew && initial.sshUser == "root") initial.copy(sshUser = "") else initial
+    }
+    var draft by remember { mutableStateOf(openingSnapshot) }
+    var portInput by remember { mutableStateOf(openingSnapshot.sshPort.toString()) }
     var closed by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var saveAttempt by remember { mutableIntStateOf(0) }
@@ -85,7 +88,7 @@ internal fun SettingsShellDeviceEditor(
     }
     val guardedBack = if (pageActive && ownsEditor()) {
         rememberUnsavedChangesBack(
-            hasUnsavedChanges = draft != initial || portInput != initial.sshPort.toString() || importingKey,
+            hasUnsavedChanges = draft != openingSnapshot || portInput != openingSnapshot.sshPort.toString() || importingKey,
             onBack = ::leave,
         )
     } else ({})
@@ -218,7 +221,7 @@ internal fun SettingsShellDeviceEditor(
                                     if (ownsEditor() && !saving && draft.type != type) {
                                         update(ShellDeviceConfig(
                                             id = draft.id, name = draft.name,
-                                            description = draft.description, type = type,
+                                            description = draft.description, type = type, sshUser = "",
                                         ))
                                         portInput = "22"
                                     }

@@ -223,6 +223,69 @@ class SettingsShellDeviceCreationTest {
     }
 
     @Test
+    fun untouchedNewDeviceReturnsWithoutAFalseUnsavedUsernameChange() {
+        showPage()
+        addDraft()
+        back().performClick()
+        compose.waitForIdle()
+        button(R.string.unsaved_changes_discard).assertDoesNotExist()
+        add().assertIsDisplayed()
+        assertNoPersistence()
+    }
+    @Test
+    fun newSshUsernameStaysEmptyWhileVerifyAndSaveUseTheRootDefault() {
+        val probes = mutableListOf<ShellDeviceConfig>()
+        every { viewModel.sshHostKeyVerifier } returns SshHostKeyVerifier(
+            createSession = { request ->
+                probes += request
+                HostKeyCaptureSession(probe = {}, capturedHostKey = { null }, close = {})
+            },
+            ioDispatcher = Dispatchers.Unconfined,
+        )
+        showPage()
+        addDraft()
+        compose.onNodeWithText("SSH").performScrollTo().performClick()
+        field(R.string.shell_device_user).performScrollTo()
+        assertValue(R.string.shell_device_user, "")
+        compose.onNode(hasText("root") and hasAnyAncestor(hasTestTag("shell-field-user")),
+            useUnmergedTree = true).assertIsDisplayed()
+        replace(R.string.shell_device_name, "New SSH")
+        replace(R.string.shell_device_host, "new.example.test")
+        button(R.string.shell_ssh_verify_host_key).performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals("root", probes.single().sshUser) }
+        field(R.string.shell_device_user).performScrollTo()
+        assertValue(R.string.shell_device_user, "")
+        assertNoPersistence()
+        save().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals("root", additions.single().sshUser) }
+        assertValue(R.string.shell_device_user, "")
+    }
+    @Test
+    fun savedRootAndExplicitUsernameRemainValuesAndClearingUsesTheDefaultOnlyAtSave() {
+        val root = ShellDeviceConfig(id = "root", name = "Root Host", type = "ssh", sshHost = "root.example.test")
+        val builder = root.copy(id = "builder", name = "Builder Host", sshUser = "builder")
+        showPage(listOf(root, builder))
+        open(root.name)
+        field(R.string.shell_device_user).performScrollTo()
+        assertValue(R.string.shell_device_user, "root")
+        back().performClick()
+        compose.waitForIdle()
+        button(R.string.unsaved_changes_discard).assertDoesNotExist()
+        open(builder.name)
+        field(R.string.shell_device_user).performScrollTo()
+        assertValue(R.string.shell_device_user, "builder")
+        replace(R.string.shell_device_user, "   ")
+        assertNoPersistence()
+        save().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(builder.copy(sshUser = "root"), updates.single())
+        }
+        assertValue(R.string.shell_device_user, "   ")
+    }
+    @Test
     fun blankDuplicateAndReservedNamesDisableSaveWithoutChangingTheDraft() {
         val existing = ShellDeviceConfig(id = "existing", name = "  Build Host  ")
         showPage(listOf(existing))

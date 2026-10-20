@@ -118,6 +118,7 @@ internal fun SettingsSshAuthenticationEditor(
                     modifier = Modifier.testTag("shell-field-user"),
                     value = device.sshUser,
                     onValueChange = { if (canEdit()) onChange(device.copy(sshUser = it)) },
+                    placeholder = "root",
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
