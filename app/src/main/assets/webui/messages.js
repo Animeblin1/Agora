@@ -17,6 +17,7 @@ import { sync } from "./sync.js";
 import { DetailSheet, CardIcon, InfoItem, useCardTitle, canOpenSheetItem } from "./detail-sheet.js";
 import { attachScrollbar } from "./material/scrollbar.js";
 import { AttachmentViewer } from "./composer.js";
+import { bindTailScrollInput, createStreamingTailFollow, coalescedScrollStep } from "./tail-follow.js";
 
 
 /**
@@ -42,18 +43,8 @@ const BOTTOM_MOTION = {
   settlingIdleMs: 192,
   settlingTimeoutMs: 1_600,
   settlingStableFrames: 6,
-  attachTauSeconds: 0.055,
-  attachMaxVelocityPxPerSecond: 2_800,
-  attachThresholdPx: 0.5,
 };
 
-/** Compose coalescedScrollStep: exponential error-proportional travel inside a velocity cap. */
-function coalescedScrollStep(errorPx, elapsedSeconds, timeConstantSeconds, maximumVelocity, minimumStepPx) {
-  if (errorPx === 0 || elapsedSeconds <= 0) return 0;
-  const fraction = 1 - Math.exp(-elapsedSeconds / Math.max(timeConstantSeconds, 0.001));
-  const maximumStep = Math.max(minimumStepPx, maximumVelocity * elapsedSeconds);
-  return Math.min(maximumStep, Math.max(-maximumStep, errorPx * fraction));
-}
 
 /** Numeric stand-in for a Compose Easing so a per-frame actor can reuse a CSS timing curve. */
 function cubicBezierEasing(x1, y1, x2, y2) {
@@ -1002,6 +993,9 @@ export function MessageList({ state, label, onPageAction }) {
   const bar = useRef(null);
   const pinned = useRef(false);
   const bottomMotion = useRef(null);
+  const tailFollow = useRef(createStreamingTailFollow());
+  const tailInput = useRef(null);
+  const tailInputHandlers = useRef(null);
   const bottomButton = useRef(null);
   const bottomSeek = useRef(null);
   const bottomRequested = useRef(false);
@@ -1181,7 +1175,7 @@ export function MessageList({ state, label, onPageAction }) {
     setBottomVisible(latch.heading && !!state.openId && state.path.length > 0 && !covered &&
       state.openStatus === "ready" && !pageLoading && !latch.near &&
       !bottomRequested.current && !bottomMotion.current &&
-      !(pinned.current && state.generating) && !branch && !search?.query.trim());
+      !tailFollow.current.following && !branch && !search?.query.trim());
   };
   const pagePath = pageEntries(displayed);
   const windowStart = displayed.end > displayed.start ? roundStarts[displayed.start] : 0;
@@ -1424,7 +1418,16 @@ export function MessageList({ state, label, onPageAction }) {
 
   // Chrome runs no CSS transition on its own scrollbar, so the animated bar is drawn beside it; the
   // native bar stays in place and keeps every hit target.
+  useEffect(() => {
+    const input = bindTailScrollInput(scroller.current, {
+      start: () => tailInputHandlers.current?.start(),
+      stop: () => tailInputHandlers.current?.stop(),
+    }, bar.current);
+    tailInput.current = input;
+    return () => { input.dispose(); tailInput.current = null; };
+  }, []);
   useEffect(() => attachScrollbar(scroller.current, bar.current, direction => {
+    tailInput.current?.scrollbarInput();
     pageInput.current.direction = direction;
     pageAtEdge.current?.();
   }), []);
@@ -1479,6 +1482,8 @@ export function MessageList({ state, label, onPageAction }) {
   // The app opens a conversation at its newest message. Row bodies arrive after the path, so
   // this same owner releases the cover after visible bodies and bottom layout have settled.
   useLayoutEffect(() => {
+    tailFollow.current.reset();
+    bottomMotion.current = null;
     pinned.current = true;
     bottomRequested.current = false;
     setBottomVisible(false);
@@ -1508,6 +1513,18 @@ export function MessageList({ state, label, onPageAction }) {
     // actor settles on the end sentinel before releasing ownership.
     let motionFrame = 0;
     const bottomError = () => Math.max(0, root.scrollHeight - root.clientHeight - root.scrollTop);
+    const updateTail = (now = performance.now()) => {
+      if (covered || branch || search?.query.trim()) bottomMotion.current = null;
+      tailFollow.current.update({
+        generating: generationActive.current,
+        blocked: covered || !!branch || !!search?.query.trim() || !!state.composer?.stopping ||
+          !!state.display?.reduceMotion || !tailReady || pageLoading,
+        handoff: pending || !!bottomMotion.current,
+        stickToBottom: state.display?.stickToBottom ?? true,
+      }, now);
+      tailFollow.current.proximity(bottomError(), !!tailInput.current?.scrolling, now);
+      pinned.current = pending || !!bottomMotion.current || tailFollow.current.following;
+    };
     let scrollRemainder = 0;
     const scrollBy = (step) => {
       const before = root.scrollTop;
@@ -1528,11 +1545,10 @@ export function MessageList({ state, label, onPageAction }) {
     };
     const pump = () => {
       motionFrame = 0;
+      const now = performance.now();
+      updateTail(now);
       const motion = bottomMotion.current;
-      if (!pinned.current) {
-        bottomMotion.current = null;
-        return;
-      }
+      if (!pinned.current) return;
       if (fading) return;
       // Opening stays a hard placement under the switching cover, exactly like scrollToItem.
       if (pending) {
@@ -1544,14 +1560,21 @@ export function MessageList({ state, label, onPageAction }) {
         bottomMotion.current = null;
         return;
       }
-      const now = performance.now();
+      if (state.display?.reduceMotion && motion) {
+        root.scrollTop = root.scrollHeight;
+        bottomMotion.current = null;
+        updateTail(now);
+        return;
+      }
       const generating = generationActive.current;
       if (!motion) {
-        // Idle growth is not a scroll gesture: the phone detaches too, leaving the tail in place.
-        if (!generating || bottomError() <= BOTTOM_MOTION.attachThresholdPx) return;
-        bottomMotion.current = { mode: "attach", previous: now };
+        const step = tailFollow.current.frame(bottomError(), now);
+        if (Math.abs(step) > 0.05) scrollBy(step);
+        pinned.current = tailFollow.current.following;
+        if (pinned.current) wake();
+        return;
       }
-      const active = bottomMotion.current;
+      const active = motion;
       const elapsed = Math.max(0.001, Math.min(0.05, (now - active.previous) / 1000));
       active.previous = now;
       const height = Math.max(1, root.clientHeight);
@@ -1566,6 +1589,12 @@ export function MessageList({ state, label, onPageAction }) {
           scrollBy(error);
           active.stable += 1;
           if (active.stable >= BOTTOM_MOTION.stableFrames) {
+            if (generating) {
+              bottomMotion.current = null;
+              updateTail(now);
+              wake();
+              return;
+            }
             active.mode = "settle";
             active.settlingStarted = now;
             active.settlingStable = 0;
@@ -1621,12 +1650,6 @@ export function MessageList({ state, label, onPageAction }) {
         wake();
         return;
       }
-      if (error > BOTTOM_MOTION.attachThresholdPx) {
-        const step = coalescedScrollStep(error, elapsed, BOTTOM_MOTION.attachTauSeconds,
-          BOTTOM_MOTION.attachMaxVelocityPxPerSecond, BOTTOM_MOTION.minimumStepPx);
-        if (Math.abs(step) > 0.05) scrollBy(step);
-      }
-      if (bottomError() > BOTTOM_MOTION.attachThresholdPx) wake();
     };
     function wake() {
       if (!motionFrame) motionFrame = requestAnimationFrame(() => { pump(); refreshBottom.current?.(); });
@@ -1639,6 +1662,7 @@ export function MessageList({ state, label, onPageAction }) {
       if (pending || covered || state.display?.reduceMotion) {
         bottomMotion.current = null;
         root.scrollTop = root.scrollHeight;
+        updateTail();
         return;
       }
       const now = performance.now();
@@ -1686,6 +1710,7 @@ export function MessageList({ state, label, onPageAction }) {
       }
     };
     const followBottom = (fromFrame = false) => {
+      updateTail();
       if (fading) return;
       if (branch) {
         pinned.current = false;
@@ -1802,8 +1827,8 @@ export function MessageList({ state, label, onPageAction }) {
       if (covered && !coveredOpen) return;
       if (pending && !frame) frame = requestAnimationFrame(settle);
     };
-    const release = (event) => {
-      if (["pointerdown", "touchstart"].includes(event.type)) pageInput.current.direction = 0;
+    const release = () => {
+      tailFollow.current.userDrag();
       if (branch && !branch.request.scrollFinished && !branchScroll.current?.done) {
         branchScroll.current = { id: branch.request.id, target: branchTarget, done: true };
         sync.branchAck('branch_scroll', branch, false);
@@ -1820,21 +1845,26 @@ export function MessageList({ state, label, onPageAction }) {
       refreshBottom.current?.();
       pageAtEdge.current?.();
     };
+    const handlers = {
+      start: release,
+      stop: () => { updateTail(); if (pinned.current) wake(); refreshBottom.current?.(); },
+    };
+    tailInputHandlers.current = handlers;
     const follow = new ResizeObserver(followBottom);
     follow.observe(column);
     follow.observe(root);
     followBottom();
-    const inputs = ["wheel", "touchstart", "keydown", "pointerdown"];
-    inputs.forEach((type) => root.addEventListener(type, release, { passive: true }));
     return () => {
       follow.disconnect();
       cancelAnimationFrame(frame);
       cancelAnimationFrame(motionFrame);
       cancelAnimationFrame(seekFrame);
       if (bottomSeek.current === startSeek) bottomSeek.current = null;
-      inputs.forEach((type) => root.removeEventListener(type, release));
+      if (tailInputHandlers.current === handlers) tailInputHandlers.current = null;
     };
-  }, [state.openId, state.openStatus, ids, state.bodies, state.streaming, settledOpenId, state.scrollRequest, search, branch, covered, switching?.phase, tailReady, state.display?.reduceMotion]);
+  }, [state.openId, state.openStatus, ids, state.bodies, state.streaming, settledOpenId, state.scrollRequest,
+    state.generating, state.composer?.stopping, search, branch, covered, switching?.phase, tailReady,
+    pageLoading, state.display?.reduceMotion, state.display?.stickToBottom]);
 
   useLayoutEffect(() => {
     const node = cover.current;

@@ -137,6 +137,7 @@ internal sealed interface WebSyncEvent {
         val blurEffectsEnabled: Boolean,
         val reduceMotion: Boolean,
         val liveThinking: WebLiveTimerStrings,
+        @EncodeDefault val stickToBottom: Boolean = true,
         @EncodeDefault val subagentCapsuleDisplayMode: String = com.newoether.agora.data.SubagentCapsuleDisplayModes.DEFAULT,
     ) : WebSyncEvent
 

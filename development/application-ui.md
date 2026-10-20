@@ -1202,12 +1202,22 @@ The existing MessageList bottom-follow owner consumes them only when that messag
 path; queue admission alone does not move the reader. User input releases bottom following as before.
 That bottom-follow owner is the list's only programmatic scroll actor: send requests, streaming growth
 and settled content all wake the same frame loop instead of adding separate corrections. It follows the
-phone controller — a 240ms FastOutSlowIn send start feeding the 0.09s measured and 0.16s unmeasured
-exponential seek under the 0.82-viewport per-frame cap, then a settling window of 700ms while a
-generation runs or 192ms otherwise before ownership releases. Content growth during a generation keeps
-pulling with the 0.055s tail correction, and growth outside one leaves the reader still. Opening a
-conversation stays an instant placement under the cover, App Reduce Motion snaps, and any wheel, touch,
-key or pointer input ends the motion and hands the list to the reader.
+phone controller with a 240ms FastOutSlowIn send start feeding the 0.09s measured and 0.16s unmeasured
+exponential seek under the 0.82-viewport per-frame cap. WebUI consumes the App's stored Stick to Bottom
+value through the existing display event, including live changes, without a browser override.
+Its lifecycle matches native INACTIVE, ARMED, ATTACHED, SETTLING and DETACHED states. A real reader
+scroll gesture detaches; an ordinary click, focus, text selection or non-scrolling key does not.
+Only after reader scrolling has stopped, on the newest ready page and within 48px of the physical
+bottom, may generation following attach again. Search, loading, branch replacement, competing seeks
+and Stop keep their existing exclusion. Explicit send/bottom navigation retains its own seek even
+when Stick to Bottom is off. Attached growth uses the native 0.055s tail correction capped at
+2800px/s. Generation completion enters settlement for at least 700ms and eight stable frames, capped
+at 1600ms; detached readers are never pulled back by terminal growth. Opening a conversation stays
+an instant placement under the cover. App Reduced Motion blocks streaming auto-follow through the
+same native motion policy, while explicit send/bottom seeks snap. A settling phase already started
+continues under native rules even if Stick to Bottom is disabled. A new active generation resumes
+attachment from an unfinished settling phase through the same lifecycle owner. Paging, anchor compensation and
+bottom-button 48px/96px hysteresis remain owned by the same MessageList scroll loop.
 WebUI history pages use an independent `262144`-token (256K) crossing threshold and a maximum of
 `10` complete rounds per newly loaded window. These are not the conversation's generation context
 setting or historical Provider usage. Every initial, older, newer and explicit-bottom load admits

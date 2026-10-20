@@ -521,6 +521,10 @@ class AppContainer(
                 settingsRepository.subagentCapsuleDisplayMode,
             ) { context, capsuleDisplayMode ->
                 context.copy(subagentCapsuleDisplayMode = capsuleDisplayMode)
+            }.combine(
+                settingsRepository.stickToBottom,
+            ) { context, stickToBottom ->
+                context.copy(stickToBottom = stickToBottom)
             },
         )
     }

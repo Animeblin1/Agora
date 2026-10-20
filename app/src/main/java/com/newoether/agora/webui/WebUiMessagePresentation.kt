@@ -49,6 +49,7 @@ internal data class WebDisplayContext(
     val autoWrapCodeBlocks: Boolean,
     val blurEffectsEnabled: Boolean = true,
     val reduceMotion: Boolean = false,
+    val stickToBottom: Boolean = true,
     /** The phone's model aliases and provider-name visibility, for MessageInfoDialog's model line. */
     val modelAliases: Map<String, String> = emptyMap(),
     val modelProviderNames: Map<String, Boolean> = emptyMap(),
@@ -62,6 +63,7 @@ internal data class WebDisplayContext(
         autoWrapCodeBlocks = autoWrapCodeBlocks,
         blurEffectsEnabled = blurEffectsEnabled,
         reduceMotion = reduceMotion,
+        stickToBottom = stickToBottom,
         subagentCapsuleDisplayMode = subagentCapsuleDisplayMode,
         liveThinking = WebLiveTimerStrings(
             seconds = resources.getString(R.string.thinking_for_seconds_ellipsis),

@@ -69,6 +69,18 @@ class WebUiMessagePresentationTest {
         )
 
     @Test
+    fun phoneStickToBottomSettingIsAlwaysPublishedIncludingItsDefault() {
+        for (enabled in listOf(true, false)) {
+            val event = display().copy(stickToBottom = enabled).toEvent()
+            assertEquals(enabled, event.stickToBottom)
+            val encoded = kotlinx.serialization.json.Json.encodeToString(
+                WebSyncEvent.Display.serializer(), event,
+            )
+            assertTrue(encoded.contains("\"stickToBottom\":$enabled"))
+        }
+        assertTrue(display().toEvent().stickToBottom)
+    }
+    @Test
     fun completionSourceProjectsCompactMetadataAndKeepsTheFullOriginalResult() {
         val raw = "Worker (child) [failed]\nFull original result\nError: Connection closed"
         val result = com.newoether.agora.model.MessageSource.SubagentResult(
