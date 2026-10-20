@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -108,7 +109,17 @@ internal fun SettingsSshAuthenticationEditor(
     }
     SettingsGroup(title = stringResource(R.string.shell_authentication), items = buildList {
         add {
-            SettingsIconContent(Icons.Default.Key) {
+            SettingsIconContent(
+                Icons.Default.Key,
+                modifier = Modifier.testTag("shell-ssh-authentication"),
+            ) {
+                McpLabeledField(
+                    label = stringResource(R.string.shell_device_user),
+                    modifier = Modifier.testTag("shell-field-user"),
+                    value = device.sshUser,
+                    onValueChange = { if (canEdit()) onChange(device.copy(sshUser = it)) },
+                )
+                Spacer(Modifier.height(12.dp))
                 Text(
                     stringResource(R.string.shell_ssh_auth_method),
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
@@ -121,6 +132,7 @@ internal fun SettingsSshAuthenticationEditor(
                         stringResource(R.string.shell_ssh_auth_private_key),
                     ),
                     selectedIndex = if (device.sshAuthMode == SSH_AUTH_PRIVATE_KEY) 1 else 0,
+                    modifier = Modifier.testTag("shell-auth-method"),
                     onSelect = { index ->
                         val mode = if (index == 1) SSH_AUTH_PRIVATE_KEY else SSH_AUTH_PASSWORD
                         if (canEdit() && !importing && mode != device.sshAuthMode) {

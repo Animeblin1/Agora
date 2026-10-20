@@ -104,6 +104,7 @@ class SettingsShellDeviceCreationTest {
         compose.setContent {
             val context = LocalContext.current
             strings = listOf(
+                R.string.shell_device_host, R.string.shell_device_port, R.string.shell_device_user,
                 R.string.shell_add_device, R.string.shell_device_name, R.string.shell_device_desc,
                 R.string.shell_device_url, R.string.shell_device_key, R.string.save, R.string.back,
                 R.string.custom_provider_name_error, R.string.unsaved_changes_discard,
@@ -152,6 +153,9 @@ class SettingsShellDeviceCreationTest {
         R.string.shell_device_desc -> "shell-field-description"
         R.string.shell_device_url -> "shell-field-url"
         R.string.shell_device_key -> "shell-field-key"
+        R.string.shell_device_host -> "shell-field-host"
+        R.string.shell_device_port -> "shell-field-port"
+        R.string.shell_device_user -> "shell-field-user"
         else -> error("Unknown Shell field")
     }
     private fun field(label: Int) = compose.onNode(
@@ -163,7 +167,8 @@ class SettingsShellDeviceCreationTest {
     private fun back() = compose.onNodeWithContentDescription(strings.getValue(R.string.back))
     private fun open(name: String) {
         val id = devices.value.single { it.name == name }.id
-        compose.onNodeWithTag("shell-device-details:$id").performScrollTo().performClick()
+        compose.onNodeWithTag("shell-device-menu:$id").performScrollTo().performClick()
+        button(R.string.task_section_details).performClick()
         compose.waitForIdle()
         field(R.string.shell_device_name).assertExists()
     }
@@ -297,8 +302,7 @@ class SettingsShellDeviceCreationTest {
     fun editingIgnoresPersistedEchoAndDiscardReentryStartsFromTheLatestSnapshot() {
         val initial = ShellDeviceConfig(id = "existing", name = "Build Host", description = "Original")
         showPage(listOf(initial))
-        compose.onNodeWithContentDescription(strings.getValue(R.string.task_section_details)).performScrollTo().performClick()
-        compose.waitForIdle()
+        open(initial.name)
         replace(R.string.shell_device_name, "  bUiLd HoSt  ")
         replace(R.string.shell_device_desc, "Unsaved change")
         save().assertIsEnabled()
@@ -389,10 +393,11 @@ class SettingsShellDeviceCreationTest {
         val existing = (1..20).map { ShellDeviceConfig(id = "$it", name = "Host $it") }
         showPage(existing)
         val rootPath = listOf(false, "devices")
-        compose.onNodeWithTag("shell-device-details:8").performScrollTo()
+        compose.onNodeWithTag("shell-device-menu:8").performScrollTo()
         compose.waitForIdle()
         val expected = retention.scrollState(rootPath)!!.value
-        compose.onNodeWithTag("shell-device-details:8").performClick()
+        compose.onNodeWithTag("shell-device-menu:8").performClick()
+        button(R.string.task_section_details).performClick()
         compose.waitForIdle()
         replace(R.string.shell_device_desc, "Saved detail")
         save().performClick()
@@ -536,6 +541,37 @@ class SettingsShellDeviceCreationTest {
         button(R.string.shell_ssh_import_private_key).assertIsEnabled()
         save().assertIsNotEnabled()
         assertNoPersistence()
+    }
+
+    @Test
+    fun compactSshFieldsRemainIndependentDraftValuesAndOnlyExplicitSaveSubmitsThem() {
+        val initial = ShellDeviceConfig(
+            id = "ssh", name = "SSH Host", type = "ssh", sshHost = "old.example.test",
+            sshUser = "old-user", sshPassword = "existing-secret",
+        )
+        showPage(listOf(initial))
+        open(initial.name)
+        replace(R.string.shell_device_name, " Renamed host ")
+        replace(R.string.shell_device_desc, " Build machine ")
+        replace(R.string.shell_device_host, " new.example.test ")
+        replace(R.string.shell_device_port, "2x222")
+        replace(R.string.shell_device_user, " builder ")
+        assertValue(R.string.shell_device_port, "2222")
+        assertNoPersistence()
+        save().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(initial.copy(
+                name = "Renamed host", description = "Build machine",
+                sshHost = "new.example.test", sshPort = 2222, sshUser = "builder",
+            ), updates.single())
+            results.single()(true)
+        }
+        compose.waitForIdle()
+        field(R.string.shell_device_name).assertDoesNotExist()
+        add().assertIsEnabled()
+        verify(exactly = 1) { settings.updateShellDevice(any(), any(), any()) }
+        verify(exactly = 0) { settings.addShellDevice(any(), any(), any()) }
     }
 
     @Test

@@ -233,19 +233,24 @@ and WebUI share this contract.
 ## Shell device list and editors
 
 - Shell devices use the existing guarded Settings list/detail navigation. Each root card has a
-  bounded whole-card ripple and opens the shared Details/Delete dropdown. Its separate right-side
-  outlined Info Details IconButton opens the full-page editor directly. No pencil, inline expansion
-  or passive disclosure glyph is present. Delete captures the device and requires confirmation.
+  bounded whole-card ripple. The whole row and its right-side MoreVert IconButton open the same
+  shared Details/Delete dropdown; only Details opens the full-page editor. No pencil, inline
+  expansion or passive disclosure glyph is present. Delete captures the device and requires confirmation.
 - Root headlines retain the compact Conch/SSH badge: 4 dp corners, 6 dp horizontal/1 dp vertical
-  padding, labelSmall and primaryContainer/onPrimaryContainer for both types. Description and
-  connection summary remain supporting text below the name.
+  padding, labelSmall and primaryContainer/onPrimaryContainer for both types. Only a nonblank
+  description appears below the name, with at most two lines and ellipsis. Addresses and connection
+  summaries remain in the detail editor; blank descriptions add no fallback copy or supporting row.
 - Add/Edit follows the MCP details reference: shared collapsing scaffold, Connection group with
   type first, then name/description and endpoint fields, followed by Authentication and SSH Host Key.
-  Type and authentication use the existing MCP PillTabSwitcher in SettingsIconContent. Text fields
-  reuse McpLabeledField with its leading icon, full available width, 16 dp outlined corners and 8 dp
-  label/input gap. Values and placeholders use bodyMedium and full onSurfaceVariant; labels retain
-  bodyLarge Medium. Do not enlarge hints or shrink headings. Keep the root list's scroll and
-  collapsing-title position through the existing scroll owner.
+  Name and description share one Label-icon item with 12 dp between their independent fields.
+  SSH host and port share one Dns-icon item: host fills the remaining width, port is 96 dp and the
+  gap is 12 dp. Insufficient width or larger fonts stack the fields with 12 dp vertical spacing.
+  Username starts the Key-icon Authentication item above the authentication method with 12 dp
+  spacing. Conch retains its URL and API key fields. Type and authentication reuse PillTabSwitcher.
+  Text fields reuse McpLabeledField with 16 dp outlined corners and an 8 dp label/input gap. Values
+  and placeholders use bodyMedium and full onSurfaceVariant; labels retain bodyLarge Medium.
+  Do not enlarge hints or shrink headings. Short and enlarged-font editors remain scrollable.
+  Keep the root list's scroll and collapsing-title position through the existing scroll owner.
 - The detail editor owns the shared `shell.md` documentation FAB and its conditional 80 dp bottom
   clearance. The root list has neither. Sandbox management keeps its existing `sandbox.md` entry.
 - Save is explicit. Successful persistence animates back to the list through the shared transition

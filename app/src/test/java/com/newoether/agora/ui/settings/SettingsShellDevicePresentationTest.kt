@@ -54,7 +54,10 @@ class SettingsShellDevicePresentationTest {
     private var primaryContainer = Color.Unspecified
     private var onSurfaceVariant = Color.Unspecified
 
-    private fun showList(devices: List<ShellDeviceConfig> = listOf(host)) {
+    private fun showList(
+        devices: List<ShellDeviceConfig> = listOf(host),
+        isPageActive: () -> Boolean = { true },
+    ) {
         every { viewModel.settings } returns settings
         every { viewModel.isSandboxFlavor } returns false
         every { settings.shellEnabled } returns MutableStateFlow(true)
@@ -68,8 +71,11 @@ class SettingsShellDevicePresentationTest {
             drawingView = LocalView.current
             val context = LocalContext.current
             strings = listOf(R.string.task_section_details, R.string.delete, R.string.cancel,
-                R.string.shell_delete_confirm_title, R.string.edit).associateWith(context::getString)
-            CompositionLocalProvider(LocalAgoraMotionPolicy provides AgoraMotionPolicy(reduceMotion = true)) {
+                R.string.shell_delete_confirm_title, R.string.edit, R.string.options).associateWith(context::getString)
+            CompositionLocalProvider(
+                LocalAgoraMotionPolicy provides AgoraMotionPolicy(reduceMotion = true),
+                LocalSettingsScrollRetentionActive provides isPageActive(),
+            ) {
                 MaterialTheme {
                     primaryContainer = MaterialTheme.colorScheme.primaryContainer
                     Box(Modifier.size(400.dp, 900.dp)) { SettingsShellPage(viewModel) {} }
@@ -78,7 +84,7 @@ class SettingsShellDevicePresentationTest {
         }
     }
     private fun row() = compose.onNodeWithTag("shell-device-row:${host.id}")
-    private fun details() = compose.onNodeWithTag("shell-device-details:${host.id}")
+    private fun more() = compose.onNodeWithTag("shell-device-menu:${host.id}")
     private fun editorName() = compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("shell-field-name")))
     private fun menu(label: Int) = compose.onNode(hasText(strings.getValue(label)) and hasClickAction())
 
@@ -96,14 +102,46 @@ class SettingsShellDevicePresentationTest {
     }
 
     @Test
-    fun trailingDetailsOpensTheEditorDirectlyWithNoPencilOrMenu() {
+    fun trailingMoreOpensTheSameMenuAndOnlyDetailsEntersTheEditor() {
         showList()
-        details().assertContentDescriptionEquals(strings.getValue(R.string.task_section_details))
+        more().assertContentDescriptionEquals(strings.getValue(R.string.options))
         compose.onNodeWithContentDescription(strings.getValue(R.string.edit)).assertDoesNotExist()
-        details().performScrollTo().performClick()
+        more().performScrollTo().performTouchInput { click() }
+        compose.waitForIdle()
+        editorName().assertDoesNotExist()
+        menu(R.string.task_section_details).assertIsDisplayed()
+        menu(R.string.delete).assertIsDisplayed()
+        menu(R.string.task_section_details).performClick()
         compose.waitForIdle()
         editorName().assertExists()
         menu(R.string.delete).assertDoesNotExist()
+    }
+
+    @Test
+    fun expandedMenuClosesOnPageInactivationAndDoesNotReviveOrActOnReturn() {
+        var pageActive by mutableStateOf(true)
+        showList(isPageActive = { pageActive })
+        more().performScrollTo().performTouchInput { click() }
+        menu(R.string.task_section_details).assertIsDisplayed()
+        menu(R.string.delete).assertIsDisplayed()
+        compose.runOnIdle { pageActive = false }
+        compose.waitForIdle()
+        menu(R.string.task_section_details).assertDoesNotExist()
+        menu(R.string.delete).assertDoesNotExist()
+        more().assertIsNotEnabled().performTouchInput { click() }
+        row().performTouchInput { click() }
+        compose.waitForIdle()
+        editorName().assertDoesNotExist()
+        compose.onNodeWithText(strings.getValue(R.string.shell_delete_confirm_title)).assertDoesNotExist()
+        verify(exactly = 0) { settings.removeShellDevice(any()) }
+        compose.runOnIdle { pageActive = true }
+        compose.waitForIdle()
+        more().assertIsEnabled()
+        menu(R.string.task_section_details).assertDoesNotExist()
+        menu(R.string.delete).assertDoesNotExist()
+        editorName().assertDoesNotExist()
+        compose.onNodeWithText(strings.getValue(R.string.shell_delete_confirm_title)).assertDoesNotExist()
+        verify(exactly = 0) { settings.removeShellDevice(any()) }
     }
 
     @Test
@@ -120,6 +158,42 @@ class SettingsShellDevicePresentationTest {
         menu(R.string.delete).performClick()
         verify(exactly = 1) { settings.removeShellDevice(host.id) }
         editorName().assertDoesNotExist()
+    }
+
+    @Test
+    fun listRetainsOnlyTheDescriptionAndEllipsizesItAtTwoLines() {
+        val description = "A dedicated build machine with isolated jobs and cached dependencies. ".repeat(12)
+        val described = host.copy(description = description)
+        val ssh = host.copy(
+            id = "ssh", name = "SSH Host", type = "ssh", sshHost = "ssh.example.test",
+            description = "Interactive shell", sshUser = "builder", sshPort = 2222,
+        )
+        showList(listOf(described, ssh))
+        row().performScrollTo()
+        val rendered = compose.onNode(
+            hasText(description) and hasAnyAncestor(hasTestTag("shell-device-row:${host.id}")),
+            useUnmergedTree = true,
+        )
+        rendered.assertIsDisplayed()
+        val descriptionLayout = layout(rendered)
+        assertEquals(2, descriptionLayout.lineCount)
+        assertTrue("Long descriptions visibly end in an ellipsis", descriptionLayout.isLineEllipsized(1))
+        compose.onNodeWithText("Interactive shell", useUnmergedTree = true).assertExists()
+        for (address in listOf(host.serverUrl, ssh.sshHost, "builder@ssh.example.test:2222")) {
+            compose.onNodeWithText(address, substring = true, useUnmergedTree = true).assertDoesNotExist()
+        }
+    }
+
+    @Test
+    fun blankDescriptionsAddNoAddressOrReplacementSupportingText() {
+        showList()
+        row().performScrollTo()
+        row().assertTextEquals(host.name, "Conch")
+        compose.onNodeWithText(host.serverUrl, substring = true, useUnmergedTree = true).assertDoesNotExist()
+        more().performClick()
+        menu(R.string.task_section_details).performClick()
+        val url = compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("shell-field-url")))
+        url.performScrollTo().assertTextEquals(host.serverUrl)
     }
 
     @Test

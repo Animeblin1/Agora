@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -233,7 +234,10 @@ internal fun SettingsShellDeviceEditor(
                         }
                     }
                     add {
-                        SettingsIconContent(Icons.AutoMirrored.Filled.Label) {
+                        SettingsIconContent(
+                            Icons.AutoMirrored.Filled.Label,
+                            modifier = Modifier.testTag("shell-device-identity"),
+                        ) {
                             McpLabeledField(
                                 label = stringResource(R.string.shell_device_name),
                                 modifier = Modifier.testTag("shell-field-name"),
@@ -243,10 +247,7 @@ internal fun SettingsShellDeviceEditor(
                                 supportingText = if (nameError) stringResource(R.string.custom_provider_name_error) else null,
                                 placeholder = stringResource(R.string.shell_device_name_hint),
                             )
-                        }
-                    }
-                    add {
-                        SettingsIconContent(Icons.Default.Description) {
+                            Spacer(Modifier.height(12.dp))
                             McpLabeledField(
                                 label = stringResource(R.string.shell_device_desc),
                                 modifier = Modifier.testTag("shell-field-description"),
@@ -259,37 +260,63 @@ internal fun SettingsShellDeviceEditor(
                     if (draft.type == "ssh") {
                         add {
                             SettingsIconContent(Icons.Default.Dns) {
-                                McpLabeledField(
-                                    label = stringResource(R.string.shell_device_host),
-                                    value = draft.sshHost,
-                                    onValueChange = { update(draft.copy(sshHost = it)) },
-                                    placeholder = stringResource(R.string.shell_device_host_hint),
-                                )
-                            }
-                        }
-                        add {
-                            SettingsIconContent(Icons.Default.SettingsEthernet) {
-                                McpLabeledField(
-                                    label = stringResource(R.string.shell_device_port),
-                                    value = portInput,
-                                    onValueChange = {
-                                        if (ownsEditor() && !saving && !deleteConfirm) {
-                                            portInput = it.filter(Char::isDigit)
-                                            pendingVerify = null
-                                            verifiedDraft = null
+                                BoxWithConstraints(Modifier.fillMaxWidth().testTag("shell-ssh-endpoint")) {
+                                    val fontScale = LocalDensity.current.fontScale
+                                    val inline = maxWidth >= 264.dp * fontScale
+                                    if (inline) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            McpLabeledField(
+                                                label = stringResource(R.string.shell_device_host),
+                                                modifier = Modifier.weight(1f).testTag("shell-field-host"),
+                                                value = draft.sshHost,
+                                                onValueChange = { update(draft.copy(sshHost = it)) },
+                                                placeholder = stringResource(R.string.shell_device_host_hint),
+                                            )
+                                            McpLabeledField(
+                                                label = stringResource(R.string.shell_device_port),
+                                                modifier = Modifier.width(96.dp).testTag("shell-field-port"),
+                                                value = portInput,
+                                                onValueChange = {
+                                                    if (ownsEditor() && !saving && !deleteConfirm) {
+                                                        portInput = it.filter(Char::isDigit)
+                                                        pendingVerify = null
+                                                        verifiedDraft = null
+                                                    }
+                                                },
+                                                keyboardType = KeyboardType.Number,
+                                            )
                                         }
-                                    },
-                                    keyboardType = KeyboardType.Number,
-                                )
-                            }
-                        }
-                        add {
-                            SettingsIconContent(Icons.Default.Person) {
-                                McpLabeledField(
-                                    label = stringResource(R.string.shell_device_user),
-                                    value = draft.sshUser,
-                                    onValueChange = { update(draft.copy(sshUser = it)) },
-                                )
+                                    } else {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            McpLabeledField(
+                                                label = stringResource(R.string.shell_device_host),
+                                                modifier = Modifier.fillMaxWidth().testTag("shell-field-host"),
+                                                value = draft.sshHost,
+                                                onValueChange = { update(draft.copy(sshHost = it)) },
+                                                placeholder = stringResource(R.string.shell_device_host_hint),
+                                            )
+                                            McpLabeledField(
+                                                label = stringResource(R.string.shell_device_port),
+                                                modifier = Modifier.fillMaxWidth().testTag("shell-field-port"),
+                                                value = portInput,
+                                                onValueChange = {
+                                                    if (ownsEditor() && !saving && !deleteConfirm) {
+                                                        portInput = it.filter(Char::isDigit)
+                                                        pendingVerify = null
+                                                        verifiedDraft = null
+                                                    }
+                                                },
+                                                keyboardType = KeyboardType.Number,
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {

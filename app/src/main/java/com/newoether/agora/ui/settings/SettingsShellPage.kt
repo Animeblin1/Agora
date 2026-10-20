@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
@@ -224,9 +225,6 @@ private fun ShellDeviceRow(
     var menuExpanded by remember(device.id) { mutableStateOf(false) }
     SideEffect { if (!active) menuExpanded = false }
     val type = if (device.type == "ssh") "SSH" else "Conch"
-    val connection = if (device.type == "ssh") {
-        if (device.sshHost.isBlank()) "" else "${device.sshUser}@${device.sshHost}:${device.sshPort}"
-    } else device.serverUrl
     Box {
         SettingsItem(
             headlineContent = {
@@ -252,18 +250,21 @@ private fun ShellDeviceRow(
                     }
                 }
             },
-            supportingContent = {
-                if (device.description.isNotBlank()) Text(device.description)
-                if (connection.isNotBlank()) Text(connection)
-            },
+            supportingContent = if (device.description.isNotBlank()) ({
+                Text(
+                    device.description,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }) else null,
             leadingContent = { Icon(Icons.Default.Devices, null, tint = MaterialTheme.colorScheme.primary) },
             trailingContent = {
                 IconButton(
-                    onClick = { if (active) { menuExpanded = false; onDetails() } },
+                    onClick = { if (active) menuExpanded = true },
                     enabled = active,
-                    modifier = Modifier.testTag("shell-device-details:${device.id}"),
+                    modifier = Modifier.testTag("shell-device-menu:${device.id}"),
                 ) {
-                    Icon(Icons.Outlined.Info, stringResource(R.string.task_section_details), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.MoreVert, stringResource(R.string.options), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             modifier = Modifier
