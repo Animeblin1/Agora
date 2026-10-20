@@ -251,10 +251,10 @@ internal class RemoteViewModel(
 
     fun retryConnection() {
         val snapshot = state.value
-        if (!visible || snapshot.restoring || snapshot.addingDevice) return
+        if (!visible || snapshot.restoring || snapshot.addingDevice || snapshot.loading) return
         if (snapshot.isDraft) {
             val id = snapshot.deviceId ?: return
-            mutableState.value = snapshot.copy(failure = null)
+            mutableState.value = snapshot.copy(loading = true)
             deviceDirectory.checkDevice(id)
         } else refresh()
     }
@@ -270,7 +270,7 @@ internal class RemoteViewModel(
         }
         val client = clients[id] ?: return
         if (state.value.devices.firstOrNull { it.id == id }?.status != RemoteDeviceStatus.CONNECTED) {
-            mutableState.value = state.value.copy(loading = true, failure = null)
+            mutableState.value = state.value.copy(loading = true)
             deviceDirectory.checkDevice(id)
             return
         }
@@ -278,8 +278,8 @@ internal class RemoteViewModel(
         val generation = epoch
         val session = state.value.session
         loadModels(id, client)
+        mutableState.value = state.value.copy(loading = true)
         polling = viewModelScope.launch {
-            mutableState.value = state.value.copy(loading = true)
             var consecutiveFailures = 0
             var notifiedFailure: RemoteFailure? = null
             do {
@@ -310,7 +310,7 @@ internal class RemoteViewModel(
                 catch (error: Exception) {
                     if (generation == epoch) {
                         val readFailure = requireNotNull(trace("read_failed", error, notify = false))
-                        mutableState.value = state.value.copy(loading = false, runtime = null)
+                        mutableState.value = state.value.copy(runtime = null)
                         if (remoteErrorCode(error) == "desktop_unavailable") deviceDirectory.desktopUnavailable(id)
                         // A failed native read is not proof that the device is offline.
                         var reachable = false
@@ -359,7 +359,7 @@ internal class RemoteViewModel(
                         // Health failure and non-network errors remain immediately visible.
                         val recovering = session != null && readFailure == RemoteFailure.NETWORK &&
                             reachable && consecutiveFailures == 1
-                        mutableState.value = state.value.copy(failure = failure.takeUnless { recovering })
+                        mutableState.value = state.value.copy(loading = false, failure = if (recovering) state.value.failure else failure)
                         if (!recovering && notifiedFailure != failure) {
                             noticeChannel.trySend(RemoteNotice("read_failed", failure, selectionEpoch,
                                 remoteErrorDetail(error).takeIf { failure == readFailure },

@@ -282,7 +282,9 @@ and compaction-reserve behavior remain unchanged.
 The chat loading cover is the original content-area ChatApp block before the composer:
 48dp/5dp circle, 200ms opacity. Center it in ChatApp's same measured top-bar/bottom-bar available
 range, including IME changes, not in the whole body. Its lifetime is initial history opening/scroll
-settling, ended by readiness or error. The cover itself blocks touch to covered content through its
+settling, ended by readiness or a definitive error after the admitted fallback/health reads. Empty
+foreground retries reuse this same cover, including local-draft retries; automatic background recovery,
+loaded-history recovery and ordinary settings changes do not restart it. The cover itself blocks touch to covered content through its
 visible enter/loading/exit lifetime, as required by application-ui.md; a background alone is not
 enough. No Remote-wide cover, separate interception layer, or loading cover for ordinary settings
 changes/generation is allowed. Devices/Sessions retain their own behavior.
@@ -332,12 +334,18 @@ remoteDeviceName and the localized Device fallback; never derive it from an addr
 or hard-code a particular device. Device selection/name changes immediately update the subtitle.
 Offline and failed-read states retain their localized state headline and existing safe Retry action,
 with the same selected-device subtitle. The top bar continues to show actual connection status.
-Every empty-body appearance, including its first composition and return after absence, fades from
-transparent to opaque over 200ms using the original loading cover's opacity timing. Reduced Motion
-retains this fade without any scale, translation or geometry animation. Live state updates use one
-current body without restarting its entrance or retaining stale Retry actions. Loaded messages,
-a missing session or initial-history opening remove the empty body immediately, including during
-an interrupted entrance. Keep the block inside the original measured
+The empty body and Retry do not own an entrance animation. A retained failure takes precedence over
+transient Connecting during automatic recovery, keeping the same headline, Retry and geometry.
+Explicit retry keeps that body under the original content-area loading cover: one 48dp/5dp circular
+indicator, 200ms opacity entrance (including initial composition), then 200ms retained exit.
+The existing loading flag spans the foreground read, same-owner fallback and health result; settle
+failure before removing the cover. Repeated explicit retries coalesce. A draft retry uses the same
+cover even though normal New Chat entry has no cover. Reduced Motion retains opacity and the shared
+stationary indicator policy. The cover blocks covered input through entry/loading/exit; the composer
+remains independently editable. Background recovery after a definitive result does not restart the
+cover or animate/remove Retry. Loaded history stays readable during recovery and does not acquire
+an empty-state retry cover. Loaded messages and a missing session remove the empty body immediately.
+Keep the block inside the original measured
 top-bar/composer range, including IME changes. Measure the actual title, subtitle, gaps and Retry
 at their natural height before assigning remaining space to the decorative mark, preserving text
 and action geometry for large fonts, long names and RTL. When those details alone exceed the

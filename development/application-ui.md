@@ -55,6 +55,10 @@ or introduce a global input owner for this cover.
 The existing content-area cover owns this exclusion, without a Remote-wide or separate interception
 layer. Indicator placement uses ChatApp's measured top-bar and bottom-bar available range, including
 IME-driven bottom-bar changes. Remote must reuse that centering rule rather than the full-body center.
+Remote initial opening and explicit empty-conversation retry request the canonical cover's 200ms
+opacity entrance even on first composition, followed by its retained 200ms exit. The empty body itself
+has no entrance fade. Background recovery preserves the failed page and Retry without restarting a
+cover, and loaded history remains readable. Ordinary ChatApp's initial visibility policy is unchanged.
 
 Every overlay blocks haptics originating from the chat beneath it, including a continuous answer
 texture and asynchronous send acknowledgements. Settings, Tasks, Remote, text/media previews,

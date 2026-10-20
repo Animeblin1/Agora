@@ -33,8 +33,8 @@ internal fun RemoteState.remoteEmptyConversationHint(): Int? {
     if (session == null || messageGroups.isNotEmpty()) return null
     val connection = remoteConnectionStatus()
     return when {
-        loading || connection == McpConnectionStatus.CONNECTING -> R.string.remote_empty_connecting_hint
         error -> R.string.remote_empty_retry_hint
+        loading || connection == McpConnectionStatus.CONNECTING -> R.string.remote_empty_connecting_hint
         isDraft && connection == McpConnectionStatus.CONNECTED -> R.string.remote_new_chat_hint
         connection != McpConnectionStatus.CONNECTED -> R.string.remote_empty_offline_hint
         !hydrationEnabled -> R.string.remote_empty_connecting_hint
@@ -43,6 +43,6 @@ internal fun RemoteState.remoteEmptyConversationHint(): Int? {
 }
 
 internal fun RemoteState.canRetryEmptyConnection(): Boolean =
-    remoteEmptyConversationHint() != null && !loading &&
-        remoteConnectionStatus() != McpConnectionStatus.CONNECTING &&
-        (error || remoteConnectionStatus() != McpConnectionStatus.CONNECTED)
+    remoteEmptyConversationHint() != null && (error ||
+        !loading && remoteConnectionStatus() != McpConnectionStatus.CONNECTING &&
+        remoteConnectionStatus() != McpConnectionStatus.CONNECTED)

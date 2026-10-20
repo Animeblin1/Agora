@@ -240,6 +240,65 @@ class RemoteConnectionRecoveryTest {
         io.mockk.verify(exactly = 1) { client.events(any()) }
     }
 
+    @Test fun foregroundRetryStaysLoadingThroughFallbackAndHealthThenBackgroundFailuresStaySettled() = runTest(dispatcher) {
+        every { client.events(any()) } returns flow { throw IOException("offline") }
+        coEvery { client.connect() } throws IOException("offline")
+        val vm = open()
+        val failed = vm.state.value
+        assertEquals(RemoteFailure.NETWORK, failed.failure)
+        assertFalse(failed.loading)
+        val owner = requireNotNull(failed.owner)
+        vm.editDraft(owner, "Keep this draft")
+        val health = CompletableDeferred<RemoteDeviceStatus>()
+        val fallback = CompletableDeferred<RemoteConversationPage>()
+        var probes = 0
+        coEvery { client.connect() } coAnswers {
+            if (++probes == 1) RemoteDeviceStatus.CONNECTED else health.await()
+        }
+        coEvery { client.conversation(session.id, null) } coAnswers { fallback.await() }
+        vm.retryConnection()
+        vm.retryConnection()
+        runCurrent()
+        assertTrue(vm.state.value.loading)
+        assertEquals(failed.failure, vm.state.value.failure)
+        assertEquals(1, probes)
+        fallback.completeExceptionally(IOException("snapshot offline"))
+        runCurrent()
+        assertTrue(vm.state.value.loading)
+        assertEquals(failed.failure, vm.state.value.failure)
+        assertEquals(2, probes)
+        health.completeExceptionally(IOException("health offline"))
+        runCurrent()
+        assertFalse(vm.state.value.loading)
+        assertEquals(RemoteFailure.NETWORK, vm.state.value.failure)
+        assertEquals("Keep this draft", vm.state.value.drafts[owner])
+        coEvery { client.conversation(session.id, null) } throws IOException("snapshot offline")
+        repeat(3) {
+            advanceTimeBy(3000); runCurrent()
+            assertFalse(vm.state.value.loading)
+            assertEquals(RemoteFailure.NETWORK, vm.state.value.failure)
+        }
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()); client.send(any(), any(), any(), any()) }
+        vm.setVisible(false)
+    }
+
+    @Test fun hidingDuringForegroundFallbackFencesItsLateFailureAndClearsLoading() = runTest(dispatcher) {
+        every { client.events(any()) } returns flow { throw FiloHttpException(503) }
+        val vm = open()
+        val pending = CompletableDeferred<RemoteConversationPage>()
+        coEvery { client.conversation(session.id, null) } coAnswers { withContext(NonCancellable) { pending.await() } }
+        vm.retryConnection(); runCurrent()
+        assertTrue(vm.state.value.loading)
+        vm.setVisible(false)
+        vm.selectSession(null)
+        assertFalse(vm.state.value.loading)
+        pending.completeExceptionally(IOException("late failure")); runCurrent()
+        assertNull(vm.state.value.session)
+        assertNull(vm.state.value.failure)
+        assertFalse(vm.state.value.loading)
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()); client.send(any(), any(), any(), any()) }
+    }
+
     @Test fun successfulSnapshotEndsFailureEpisodeAndAllowsANewNotice() = runTest(dispatcher) {
         val failAgain = CompletableDeferred<Unit>()
         var reads = 0

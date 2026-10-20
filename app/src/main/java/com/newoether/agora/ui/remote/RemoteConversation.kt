@@ -328,12 +328,14 @@ internal fun RemoteConversation(
                         onRetry = vm::retryConnection,
                     )
                 }
-                Box {
+                key(owner) {
                     ChatSwitchingOverlay(
-                        isSwitching = switching && !state.error,
-                        isTransitioningToNewChat = newChatEntry,
+                        isSwitching = (switching && !state.error && !newChatEntry) ||
+                            (messages.isEmpty() && state.loading),
+                        isTransitioningToNewChat = false,
                         topBarHeight = topBarHeight,
                         bottomBarHeight = barHeight,
+                        animateInitialAppearance = true,
                     )
                 }
             }

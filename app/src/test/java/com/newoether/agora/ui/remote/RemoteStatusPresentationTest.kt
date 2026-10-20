@@ -72,8 +72,10 @@ class RemoteStatusPresentationTest {
             assertFalse(snapshot.canRetryEmptyConnection())
         }
         val reconnecting = state(RemoteDeviceStatus.CONNECTING).copy(failure = RemoteFailure.NETWORK)
-        assertEquals(R.string.remote_empty_connecting_hint, reconnecting.remoteEmptyConversationHint())
-        assertFalse(reconnecting.canRetryEmptyConnection())
+        assertEquals(R.string.remote_empty_retry_hint, reconnecting.remoteEmptyConversationHint())
+        assertTrue(reconnecting.canRetryEmptyConnection())
+        assertEquals(R.string.remote_empty_retry_hint, reconnecting.copy(loading = true).remoteEmptyConversationHint())
+        assertTrue(reconnecting.copy(loading = true).canRetryEmptyConnection())
         val confirmedEmpty = state().copy(hydrationEnabled = true, runtime = RemoteRuntime("notLoaded"))
         assertEquals(R.string.remote_empty_conversation_hint, confirmedEmpty.remoteEmptyConversationHint())
         assertFalse(confirmedEmpty.canRetryEmptyConnection())

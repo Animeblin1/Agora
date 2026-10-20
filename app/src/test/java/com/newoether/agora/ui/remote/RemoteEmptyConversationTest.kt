@@ -97,11 +97,11 @@ class RemoteEmptyConversationTest {
         }
     }
 
-    @Test fun emptyAppearanceFadesOnInitialCompositionAndAfterAbsenceWithoutSpatialMotion() {
+    @Test fun emptyBodyIsStableOnInitialCompositionAndAfterAbsence() {
         assertInitialAndLaterAppearance(reduceMotion = false)
     }
 
-    @Test fun reducedMotionRetainsTheSameGradualEmptyAppearance() {
+    @Test fun reducedMotionKeepsTheSameStableEmptyBody() {
         assertInitialAndLaterAppearance(reduceMotion = true)
     }
 
@@ -111,19 +111,19 @@ class RemoteEmptyConversationTest {
         compose.mainClock.autoAdvance = false
         show(reduceMotion = reduceMotion, opacityProbe = true)
         compose.waitForIdle()
-        assertEquals("Initial composition starts transparent", 0, strongestWelcomeRed())
+        assertTrue("The empty body itself has no entrance fade", strongestWelcomeRed() >= 254)
         val body = compose.onNodeWithTag("remote-empty-conversation")
         val initialBounds = body.getUnclippedBoundsInRoot()
         frame()
         compose.mainClock.advanceTimeBy(80)
         compose.waitForIdle()
         val middle = strongestWelcomeRed()
-        assertTrue("Initial appearance has intermediate opacity: $middle", middle in 1..254)
+        assertTrue("Only the loading overlay owns opacity motion", middle >= 254)
         assertEquals(initialBounds, body.getUnclippedBoundsInRoot())
         compose.mainClock.advanceTimeBy(64)
         compose.waitForIdle()
         val later = strongestWelcomeRed()
-        assertTrue("Opacity grows through the 200ms entrance: $middle -> $later", later > middle && later < 255)
+        assertTrue("The body remains opaque", later >= 254)
         compose.mainClock.advanceTimeBy(160)
         compose.waitForIdle()
         assertTrue("The entrance reaches full opacity", strongestWelcomeRed() >= 254)
@@ -141,12 +141,12 @@ class RemoteEmptyConversationTest {
             Snapshot.sendApplyNotifications()
         }
         frame()
-        assertEquals("A later appearance also starts transparent", 0, strongestWelcomeRed())
+        assertTrue("A later body appearance is also stable", strongestWelcomeRed() >= 254)
         val returningBounds = body.getUnclippedBoundsInRoot()
         compose.mainClock.advanceTimeBy(80)
         compose.waitForIdle()
         val returningMiddle = strongestWelcomeRed()
-        assertTrue("Later appearance has intermediate opacity: $returningMiddle", returningMiddle in 1..254)
+        assertTrue("The returning body remains opaque", returningMiddle >= 254)
         assertEquals(returningBounds, body.getUnclippedBoundsInRoot())
         compose.mainClock.advanceTimeBy(160)
         compose.waitForIdle()
@@ -157,14 +157,14 @@ class RemoteEmptyConversationTest {
         assertEquals(1, retries)
     }
 
-    @Test fun interruptedAppearanceUsesLatestStateAndCannotPaintOverLoadedHistory() {
+    @Test fun liveFailureUpdatesAndBackgroundRecoveryKeepOneStableRetryUntilHistoryArrives() {
         compose.mainClock.autoAdvance = false
         show(opacityProbe = true)
         frame()
         compose.mainClock.advanceTimeBy(64)
         compose.waitForIdle()
         val enteringOpacity = strongestWelcomeRed()
-        assertTrue(enteringOpacity in 1..254)
+        assertTrue(enteringOpacity >= 254)
         compose.runOnIdle {
             state = state.copy(failure = RemoteFailure.SERVICE,
                 devices = state.devices.map { it.copy(name = "Latest Device") })
@@ -175,7 +175,21 @@ class RemoteEmptyConversationTest {
         compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Latest Device")
         compose.onNodeWithText("Quantum").assertDoesNotExist()
         compose.onAllNodesWithText(text(R.string.retry)).assertCountEquals(1)
-        assertTrue("An ordinary state update does not restart or complete the fade", strongestWelcomeRed() in enteringOpacity..254)
+        assertTrue("A state update does not animate the body", strongestWelcomeRed() >= 254)
+        val retryBounds = compose.onNodeWithText(text(R.string.retry)).getUnclippedBoundsInRoot()
+        repeat(3) {
+            compose.runOnIdle {
+                state = state.copy(devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTING) })
+                Snapshot.sendApplyNotifications()
+            }
+            frame()
+            compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_empty_retry_hint))
+            compose.onNodeWithText(text(R.string.retry)).assertIsEnabled()
+            assertEquals(retryBounds, compose.onNodeWithText(text(R.string.retry)).getUnclippedBoundsInRoot())
+            compose.runOnIdle { state = state.copy(devices = state.devices.map { it.copy(status = RemoteDeviceStatus.ERROR) }) }
+            frame()
+            assertEquals(retryBounds, compose.onNodeWithText(text(R.string.retry)).getUnclippedBoundsInRoot())
+        }
         val groups = listOf(RemoteMessageGroup(ChatMessage("loaded", text = "Retained", participant = Participant.USER), emptyList()))
         compose.runOnIdle { state = state.copy(messageGroups = groups); Snapshot.sendApplyNotifications() }
         frame()
@@ -189,7 +203,7 @@ class RemoteEmptyConversationTest {
             Snapshot.sendApplyNotifications()
         }
         frame()
-        assertEquals("Interrupted entry restarts transparent with only the latest state", 0, strongestWelcomeRed())
+        assertTrue("The latest empty body is immediately stable", strongestWelcomeRed() >= 254)
         compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
         compose.onNodeWithTag("remote-welcome-device").assertTextEquals("Newest Device")
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
@@ -259,9 +273,9 @@ class RemoteEmptyConversationTest {
         compose.onNodeWithText(text(R.string.retry)).assertIsNotEnabled()
         assertEquals(1, retries)
         compose.runOnIdle { state = state.copy(loading = true) }
-        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop").assertIsDisplayed()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_empty_retry_hint)).assertIsDisplayed()
         compose.onNodeWithText(text(R.string.remote_empty_connecting_hint)).assertDoesNotExist()
-        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.retry)).assertIsNotEnabled()
     }
 
     @Test fun loadedContentSuppressesEveryEmptyPresentationWithoutReplacingTheHistory() {

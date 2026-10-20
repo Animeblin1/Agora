@@ -102,16 +102,19 @@ internal class RemoteDeviceLifecycleTest : RemoteViewModelFixture() {
         vm.retryConnection()
         runCurrent()
         assertEquals(RemoteDeviceStatus.CONNECTING, vm.state.value.devices.single().status)
+        assertTrue(vm.state.value.loading)
         coVerify(exactly = 2) { client.connect() }
         gate.completeExceptionally(IOException("offline"))
         runCurrent()
         assertEquals(RemoteDeviceStatus.ERROR, vm.state.value.devices.single().status)
+        assertFalse(vm.state.value.loading)
         val notice = vm.notices.first()
         coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
         vm.retryNotice(notice)
         runCurrent()
 
         assertEquals(RemoteDeviceStatus.CONNECTED, vm.state.value.devices.single().status)
+        assertFalse(vm.state.value.loading)
         assertNull(vm.state.value.failure)
         assertEquals(owner, vm.state.value.owner)
         assertEquals(draftId, vm.state.value.draftSessionId)

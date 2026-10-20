@@ -129,6 +129,7 @@ class RemoteConversationPresentationTest {
             Snapshot.sendApplyNotifications()
         }
         compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(64)
         compose.waitForIdle()
         compose.onNodeWithTag("remote-empty-conversation").assertDoesNotExist()
         compose.onAllNodes(SemanticsMatcher.expectValue(
@@ -138,8 +139,8 @@ class RemoteConversationPresentationTest {
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeBy(64)
         compose.waitForIdle()
-        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals("Codex Desktop")
-        compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
+        compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_empty_retry_hint))
+        compose.onNodeWithText(text(R.string.retry)).assertIsEnabled()
         val message = ChatMessage(id = "arriving", text = "Arrived during entry", participant = Participant.USER)
         every { vm.observeMessage(any(), "arriving") } returns flowOf(message)
         every { vm.cachedMessage(any(), "arriving") } returns message
@@ -156,6 +157,69 @@ class RemoteConversationPresentationTest {
         compose.onNodeWithTag("remote-welcome-mark").assertDoesNotExist()
         compose.onNodeWithText(text(R.string.retry)).assertDoesNotExist()
         assertEquals(groups, state.messageGroups)
+        verify(exactly = 0) { vm.retryConnection() }
+        verify(exactly = 0) { vm.send() }
+    }
+
+    @Test fun retryKeepsFailureAndActionGeometryAcrossAutomaticRecoveryAndUsesOneCover() {
+        state = state.copy(draftSessionId = null, failure = RemoteFailure.NETWORK,
+            devices = state.devices.map { it.copy(status = RemoteDeviceStatus.ERROR) })
+        show()
+        val retry = compose.onNodeWithText(text(R.string.retry))
+        val bounds = retry.getUnclippedBoundsInRoot()
+        repeat(3) {
+            compose.runOnIdle { state = state.copy(devices = state.devices.map { it.copy(status = RemoteDeviceStatus.CONNECTING) }) }
+            compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_empty_retry_hint))
+            retry.assertIsDisplayed().assertIsEnabled()
+            assertEquals(bounds, retry.getUnclippedBoundsInRoot())
+            compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate)).assertCountEquals(0)
+            compose.runOnIdle { state = state.copy(devices = state.devices.map { it.copy(status = RemoteDeviceStatus.ERROR) }) }
+        }
+        retry.performTouchInput { click() }
+        verify(exactly = 1) { vm.retryConnection() }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { state = state.copy(loading = true); Snapshot.sendApplyNotifications() }
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(240)
+        compose.waitForIdle()
+        val ring = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
+        ring.assertWidthIsEqualTo(androidx.compose.ui.unit.Dp(48f)).assertHeightIsEqualTo(androidx.compose.ui.unit.Dp(48f))
+        retry.assertIsNotEnabled()
+        assertEquals(bounds, retry.getUnclippedBoundsInRoot())
+        retry.performTouchInput { click() }
+        verify(exactly = 1) { vm.retryConnection() }
+        compose.runOnIdle { state = state.copy(loading = false); Snapshot.sendApplyNotifications() }
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        ring.assertExists()
+        retry.performTouchInput { click() }
+        verify(exactly = 1) { vm.retryConnection() }
+        compose.mainClock.advanceTimeBy(240)
+        compose.waitForIdle()
+        ring.assertDoesNotExist()
+        retry.assertIsEnabled().performTouchInput { click() }
+        verify(exactly = 2) { vm.retryConnection() }
+        verify(exactly = 0) { vm.send() }
+        verify(exactly = 0) { vm.newSession() }
+    }
+
+    @Test fun foregroundDraftRetryUsesCoverAndLoadedHistoryRecoveryDoesNot() {
+        state = state.copy(loading = true, failure = RemoteFailure.SERVICE)
+        show()
+        compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate)).assertCountEquals(1)
+        compose.onNode(hasSetTextAction()).assertTextContains("Unsent draft").performTextReplacement("Kept during retry")
+        val message = ChatMessage(id = "loaded", text = "Retained during retry", participant = Participant.USER)
+        every { vm.observeMessage(any(), "loaded") } returns flowOf(message)
+        every { vm.cachedMessage(any(), "loaded") } returns message
+        compose.runOnIdle {
+            state = state.copy(draftSessionId = null, hydrationEnabled = true,
+                messageGroups = listOf(RemoteMessageGroup(message, emptyList())))
+        }
+        compose.onNodeWithText("Retained during retry", substring = true).assertExists()
+        compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate)).assertCountEquals(0)
+        compose.onNodeWithTag("remote-empty-conversation").assertDoesNotExist()
+        compose.onNode(hasSetTextAction()).assertTextContains("Kept during retry")
         verify(exactly = 0) { vm.retryConnection() }
         verify(exactly = 0) { vm.send() }
     }

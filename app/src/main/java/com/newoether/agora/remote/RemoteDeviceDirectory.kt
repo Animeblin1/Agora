@@ -202,7 +202,10 @@ internal class RemoteDeviceDirectory(
                 if (!isActive || mutableClients[id] !== client) return@launch
                 updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
                     desktopStatus = desktop) }
-                if (state.value.deviceId == id) refresh()
+                if (state.value.deviceId == id) {
+                    if (state.value.isDraft) mutableState.value = state.value.copy(loading = false, failure = null)
+                    refresh()
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (!isActive || mutableClients[id] !== client) return@launch
