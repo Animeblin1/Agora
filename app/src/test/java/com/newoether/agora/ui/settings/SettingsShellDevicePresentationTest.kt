@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
@@ -19,6 +23,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.newoether.agora.R
@@ -57,6 +62,7 @@ class SettingsShellDevicePresentationTest {
     private fun showList(
         devices: List<ShellDeviceConfig> = listOf(host),
         isPageActive: () -> Boolean = { true },
+        layoutDirection: LayoutDirection = LayoutDirection.Ltr,
     ) {
         every { viewModel.settings } returns settings
         every { viewModel.isSandboxFlavor } returns false
@@ -71,10 +77,12 @@ class SettingsShellDevicePresentationTest {
             drawingView = LocalView.current
             val context = LocalContext.current
             strings = listOf(R.string.task_section_details, R.string.delete, R.string.cancel,
-                R.string.shell_delete_confirm_title, R.string.edit, R.string.options).associateWith(context::getString)
+                R.string.shell_delete_confirm_title, R.string.shell_remove_device,
+                R.string.edit, R.string.options).associateWith(context::getString)
             CompositionLocalProvider(
                 LocalAgoraMotionPolicy provides AgoraMotionPolicy(reduceMotion = true),
                 LocalSettingsScrollRetentionActive provides isPageActive(),
+                LocalLayoutDirection provides layoutDirection,
             ) {
                 MaterialTheme {
                     primaryContainer = MaterialTheme.colorScheme.primaryContainer
@@ -89,32 +97,95 @@ class SettingsShellDevicePresentationTest {
     private fun menu(label: Int) = compose.onNode(hasText(strings.getValue(label)) and hasClickAction())
 
     @Test
-    fun wholeCardOpensDetailsDeleteMenuAndDetailsActionDoesNotOpenTheEditorUntilSelected() {
+    fun wholeCardOpensEditDeleteMenuAndEditActionDoesNotOpenTheEditorUntilSelected() {
         showList()
         row().performScrollTo().performClick()
-        menu(R.string.task_section_details).assertIsDisplayed()
+        menu(R.string.edit).assertIsDisplayed()
         menu(R.string.delete).assertIsDisplayed()
+        menu(R.string.task_section_details).assertDoesNotExist()
+        val editBounds = menu(R.string.edit).fetchSemanticsNode().boundsInRoot
+        val deleteBounds = menu(R.string.delete).fetchSemanticsNode().boundsInRoot
+        assertTrue("Edit is the first menu action", editBounds.top < deleteBounds.top)
         editorName().assertDoesNotExist()
-        menu(R.string.task_section_details).performClick()
+        menu(R.string.edit).performClick()
         compose.waitForIdle()
         editorName().assertExists()
+        compose.onNodeWithContentDescription(strings.getValue(R.string.shell_remove_device)).assertDoesNotExist()
         menu(R.string.delete).assertDoesNotExist()
     }
 
     @Test
-    fun trailingMoreOpensTheSameMenuAndOnlyDetailsEntersTheEditor() {
+    fun trailingMoreOpensTheSameMenuAndOnlyEditEntersTheEditor() {
         showList()
         more().assertContentDescriptionEquals(strings.getValue(R.string.options))
         compose.onNodeWithContentDescription(strings.getValue(R.string.edit)).assertDoesNotExist()
         more().performScrollTo().performTouchInput { click() }
         compose.waitForIdle()
         editorName().assertDoesNotExist()
-        menu(R.string.task_section_details).assertIsDisplayed()
+        menu(R.string.edit).assertIsDisplayed()
         menu(R.string.delete).assertIsDisplayed()
-        menu(R.string.task_section_details).performClick()
+        menu(R.string.edit).performClick()
         compose.waitForIdle()
         editorName().assertExists()
+        compose.onNodeWithContentDescription(strings.getValue(R.string.shell_remove_device)).assertDoesNotExist()
         menu(R.string.delete).assertDoesNotExist()
+    }
+
+    @Test
+    fun ltrMoreKeepsItsFortyEightDpTargetAndSixDpEndPaddingWithAnAdjacentPopup() {
+        verifyMoreGeometryAndPopup(LayoutDirection.Ltr, openFromRow = false)
+    }
+
+    @Test
+    fun rtlWholeRowOpensThePopupBesideItsMirroredMoreAnchor() {
+        verifyMoreGeometryAndPopup(LayoutDirection.Rtl, openFromRow = true)
+    }
+
+    private fun verifyMoreGeometryAndPopup(direction: LayoutDirection, openFromRow: Boolean) {
+        showList(layoutDirection = direction)
+        more().performScrollTo()
+        val rowBounds = row().getUnclippedBoundsInRoot()
+        val buttonBounds = more().getUnclippedBoundsInRoot()
+        val anchorBounds = compose.onNodeWithTag(
+            "shell-device-menu-anchor:${host.id}", useUnmergedTree = true,
+        ).getUnclippedBoundsInRoot()
+        // Material's semantics expose the 40 dp inner container. Its touch target and
+        // outer minimum-size layout are separate from that visible container.
+        more().assertTouchWidthIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
+        assertEquals(48.dp, anchorBounds.right - anchorBounds.left)
+        assertEquals(48.dp, anchorBounds.bottom - anchorBounds.top)
+        assertEquals(buttonBounds.left + buttonBounds.right, anchorBounds.left + anchorBounds.right)
+        assertEquals(buttonBounds.top + buttonBounds.bottom, anchorBounds.top + anchorBounds.bottom)
+        assertTrue("The anchor contains the inner button layout",
+            anchorBounds.left <= buttonBounds.left && anchorBounds.right >= buttonBounds.right &&
+                anchorBounds.top <= buttonBounds.top && anchorBounds.bottom >= buttonBounds.bottom)
+        val endPadding = if (direction == LayoutDirection.Ltr) {
+            rowBounds.right - anchorBounds.right
+        } else anchorBounds.left - rowBounds.left
+        assertEquals(6.dp, endPadding)
+        val screenRow = row().screenBounds()
+        val screenAnchor = compose.onNodeWithTag(
+            "shell-device-menu-anchor:${host.id}", useUnmergedTree = true,
+        ).screenBounds()
+        val window = compose.onRoot().screenBounds()
+        if (openFromRow) row().performTouchInput { click() }
+        else more().performTouchInput { click() }
+        val popup = compose.onNodeWithTag("shell-device-dropdown:${host.id}")
+        popup.assertIsDisplayed().assert(hasAnyAncestor(isPopup()))
+        val screenPopup = popup.screenBounds()
+        if (direction == LayoutDirection.Ltr) {
+            assertEquals("Popup ends at the More anchor", screenAnchor.right, screenPopup.right, 1f)
+            assertTrue("Popup opens in the trailing half", screenPopup.center.x > screenRow.center.x)
+        } else {
+            assertEquals("RTL popup starts at the More anchor", screenAnchor.left, screenPopup.left, 1f)
+            assertTrue("RTL popup opens in the trailing half", screenPopup.center.x < screenRow.center.x)
+        }
+        assertTrue("Popup remains inside the window: popup=$screenPopup window=$window",
+            screenPopup.left >= window.left - 1f && screenPopup.right <= window.right + 1f)
+        menu(R.string.edit).assertIsDisplayed()
+        menu(R.string.delete).assertIsDisplayed()
+        editorName().assertDoesNotExist()
+        verify(exactly = 0) { settings.removeShellDevice(any()) }
     }
 
     @Test
@@ -122,11 +193,11 @@ class SettingsShellDevicePresentationTest {
         var pageActive by mutableStateOf(true)
         showList(isPageActive = { pageActive })
         more().performScrollTo().performTouchInput { click() }
-        menu(R.string.task_section_details).assertIsDisplayed()
+        menu(R.string.edit).assertIsDisplayed()
         menu(R.string.delete).assertIsDisplayed()
         compose.runOnIdle { pageActive = false }
         compose.waitForIdle()
-        menu(R.string.task_section_details).assertDoesNotExist()
+        menu(R.string.edit).assertDoesNotExist()
         menu(R.string.delete).assertDoesNotExist()
         more().assertIsNotEnabled().performTouchInput { click() }
         row().performTouchInput { click() }
@@ -137,7 +208,7 @@ class SettingsShellDevicePresentationTest {
         compose.runOnIdle { pageActive = true }
         compose.waitForIdle()
         more().assertIsEnabled()
-        menu(R.string.task_section_details).assertDoesNotExist()
+        menu(R.string.edit).assertDoesNotExist()
         menu(R.string.delete).assertDoesNotExist()
         editorName().assertDoesNotExist()
         compose.onNodeWithText(strings.getValue(R.string.shell_delete_confirm_title)).assertDoesNotExist()
@@ -191,7 +262,7 @@ class SettingsShellDevicePresentationTest {
         row().assertTextEquals(host.name, "Conch")
         compose.onNodeWithText(host.serverUrl, substring = true, useUnmergedTree = true).assertDoesNotExist()
         more().performClick()
-        menu(R.string.task_section_details).performClick()
+        menu(R.string.edit).performClick()
         val url = compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("shell-field-url")))
         url.performScrollTo().assertTextEquals(host.serverUrl)
     }
@@ -231,12 +302,12 @@ class SettingsShellDevicePresentationTest {
         try {
             compose.runOnIdle { ripple = pressedRipple() }
             editorName().assertDoesNotExist()
-            menu(R.string.task_section_details).assertDoesNotExist()
+            menu(R.string.edit).assertDoesNotExist()
         } finally {
             row().performTouchInput { cancel() }
         }
         compose.runOnIdle { assertFalse(android.R.attr.state_pressed in ripple.state) }
-        menu(R.string.task_section_details).assertDoesNotExist()
+        menu(R.string.edit).assertDoesNotExist()
         row().performTouchInput {
             down(center)
             // The scroll container delays clickable's press indication while detecting a drag.
@@ -250,7 +321,7 @@ class SettingsShellDevicePresentationTest {
             row().performTouchInput { up() }
         }
         compose.runOnIdle { assertFalse(android.R.attr.state_pressed in ripple.state) }
-        menu(R.string.task_section_details).assertExists()
+        menu(R.string.edit).assertExists()
     }
 
     @Test
@@ -304,6 +375,12 @@ class SettingsShellDevicePresentationTest {
         assertEquals(layout(referenceField).layoutInput.style.fontSize, valueStyle.fontSize)
         assertEquals(hintStyle.fontSize, valueStyle.fontSize)
         assertEquals(onSurfaceVariant, valueStyle.color)
+    }
+
+    private fun SemanticsNodeInteraction.screenBounds(): Rect {
+        val node = fetchSemanticsNode()
+        val root = node.layoutInfo.coordinates.findRootCoordinates()
+        return node.boundsInRoot.translate(root.localToScreen(Offset.Zero))
     }
 
     private fun draw(node: SemanticsNodeInteraction): Bitmap {

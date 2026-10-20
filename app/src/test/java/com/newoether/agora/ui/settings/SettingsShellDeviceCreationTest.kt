@@ -104,11 +104,12 @@ class SettingsShellDeviceCreationTest {
         compose.setContent {
             val context = LocalContext.current
             strings = listOf(
+                R.string.shell_remove_device,
                 R.string.shell_device_host, R.string.shell_device_port, R.string.shell_device_user,
                 R.string.shell_add_device, R.string.shell_device_name, R.string.shell_device_desc,
                 R.string.shell_device_url, R.string.shell_device_key, R.string.save, R.string.back,
                 R.string.custom_provider_name_error, R.string.unsaved_changes_discard,
-                R.string.unsaved_changes_keep_editing, R.string.task_section_details, R.string.img_save_failed,
+                R.string.unsaved_changes_keep_editing, R.string.edit, R.string.img_save_failed,
                 R.string.shell_ssh_verify_host_key, R.string.shell_ssh_verify_title,
                 R.string.shell_ssh_import_private_key, R.string.shell_ssh_private_key_read_failed,
             ).associateWith { context.getString(it) }
@@ -168,14 +169,16 @@ class SettingsShellDeviceCreationTest {
     private fun open(name: String) {
         val id = devices.value.single { it.name == name }.id
         compose.onNodeWithTag("shell-device-menu:$id").performScrollTo().performClick()
-        button(R.string.task_section_details).performClick()
+        button(R.string.edit).performClick()
         compose.waitForIdle()
         field(R.string.shell_device_name).assertExists()
+        compose.onNodeWithContentDescription(strings.getValue(R.string.shell_remove_device)).assertDoesNotExist()
     }
     private fun addDraft() {
         add().performScrollTo().performClick()
         compose.waitForIdle()
         field(R.string.shell_device_name).assertExists()
+        compose.onNodeWithContentDescription(strings.getValue(R.string.shell_remove_device)).assertDoesNotExist()
         add().assertDoesNotExist()
     }
     private fun replace(label: Int, value: String) {
@@ -397,7 +400,7 @@ class SettingsShellDeviceCreationTest {
         compose.waitForIdle()
         val expected = retention.scrollState(rootPath)!!.value
         compose.onNodeWithTag("shell-device-menu:8").performClick()
-        button(R.string.task_section_details).performClick()
+        button(R.string.edit).performClick()
         compose.waitForIdle()
         replace(R.string.shell_device_desc, "Saved detail")
         save().performClick()

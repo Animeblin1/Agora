@@ -322,7 +322,7 @@ scroll. Navigation and repeated reconciliation cannot duplicate it.
 
 New Chat is local until Send: immediate original keyboard, no background creation or immediate
 request. Its visible Desktop-status observer follows the delayed info-read contract above.
-Its empty body follows the WebUI homepage welcome: centered OpenAI mark with a 112dp maximum,
+Its empty body follows the WebUI homepage welcome: centered OpenAI mark with an 80dp maximum,
 16dp mark-to-title spacing, and a 28sp Bold headlineMedium title with 35sp line height and
 onBackground color. In an online local draft or confirmed-empty history, that title is the technical
 product name `Codex Desktop`. An 8dp gap separates it from the selected device's configured name in

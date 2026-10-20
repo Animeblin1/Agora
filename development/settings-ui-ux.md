@@ -234,8 +234,11 @@ and WebUI share this contract.
 
 - Shell devices use the existing guarded Settings list/detail navigation. Each root card has a
   bounded whole-card ripple. The whole row and its right-side MoreVert IconButton open the same
-  shared Details/Delete dropdown; only Details opens the full-page editor. No pencil, inline
-  expansion or passive disclosure glyph is present. Delete captures the device and requires confirmation.
+  shared Edit/Delete dropdown; only Edit opens the full-page editor. Edit uses the pencil icon.
+  The menu anchors to the trailing IconButton's Box, not the whole card, matching MCP's 48 dp
+  touch target and 6 dp end padding. No inline expansion or passive disclosure glyph is present.
+  Delete captures the device and requires confirmation; device deletion appears only in this list
+  menu. The detail editor has no device-delete action or deletion dialog.
 - Root headlines retain the compact Conch/SSH badge: 4 dp corners, 6 dp horizontal/1 dp vertical
   padding, labelSmall and primaryContainer/onPrimaryContainer for both types. Only a nonblank
   description appears below the name, with at most two lines and ellipsis. Addresses and connection

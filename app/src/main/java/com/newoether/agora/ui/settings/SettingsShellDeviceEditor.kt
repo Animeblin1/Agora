@@ -58,7 +58,6 @@ internal fun SettingsShellDeviceEditor(
     var verifyError by remember { mutableStateOf<String?>(null) }
     var verifiedDraft by remember { mutableStateOf<ShellDeviceConfig?>(null) }
     var pendingVerify by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var deleteConfirm by remember { mutableStateOf(false) }
     var validationJob by remember { mutableStateOf<Job?>(null) }
     var verifyJob by remember { mutableStateOf<Job?>(null) }
     val latestIsCurrent by rememberUpdatedState(isCurrent)
@@ -178,11 +177,6 @@ internal fun SettingsShellDeviceEditor(
         title = if (isNew) stringResource(R.string.shell_add_device) else initial.name,
         onBack = guardedBack,
         actions = {
-            if (!isNew) {
-                IconButton(onClick = { if (ownsEditor()) deleteConfirm = true }, enabled = !saving && ownsEditor()) {
-                    Icon(Icons.Default.Delete, stringResource(R.string.shell_remove_device), tint = MaterialTheme.colorScheme.error)
-                }
-            }
             Box(Modifier.size(48.dp).testTag("shell-save-slot"), contentAlignment = Alignment.Center) {
                 Crossfade(
                     targetState = saving,
@@ -280,7 +274,7 @@ internal fun SettingsShellDeviceEditor(
                                                 modifier = Modifier.width(96.dp).testTag("shell-field-port"),
                                                 value = portInput,
                                                 onValueChange = {
-                                                    if (ownsEditor() && !saving && !deleteConfirm) {
+                                                    if (ownsEditor() && !saving) {
                                                         portInput = it.filter(Char::isDigit)
                                                         pendingVerify = null
                                                         verifiedDraft = null
@@ -306,7 +300,7 @@ internal fun SettingsShellDeviceEditor(
                                                 modifier = Modifier.fillMaxWidth().testTag("shell-field-port"),
                                                 value = portInput,
                                                 onValueChange = {
-                                                    if (ownsEditor() && !saving && !deleteConfirm) {
+                                                    if (ownsEditor() && !saving) {
                                                         portInput = it.filter(Char::isDigit)
                                                         pendingVerify = null
                                                         verifiedDraft = null
@@ -470,25 +464,5 @@ internal fun SettingsShellDeviceEditor(
                 },
             )
         }
-    }
-    if (deleteConfirm && ownsEditor()) {
-        AlertDialog(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            onDismissRequest = { deleteConfirm = false },
-            title = { Text(stringResource(R.string.shell_delete_confirm_title), fontWeight = FontWeight.Bold) },
-            text = { Text(stringResource(R.string.shell_delete_confirm_message, initial.name)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (ownsEditor()) {
-                        viewModel.settings.removeShellDevice(initial.id)
-                        deleteConfirm = false
-                        leave()
-                    }
-                }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                    Text(stringResource(R.string.delete))
-                }
-            },
-            dismissButton = { TextButton(onClick = { deleteConfirm = false }) { Text(stringResource(R.string.cancel)) } },
-        )
     }
 }

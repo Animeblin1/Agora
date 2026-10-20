@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
@@ -162,7 +162,7 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                                     ShellDeviceRow(
                                                         device = device,
                                                         active = pageActive && editorRoute == null && !showSandboxMgmt,
-                                                        onDetails = {
+                                                        onEdit = {
                                                             editorRoute = ShellDeviceEditorRoute(device, isNew = false)
                                                         },
                                                         onDelete = { deleteTarget = device },
@@ -219,46 +219,46 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
 private fun ShellDeviceRow(
     device: ShellDeviceConfig,
     active: Boolean,
-    onDetails: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menuExpanded by remember(device.id) { mutableStateOf(false) }
     SideEffect { if (!active) menuExpanded = false }
     val type = if (device.type == "ssh") "SSH" else "Conch"
-    Box {
-        SettingsItem(
-            headlineContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        device.name.ifBlank { stringResource(R.string.search_untitled) },
-                        modifier = Modifier.weight(1f, fill = false),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.testTag("shell-device-type:${device.id}"),
-                    ) {
-                        Text(
-                            type,
-                            Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                }
-            },
-            supportingContent = if (device.description.isNotBlank()) ({
+    SettingsItem(
+        headlineContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    device.description,
-                    maxLines = 2,
+                    device.name.ifBlank { stringResource(R.string.search_untitled) },
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }) else null,
-            leadingContent = { Icon(Icons.Default.Devices, null, tint = MaterialTheme.colorScheme.primary) },
-            trailingContent = {
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.testTag("shell-device-type:${device.id}"),
+                ) {
+                    Text(
+                        type,
+                        Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+        },
+        supportingContent = if (device.description.isNotBlank()) ({
+            Text(
+                device.description,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }) else null,
+        leadingContent = { Icon(Icons.Default.Devices, null, tint = MaterialTheme.colorScheme.primary) },
+        trailingContent = {
+            Box(Modifier.testTag("shell-device-menu-anchor:${device.id}")) {
                 IconButton(
                     onClick = { if (active) menuExpanded = true },
                     enabled = active,
@@ -266,30 +266,31 @@ private fun ShellDeviceRow(
                 ) {
                     Icon(Icons.Default.MoreVert, stringResource(R.string.options), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            },
-            modifier = Modifier
-                .testTag("shell-device-row:${device.id}")
-                .clickable(enabled = active) { menuExpanded = true },
-            endPadding = 6.dp,
-        )
-        AgoraDropdownMenu(
-            expanded = active && menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 16.dp,
-        ) {
-            AgoraDropdownMenuItem(
-                text = { Text(stringResource(R.string.task_section_details)) },
-                leadingIcon = { Icon(Icons.Outlined.Info, null) },
-                onClick = { if (active) { menuExpanded = false; onDetails() } },
-            )
-            AgoraDropdownMenuItem(
-                text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
-                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                onClick = { if (active) { menuExpanded = false; onDelete() } },
-            )
-        }
-    }
+                AgoraDropdownMenu(
+                    expanded = active && menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.testTag("shell-device-dropdown:${device.id}"),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 16.dp,
+                ) {
+                    AgoraDropdownMenuItem(
+                        text = { Text(stringResource(R.string.edit)) },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = { if (active) { menuExpanded = false; onEdit() } },
+                    )
+                    AgoraDropdownMenuItem(
+                        text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = { if (active) { menuExpanded = false; onDelete() } },
+                    )
+                }
+            }
+        },
+        modifier = Modifier
+            .testTag("shell-device-row:${device.id}")
+            .clickable(enabled = active) { menuExpanded = true },
+        endPadding = 6.dp,
+    )
 }
 
 @Composable

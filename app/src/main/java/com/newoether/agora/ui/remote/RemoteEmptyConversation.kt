@@ -98,7 +98,7 @@ internal fun RemoteEmptyConversation(
         ) { measurables, constraints ->
             // Preserve natural text and action height inside the bounded scroll viewport.
             val details = measurables.last().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-            val markSize = minOf(112.dp.roundToPx(),
+            val markSize = minOf(80.dp.roundToPx(),
                 (availableHeight.roundToPx() - details.height - 16.dp.roundToPx()).coerceAtLeast(0))
             val mark = measurables.first().measure(Constraints.fixed(markSize, markSize))
             val markGap = if (markSize > 0) 16.dp.roundToPx() else 0

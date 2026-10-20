@@ -144,10 +144,10 @@ class RemoteEmptyConversationTest {
         assertTrue("The full failure block stays above the IME/composer", failureBounds.bottom.value <= 340.5f)
     }
 
-    @Test fun welcomeMarkAndBoldHeadlineFollowTheWebUiHierarchyWithoutBodyProse() {
+    @Test fun welcomeUsesASmallerEightyDpMarkAboveTheProductAndDeviceIdentity() {
         show()
         val mark = compose.onNodeWithTag("remote-welcome-mark")
-            .assertWidthIsEqualTo(112.dp).assertHeightIsEqualTo(112.dp).getUnclippedBoundsInRoot()
+            .assertWidthIsEqualTo(80.dp).assertHeightIsEqualTo(80.dp).getUnclippedBoundsInRoot()
         val headline = compose.onNodeWithTag("remote-welcome-headline")
             .assertTextEquals("Codex Desktop").getUnclippedBoundsInRoot()
         assertEquals(16f, headline.top.value - mark.bottom.value, 0.5f)
@@ -170,7 +170,7 @@ class RemoteEmptyConversationTest {
         compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text)).assertCountEquals(2)
         compose.runOnIdle { state = state.copy(failure = RemoteFailure.SERVICE) }
         compose.onNodeWithTag("remote-welcome-headline").assertTextEquals(text(R.string.remote_empty_retry_hint))
-        compose.onNodeWithTag("remote-welcome-mark").assertWidthIsEqualTo(112.dp)
+        compose.onNodeWithTag("remote-welcome-mark").assertWidthIsEqualTo(80.dp)
         compose.onNodeWithText(text(R.string.retry)).assertIsDisplayed()
     }
 
@@ -201,7 +201,7 @@ class RemoteEmptyConversationTest {
         val headlineBounds = compose.onNodeWithTag("remote-welcome-headline").getUnclippedBoundsInRoot()
         val markBounds = compose.onNodeWithTag("remote-welcome-mark").getUnclippedBoundsInRoot()
         val measuredDetailsHeight = bounds.bottom.value - headlineBounds.top.value
-        val availableForMark = (260f - measuredDetailsHeight - 16f).coerceIn(0f, 112f)
+        val availableForMark = (260f - measuredDetailsHeight - 16f).coerceIn(0f, 80f)
         assertEquals("The mark uses only space left after the complete measured details",
             availableForMark, (markBounds.bottom - markBounds.top).value, 0.5f)
     }
@@ -304,7 +304,7 @@ class RemoteEmptyConversationTest {
         assertEquals(TextOverflow.Ellipsis, layout.layoutInput.overflow)
         assertEquals(2, layout.lineCount)
         assertTrue(layout.isLineEllipsized(1))
-        compose.onNodeWithTag("remote-welcome-mark").assertHeightIsEqualTo(112.dp)
+        compose.onNodeWithTag("remote-welcome-mark").assertHeightIsEqualTo(80.dp)
     }
 
     @Test fun shortEnglishAndChineseHeadlinesUseTheSameExistingResourceKeys() {
