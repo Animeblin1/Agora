@@ -44,6 +44,7 @@ internal data class StandardGenerationContinuationLaunch(
     val job: Job,
     val modelMessageId: String,
     val started: Deferred<Boolean>,
+    val uiToken: Long,
 )
 
 /**
@@ -250,6 +251,7 @@ internal class StandardGenerationContinuationLauncher(
             job = generationJob,
             modelMessageId = modelMessageId,
             started = started,
+            uiToken = uiToken,
         )
     }
 }

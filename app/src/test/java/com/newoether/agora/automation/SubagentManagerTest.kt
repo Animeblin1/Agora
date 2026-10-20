@@ -17,7 +17,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SubagentManagerTest {
-    private class Fixture(scope: CoroutineScope) {
+    internal class Fixture(scope: CoroutineScope) {
         val children = mutableMapOf("parent" to ChatEntity("parent", "Parent"))
         val messages = mutableMapOf<String, MessageEntity>()
         val terminalMessages = mutableMapOf<String, MessageEntity>()

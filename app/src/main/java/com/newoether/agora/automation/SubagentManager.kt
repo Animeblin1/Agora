@@ -209,7 +209,7 @@ class SubagentManager(
             is TaskExecutionEngine.Result.Success ->
                 conversations.subagentTerminalCompletion(id, result.modelMessageId)
             is TaskExecutionEngine.Result.Failure -> {
-                val messageId = registry.get(id)?.streamingMessage?.value?.id
+                val messageId = result.modelMessageId ?: registry.get(id)?.streamingMessage?.value?.id
                 val terminal = messageId?.takeUnless { it == previousMessageId }
                     ?.let { conversations.subagentTerminalCompletion(id, it) }
                 terminal ?: SubagentCompletion(UUID.randomUUID().toString(), "failed", result.reason,

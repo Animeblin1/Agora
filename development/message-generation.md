@@ -624,7 +624,9 @@ Existing workers retain one allowance across Compact/ordinary handoffs; nested g
 Release follows the canonical durable terminal and installed-Job barriers. Lowering concurrency leaves
 running work intact and delays further admission until below the limit; increasing it wakes waiting work.
 Terminal completion payloads keep generated `text` separate from `errorText` and optional `errorCode`
-read from the exact terminal message's persisted error segment. Failed completions apply the same
+read from the exact terminal message's persisted error segment. Engine failures carry that terminal
+message ID even after the streaming overlay is cleared; completion projection never substitutes a
+chronological message or partial answer for it. Failed completions apply the same
 error-text formatter and localized missing-detail fallback as the child timeline's gray terminal
 text, so hiding diagnostics in the receipt bubble never hides them from the parent model. Generated
 partial answers must not supply that fallback. list_agents demand-loads available
@@ -905,7 +907,9 @@ retained-message calculation.
 5. **Durable-before-external.** Provider execution begins only after the Run/message graph commits
    and the process state binds that exact Run.
 6. **Terminal-before-handoff.** Compact, queue, or loop continuation starts only after the origin
-   Run's legal terminal boundary. Checkpoint writers close before terminal persistence.
+   Run's legal terminal boundary. Checkpoint writers close before terminal persistence. A worker
+   awaiting settlement tracks its exact generation owner through both durable and installed-Job
+   barriers; a successor's claimed slot must not extend that wait while it needs the worker's lock.
 7. **Short lock scope.** Queue mutexes and graph/selection locks protect only decisions and
    transactions; never hold them across Provider streams, tool execution, or UI waits.
 8. **Revalidation.** UI-derived targets, parent links, terminal status, Run ownership, and selected

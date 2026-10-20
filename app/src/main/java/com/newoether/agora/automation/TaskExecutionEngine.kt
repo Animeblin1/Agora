@@ -87,7 +87,7 @@ class TaskExecutionEngine(
     sealed interface Result {
         data class Success(val modelMessageId: String, val text: String) : Result
         data class Busy(val reason: String = "Conversation is already generating") : Result
-        data class Failure(val reason: String) : Result
+        data class Failure(val reason: String, val modelMessageId: String? = null) : Result
     }
 
     /**
@@ -523,7 +523,7 @@ class TaskExecutionEngine(
                 }
                 ownerJob.complete()
                 ownerJob.join()
-                generationState.awaitSendAvailable()
+                generationState.awaitGenerationSettled(uiToken)
                 currentCoroutineContext().ensureActive()
                 return Result.Failure("Execution cancelled")
             }
@@ -585,7 +585,7 @@ class TaskExecutionEngine(
             if (boundaryParentId != null) generationState.deferNextQueueDrain()
             ownerJob.complete()
             ownerJob.join()
-            generationState.awaitSendAvailable()
+            generationState.awaitGenerationSettled(uiToken)
 
             if (boundaryParentId != null) {
                 val continuationResult = compactController.continueTaskGenerations(
@@ -622,7 +622,7 @@ class TaskExecutionEngine(
             if (finalMsg != null && finalMsg.status == MessageStatus.SUCCESS) {
                 Result.Success(finalModelMessageId, finalMsg.text)
             } else {
-                Result.Failure(finalMsg?.text?.takeIf { it.isNotBlank() } ?: "Generation failed")
+                Result.Failure(finalMsg?.text?.takeIf { it.isNotBlank() } ?: "Generation failed", finalModelMessageId)
             }
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
@@ -793,7 +793,7 @@ class TaskExecutionEngine(
                     )
                 }
             }
-            Result.Failure(reason)
+            Result.Failure(reason, modelMessageId.takeIf { runCreated })
         }
     }
 }
