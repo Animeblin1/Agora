@@ -82,6 +82,51 @@ internal class RemoteDeviceLifecycleTest : RemoteViewModelFixture() {
         vm.setVisible(false)
     }
 
+    @Test fun draftReconnectPreservesOwnerAndTextAndCoalescesWithoutNativeWrites() = runTest(dispatcher) {
+        val vm = RemoteViewModel(connections, projectionDispatcher = dispatcher) { _, _ -> client }
+        runCurrent()
+        saveAndSelect(vm)
+        vm.setVisible(true)
+        runCurrent()
+        vm.newSession()
+        val owner = requireNotNull(vm.state.value.owner)
+        val draftId = vm.state.value.draftSessionId
+        vm.editDraft(owner, "Keep this draft")
+        val drafts = vm.state.value.drafts
+        val models = vm.state.value.models
+        val settings = vm.state.value.draftSettings
+        val gate = CompletableDeferred<String>()
+        coEvery { client.connect() } coAnswers { gate.await() }
+
+        vm.retryConnection()
+        vm.retryConnection()
+        runCurrent()
+        assertEquals(RemoteDeviceStatus.CONNECTING, vm.state.value.devices.single().status)
+        coVerify(exactly = 2) { client.connect() }
+        gate.completeExceptionally(IOException("offline"))
+        runCurrent()
+        assertEquals(RemoteDeviceStatus.ERROR, vm.state.value.devices.single().status)
+        val notice = vm.notices.first()
+        coEvery { client.connect() } returns "Computer"
+        vm.retryNotice(notice)
+        runCurrent()
+
+        assertEquals(RemoteDeviceStatus.CONNECTED, vm.state.value.devices.single().status)
+        assertNull(vm.state.value.failure)
+        assertEquals(owner, vm.state.value.owner)
+        assertEquals(draftId, vm.state.value.draftSessionId)
+        assertEquals(drafts, vm.state.value.drafts)
+        assertEquals(models, vm.state.value.models)
+        assertEquals(settings, vm.state.value.draftSettings)
+        coVerify(exactly = 1) { client.sessions(any()) }
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { client.send(any(), any(), any(), any()) }
+        vm.setVisible(false)
+        vm.retryConnection()
+        runCurrent()
+        coVerify(exactly = 3) { client.connect() }
+    }
+
     @Test fun leavingAnUnsubmittedDeviceEditorDoesNotConnectOrSave() = runTest(dispatcher) {
         val vm = RemoteViewModel(connections, projectionDispatcher = dispatcher) { _, _ -> client }; runCurrent()
         vm.addDevice()

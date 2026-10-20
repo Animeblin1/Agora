@@ -127,7 +127,7 @@ internal class RemoteViewModel(
             "page_failed" -> loadMore()
             "payload_failed" -> mutableState.value = state.value.copy(hydrationRevision = state.value.hydrationRevision + 1)
             "models_failed" -> refreshModels()
-            "check_failed", "read_failed" -> refresh()
+            "check_failed", "read_failed" -> retryConnection()
         }
     }
 
@@ -248,6 +248,16 @@ internal class RemoteViewModel(
         }
     }
     fun refresh() = refresh(preserveRuntime = false)
+
+    fun retryConnection() {
+        val snapshot = state.value
+        if (!visible || snapshot.restoring || snapshot.addingDevice) return
+        if (snapshot.isDraft) {
+            val id = snapshot.deviceId ?: return
+            mutableState.value = snapshot.copy(failure = null)
+            checkDevice(id)
+        } else refresh()
+    }
 
     private fun refresh(preserveRuntime: Boolean) {
         if (!visible || state.value.restoring || state.value.addingDevice || state.value.isDraft) return

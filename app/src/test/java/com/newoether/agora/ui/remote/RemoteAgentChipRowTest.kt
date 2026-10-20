@@ -7,11 +7,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.assertHasNoClickAction
@@ -22,6 +25,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
+import com.newoether.agora.ui.motion.AgoraMotionPolicy
+import com.newoether.agora.ui.motion.LocalAgoraMotionPolicy
 import com.newoether.agora.remote.RemoteDeviceStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -42,20 +47,84 @@ class RemoteAgentChipRowTest {
         var status by mutableStateOf(RemoteDeviceStatus.CONNECTED)
         compose.setContent { MaterialTheme { RemoteAgentChipRow(status) } }
         compose.onNodeWithContentDescription("Codex Desktop, Online").assertExists().assertHasNoClickAction()
+        compose.onNodeWithText("Online", useUnmergedTree = true).assertExists()
         val initial = compose.onNodeWithText("Codex Desktop").getUnclippedBoundsInRoot()
+        val initialChip = compose.onNodeWithTag("remote-agent-chip", useUnmergedTree = true).getUnclippedBoundsInRoot()
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { status = RemoteDeviceStatus.ERROR }
         compose.mainClock.advanceTimeByFrame()
         repeat(4) {
             compose.mainClock.advanceTimeBy(50)
             assertEquals(initial, compose.onNodeWithText("Codex Desktop").getUnclippedBoundsInRoot())
+            assertEquals(initialChip, compose.onNodeWithTag("remote-agent-chip", useUnmergedTree = true).getUnclippedBoundsInRoot())
         }
         compose.onNodeWithContentDescription("Codex Desktop, Offline").assertExists()
+        compose.onNodeWithText("Offline", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Claude Code").assertDoesNotExist()
         compose.runOnIdle { status = RemoteDeviceStatus.CONNECTING }
         compose.mainClock.advanceTimeBy(240)
         compose.onNodeWithContentDescription("Codex Desktop, Connecting").assertExists()
+        compose.onNodeWithText("Connecting", useUnmergedTree = true).assertExists()
+        assertEquals(initialChip, compose.onNodeWithTag("remote-agent-chip", useUnmergedTree = true).getUnclippedBoundsInRoot())
         assertEquals(initial, compose.onNodeWithText("Codex Desktop").getUnclippedBoundsInRoot())
+    }
+
+    @Test fun errorAndIdleRetainDistinctSharedDotColorsWithReducedMotionAndNoAction() {
+        var status by mutableStateOf(RemoteDeviceStatus.ERROR)
+        lateinit var drawingView: View
+        var expected = Color.Unspecified
+        var expectedIdle = Color.Unspecified
+        compose.setContent {
+            CompositionLocalProvider(LocalAgoraMotionPolicy provides AgoraMotionPolicy(reduceMotion = true)) {
+                MaterialTheme {
+                    drawingView = LocalView.current
+                    val statusColor = when (status) {
+                        RemoteDeviceStatus.ERROR -> MaterialTheme.colorScheme.error
+                        RemoteDeviceStatus.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        RemoteDeviceStatus.CONNECTING -> MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                        RemoteDeviceStatus.CONNECTED -> MaterialTheme.colorScheme.primary
+                    }
+                    val container = MaterialTheme.colorScheme.secondaryContainer
+                    SideEffect {
+                        expected = statusColor
+                        expectedIdle = statusColor.compositeOver(container)
+                    }
+                    Box(Modifier.size(400.dp, 80.dp).background(Color.Transparent)) {
+                        RemoteAgentChipRow(status)
+                    }
+                }
+            }
+        }
+        fun dotPixel(): Int {
+            val bounds = compose.onNodeWithTag("remote-agent-status-dot", useUnmergedTree = true)
+                .fetchSemanticsNode().boundsInRoot
+            val image = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+            try {
+                compose.runOnUiThread {
+                    val canvas = Canvas(image)
+                    canvas.translate(-bounds.left, -bounds.top)
+                    drawingView.draw(canvas)
+                }
+                return image.getPixel(4, 4)
+            } finally { image.recycle() }
+        }
+        compose.onNodeWithContentDescription("Codex Desktop, Offline").assertHasNoClickAction()
+        val errorPixel = dotPixel()
+        assertEquals(expected.toArgb(), errorPixel)
+        compose.runOnIdle { status = RemoteDeviceStatus.IDLE }
+        compose.onNodeWithContentDescription("Codex Desktop, Offline").assertHasNoClickAction()
+        val idlePixel = dotPixel()
+        val expectedIdlePixel = expectedIdle.toArgb()
+        // Canvas quantizes premultiplied alpha when compositing the translucent idle dot.
+        for (shift in listOf(0, 8, 16, 24)) {
+            val expectedChannel = (expectedIdlePixel ushr shift) and 0xff
+            val actualChannel = (idlePixel ushr shift) and 0xff
+            assertEquals("Idle dot channel $shift", expectedChannel.toDouble(), actualChannel.toDouble(), 1.0)
+        }
+        assertTrue("Offline idle and connection failure must remain visibly distinct", errorPixel != idlePixel)
+        compose.runOnIdle { status = RemoteDeviceStatus.CONNECTED }
+        compose.onNodeWithContentDescription("Codex Desktop, Online").assertHasNoClickAction()
+        assertEquals(expected.toArgb(), dotPixel())
     }
 
     @Test fun capsuleGeometryAndPointerEventsReachPlatformRippleWithoutAddingAnAction() {

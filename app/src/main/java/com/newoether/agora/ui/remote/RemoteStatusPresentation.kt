@@ -1,0 +1,45 @@
+package com.newoether.agora.ui.remote
+
+import androidx.annotation.StringRes
+import com.newoether.agora.R
+import com.newoether.agora.mcp.McpConnectionStatus
+import com.newoether.agora.remote.RemoteDeviceStatus
+import com.newoether.agora.remote.RemoteState
+
+internal fun RemoteDeviceStatus.toMcpConnectionStatus(): McpConnectionStatus = when (this) {
+    RemoteDeviceStatus.IDLE -> McpConnectionStatus.IDLE
+    RemoteDeviceStatus.CONNECTING -> McpConnectionStatus.CONNECTING
+    RemoteDeviceStatus.CONNECTED -> McpConnectionStatus.CONNECTED
+    RemoteDeviceStatus.ERROR -> McpConnectionStatus.ERROR
+}
+
+@StringRes
+internal fun remoteConnectionStatusLabel(status: McpConnectionStatus): Int = when (status) {
+    McpConnectionStatus.CONNECTED -> R.string.remote_online
+    McpConnectionStatus.CONNECTING -> R.string.remote_connecting
+    McpConnectionStatus.IDLE, McpConnectionStatus.ERROR -> R.string.remote_offline
+}
+
+/** Both Remote surfaces report the selected authenticated gateway, never Desktop writer readiness. */
+internal fun RemoteState.remoteConnectionStatus(): McpConnectionStatus =
+    (devices.firstOrNull { it.id == deviceId }?.status ?: RemoteDeviceStatus.IDLE).toMcpConnectionStatus()
+
+/** Empty guidance never replaces an admitted message, including during read failure or recovery. */
+@StringRes
+internal fun RemoteState.remoteEmptyConversationHint(): Int? {
+    if (session == null || messageGroups.isNotEmpty()) return null
+    val connection = remoteConnectionStatus()
+    return when {
+        loading || connection == McpConnectionStatus.CONNECTING -> R.string.remote_empty_connecting_hint
+        error -> R.string.remote_empty_retry_hint
+        isDraft && connection == McpConnectionStatus.CONNECTED -> R.string.remote_new_chat_hint
+        connection != McpConnectionStatus.CONNECTED -> R.string.remote_empty_offline_hint
+        !hydrationEnabled -> R.string.remote_empty_connecting_hint
+        else -> R.string.remote_empty_conversation_hint
+    }
+}
+
+internal fun RemoteState.canRetryEmptyConnection(): Boolean =
+    remoteEmptyConversationHint() != null && !loading &&
+        remoteConnectionStatus() != McpConnectionStatus.CONNECTING &&
+        (error || remoteConnectionStatus() != McpConnectionStatus.CONNECTED)

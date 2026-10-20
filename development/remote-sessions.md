@@ -77,8 +77,10 @@ Visible entry/save starts coalesced connection checks; no periodic device-health
 
 Load failures use the original application Snackbar, positioned by the original composer
 inset owner in chat and the system inset on Devices/Sessions. Preserve the current page and
-loaded content; no permanent inline error rows. Read retry is bound to the current selection
-and cannot replay sends, settings or other writes.
+loaded content. An empty conversation additionally shows neutral localized connection/load
+guidance with a safe read/reconnect action; error details remain in Snackbar, without a
+permanent timeline error row. Read retry is bound to the current selection and cannot replay
+sends, settings or other writes.
 
 Storage and protocol errors stay distinct from connection errors.
 Device health is independent of a native session read: an HTTP/service/protocol error must
@@ -123,13 +125,16 @@ This is presentation state only; Filo verifies native ownership/state at dispatc
 
 The session catalog title is the configured device name (localized Device fallback), replacing
 Sessions. Immediately below it, a horizontally scrollable chip row currently contains one
-informational Codex Desktop chip with the existing OpenAI icon and an 8dp status dot. The chip
+informational Codex Desktop chip with the existing OpenAI icon, an 8dp status dot and visible
+localized connection status. The chip
 has a 40dp-high capsule shape with secondaryContainer/onSecondaryContainer colors, no outline,
 and a bounded press ripple. Press feedback
 never navigates, selects a provider, changes connection state or sends a request; the chip retains
 its informational accessibility semantics. The dot
 reflects the selected device's existing authenticated Filo connection state: connected is Online,
-connecting is Connecting, otherwise Offline. It does not claim a separate native Desktop writer
+connecting is Connecting, otherwise Offline. Error uses the shared error-red status dot and
+Offline remains neutral gray. Visible status and accessibility describe the same state.
+It does not claim a separate native Desktop writer
 health check. Keep the chip visible during load, failure and native mutations; status uses a
 200ms opacity Crossfade in fixed geometry, including Reduced Motion. Do not add discovery,
 provider registries, extra requests or inactive future providers for this presentation.
@@ -299,6 +304,13 @@ scroll. Navigation and repeated reconciliation cannot duplicate it.
 ## New Chat, models and settings
 
 New Chat is local until Send: immediate original keyboard, no background creation/request.
+Its empty body shows a localized prompt to send the first message while online. Empty existing
+sessions, connecting and offline/failed reads have distinct neutral guidance in the original
+content area; they never conceal loaded messages or replace the original composer. The existing
+initial loading cover retains its indicator and touch exclusion. Explicit reconnect on an offline
+local draft performs only the coalesced authenticated device check, preserving its identity, text,
+attachments and model/settings choices. Repeated requests coalesce, and late checks retain existing
+client/selection fences. Entering New Chat itself starts no check, creation or Send.
 Within chat, New Chat replaces the current conversation in place using the original title,
 composer and scroll owners; the enclosing settings navigation must not create another page.
 The Sessions FAB enters that same local draft. The original attachment plus/menu offers

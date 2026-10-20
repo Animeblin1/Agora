@@ -54,12 +54,7 @@ internal fun RemoteConversation(
 ) {
     val owner = state.owner ?: return
     val session = state.session ?: return
-    val connectionStatus = when (state.devices.firstOrNull { it.id == state.deviceId }?.status) {
-        RemoteDeviceStatus.CONNECTED -> com.newoether.agora.mcp.McpConnectionStatus.CONNECTED
-        RemoteDeviceStatus.CONNECTING -> com.newoether.agora.mcp.McpConnectionStatus.CONNECTING
-        RemoteDeviceStatus.ERROR -> com.newoether.agora.mcp.McpConnectionStatus.ERROR
-        else -> com.newoether.agora.mcp.McpConnectionStatus.IDLE
-    }
+    val connectionStatus = state.remoteConnectionStatus()
     val density = LocalDensity.current
     val motion = LocalAgoraMotionPolicy.current
     val haptics = LocalAgoraHaptics.current
@@ -251,11 +246,7 @@ internal fun RemoteConversation(
                 totalTokens = state.runtime?.contextTokens ?: 0,
                 contextTokenBudget = state.runtime?.contextWindow ?: 0,
                 contextAvailable = state.runtime?.contextTokens != null && state.runtime?.contextWindow != null,
-                subtitle = stringResource(when (connectionStatus) {
-                    com.newoether.agora.mcp.McpConnectionStatus.CONNECTED -> R.string.remote_online
-                    com.newoether.agora.mcp.McpConnectionStatus.CONNECTING -> R.string.remote_connecting
-                    else -> R.string.remote_offline
-                }),
+                subtitle = stringResource(remoteConnectionStatusLabel(connectionStatus)),
                 subtitleLeading = { com.newoether.agora.ui.settings.McpStatusDot(connectionStatus) },
                 searchActive = interaction.searchActive, searchQuery = interaction.searchQuery,
                 searchMatchIndex = interaction.searchMatchIndex, searchMatchCount = interaction.searchMatches.size,
@@ -328,12 +319,33 @@ internal fun RemoteConversation(
                     scroll.requestAbsoluteBottomScroll()
                 }
 
-                ChatSwitchingOverlay(
-                    isSwitching = switching && !state.error,
-                    isTransitioningToNewChat = newChatEntry,
-                    topBarHeight = topBarHeight,
-                    bottomBarHeight = barHeight,
-                )
+                if (!switching || state.error || newChatEntry) {
+                    RemoteEmptyConversation(
+                        state = state,
+                        active = active,
+                        topBarHeight = topBarHeight,
+                        bottomBarHeight = barHeight,
+                        onRetry = vm::retryConnection,
+                    )
+                }
+                Box {
+                    ChatSwitchingOverlay(
+                        isSwitching = switching && !state.error,
+                        isTransitioningToNewChat = newChatEntry,
+                        topBarHeight = topBarHeight,
+                        bottomBarHeight = barHeight,
+                    )
+                    if (switching && !state.error && !newChatEntry) {
+                        RemoteEmptyConversation(
+                            state = state,
+                            active = active,
+                            topBarHeight = topBarHeight,
+                            bottomBarHeight = barHeight,
+                            onRetry = vm::retryConnection,
+                            opening = true,
+                        )
+                    }
+                }
             }
         }
         ChatComposerSurface(expanded, { barHeightPx = it }, Modifier.align(Alignment.BottomCenter), spacer.outerHeightPx) {

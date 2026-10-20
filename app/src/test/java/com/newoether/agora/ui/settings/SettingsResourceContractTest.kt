@@ -72,6 +72,39 @@ class SettingsResourceContractTest {
     }
 
     @Test
+    fun sshKeyAndRemoteEmptyStateCopyIsLocalizedWithExpectedEnglishCasing() {
+        val resources = locateResourceDirectory()
+        val expected = linkedMapOf(
+            "shell_ssh_auth_method" to "Authentication method",
+            "shell_ssh_auth_private_key" to "Private Key",
+            "shell_ssh_import_private_key" to "Import Private Key",
+            "shell_ssh_private_key_desc" to "Import an SSH private key up to 256 KiB.",
+            "shell_ssh_private_key_passphrase" to "Key passphrase",
+            "shell_ssh_private_key_invalid" to "Invalid or unsupported SSH private key",
+            "shell_ssh_private_key_too_large" to "Private key exceeds 256 KiB",
+            "shell_ssh_private_key_read_failed" to "Could not read private key",
+            "shell_ssh_private_key_passphrase_invalid" to "Incorrect key passphrase",
+            "remote_new_chat_hint" to "Send a message to start a conversation on this device.",
+            "remote_empty_connecting_hint" to "Connecting to this device. You can keep writing below.",
+            "remote_empty_offline_hint" to "Reconnect to this device to load the conversation. Your draft stays here.",
+            "remote_empty_retry_hint" to "Try loading again. Your draft stays here.",
+            "remote_empty_conversation_hint" to "No messages in this conversation yet.",
+        )
+        val defaults = readStringValues(File(resources, "values"))
+        expected.forEach { (key, value) -> assertEquals(key, value, defaults[key]) }
+        val localePattern = Regex("""values-[a-z]{2,3}(?:-r[A-Z]{2})?""")
+        resources.listFiles().orEmpty()
+            .filter { it.isDirectory && localePattern.matches(it.name) }
+            .forEach { locale ->
+                val values = readStringValues(locale)
+                expected.forEach { (key, english) ->
+                    assertTrue("${locale.name}: $key", !values[key].isNullOrBlank())
+                    assertFalse("${locale.name}: $key must be translated", values[key] == english)
+                }
+            }
+    }
+
+    @Test
     fun englishSettingsDestinationTitlesFollowTheGlobalTitleCaseContract() {
         val values = readStringValues(File(locateResourceDirectory(), "values"))
         val expected = linkedMapOf(

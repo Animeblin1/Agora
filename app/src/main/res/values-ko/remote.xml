@@ -31,4 +31,9 @@
     <string name="remote_archive">보관</string>
     <string name="remote_archive_title">작업을 보관할까요?</string>
     <string name="remote_archive_message">Codex와 Remote의 활성 목록에서 이 작업을 제거할까요? 기록은 유지됩니다.</string>
+    <string name="remote_new_chat_hint">메시지를 보내 이 기기에서 대화를 시작하세요.</string>
+    <string name="remote_empty_connecting_hint">이 기기에 연결하고 있습니다. 아래에서 계속 입력할 수 있습니다.</string>
+    <string name="remote_empty_offline_hint">대화를 불러오려면 이 기기에 다시 연결하세요. 작성 중인 내용은 여기에 유지됩니다.</string>
+    <string name="remote_empty_retry_hint">다시 불러오세요. 작성 중인 내용은 여기에 유지됩니다.</string>
+    <string name="remote_empty_conversation_hint">이 대화에는 아직 메시지가 없습니다.</string>
 </resources>
