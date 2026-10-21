@@ -307,8 +307,12 @@ whether the original owner can accept that request; HTTP/SSE failures use stable
 codes to select an actionable Snackbar in the current application locale. Unknown codes and
 older servers retain the bounded native detail beside a localized category. Keep the detail
 in the transient notice for diagnosis; never log this text or credentials. Every default
-error key must exist in every supported locale. Codes do not authorize mutation retries. An unconfirmed previous delivery keeps Send clickable and presents the
-existing check action in Snackbar before any new attempt; no automatic retry or duplicate send.
+error key must exist in every supported locale. Codes never authorize automatic mutation retries.
+A rejected or unconfirmed send retains its draft and uses a text-only Snackbar with no action.
+An uncertain result says that delivery could not be confirmed, never that non-delivery is proven.
+The next explicit Send admits one fresh attempt with a new client ID, including after UNKNOWN;
+SUBMITTING and ACCEPTED still coalesce duplicate taps. Refresh, reconnect and navigation never replay
+input. Old receipts and late results cannot confirm a newer attempt, clear its draft or report failure.
 Reuse original ComposerSendButton: active + empty draft means Stop, text means Send/steer,
 submission/Stop settlement means Busy. Keep pending Stop through both HTTP success and
 native end/replacement of that exact turn, regardless of arrival order. Failure clears
@@ -390,7 +394,8 @@ is distinct from confirmed Default (`serviceTierKnown:true` with null/default).
 The native model catalog alone defines supported efforts, tiers and defaults.
 Settings apply to subsequent turns.
 Draft choices apply after one native creation and before first Send. If settings fail after
-known creation, explicit retry uses the same native ID. Unknown creation/send stays guarded.
+known creation, explicit retry uses the same native ID. Unknown creation/send retains the draft;
+the next explicit Send admits a fresh client ID without an acknowledgment step or automatic replay.
 The owner-approved creation flow uses native APIs without desktop control, preferring
 Desktop IPC and using its bundled runtime when that creation capability is unavailable.
 Verify native task identity, initial settings and first-input receipt; an empty task is
@@ -412,10 +417,11 @@ Preserve preceding answers and tools, and keep one stable error identity per nat
 Transport errors remain Snackbar notices. Missing live state must never invent a native error
 or mark a failed turn as generating. Error messages do not disable an explicit Send retry.
 No delivery-status text/card belongs above the composer. Rejected/unknown delivery details
-use the original Snackbar. Clicking Send with unknown prior delivery shows the existing
-check action in that Snackbar; acknowledging it clears the guard without sending any input.
-The action is labeled Allow Sending (localized), and the notice explicitly explains that it
-only clears the warning and does not send. A new Send tap is still required.
+use the original text-only Snackbar without a check, acknowledgment or retry button. An unconfirmed
+send reports only that successful delivery could not be confirmed; known rejections keep their
+localized failure reason. The draft remains editable and the next explicit Send performs the new
+attempt directly. No confirmation step or acknowledgment guard is required. Automatic replay stays
+prohibited even when that manual resend could duplicate an input accepted before its response was lost.
 
 Filo bounds conversation pages to 256KiB/128 records with explicit tool previews. Android
 limits SSE lines/HTTP bodies to 1MiB before UTF-8 allocation, including missing delimiters.

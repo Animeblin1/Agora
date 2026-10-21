@@ -59,9 +59,26 @@ class RemoteConversationPresentationTest {
         every { settings.autoExpandActiveGroup } returns MutableStateFlow(true)
         compose.setContent {
             MaterialTheme {
-                RemoteConversation(state, vm, settings, true, {}, {}, { _, _ -> }, { _, _, _ -> })
+                RemoteConversation(state, vm, settings, true, {}, {}, { _, _ -> })
             }
         }
+    }
+
+    @Test fun unknownDeliveryUsesTheNextSendDirectlyWithoutAnAcknowledgmentAction() {
+        val owner = requireNotNull(state.owner)
+        state = state.copy(attempts = mapOf(owner to RemoteAttempt("previous", "Unsent draft", RemoteDelivery.UNKNOWN)))
+        show()
+        compose.onNode(hasSetTextAction()).assertTextContains("Unsent draft")
+            .performTextReplacement("Edited retry")
+        compose.onNodeWithContentDescription(text(R.string.action)).assertIsEnabled().performClick()
+        compose.waitForIdle()
+        verify(exactly = 1) { vm.send() }
+        verify { vm.editDraft(owner, "Edited retry") }
+        compose.onNode(hasSetTextAction()).assertTextContains("Edited retry")
+        compose.onNodeWithText(text(R.string.remote_unknown)).assertDoesNotExist()
+        compose.onNodeWithText("Allow Sending").assertDoesNotExist()
+        verify(exactly = 0) { vm.retryConnection() }
+        verify(exactly = 0) { vm.newSession() }
     }
 
     @Test fun draftStaysEditableThroughFailureAndSafeRetryWithoutASecondSubmissionPath() {

@@ -694,12 +694,6 @@ internal class RemoteViewModel(
         mutableState.value = state.value.copy(drafts = state.value.drafts + (owner to text))
     }
 
-    fun acknowledgeUnknown(owner: String) {
-        if (state.value.attempts[owner]?.delivery == RemoteDelivery.UNKNOWN) {
-            mutableState.value = state.value.copy(attempts = state.value.attempts - owner)
-        }
-    }
-
     fun send() {
         val snapshot = state.value
         if (!visible || snapshot.controlling || snapshot.isStopping || snapshot.settingsPending) return
@@ -708,7 +702,7 @@ internal class RemoteViewModel(
         val text = snapshot.drafts[owner].orEmpty()
         val attachments = snapshot.attachments[owner].orEmpty()
         if ((text.isBlank() && attachments.isEmpty()) || snapshot.attempts[owner]?.delivery in
-            setOf(RemoteDelivery.SUBMITTING, RemoteDelivery.ACCEPTED, RemoteDelivery.UNKNOWN)) return
+            setOf(RemoteDelivery.SUBMITTING, RemoteDelivery.ACCEPTED)) return
         if (snapshot.isDraft && snapshot.settingsModel == null) {
             trace("models_failed", FiloInputException())
             return
@@ -765,14 +759,16 @@ internal class RemoteViewModel(
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                val failure = trace("send_failed", error)
-                if (state.value.owner == owner && failure == RemoteFailure.SESSION_BUSY) {
-                    mutableState.value = state.value.copy(failure = failure)
-                }
+                val rejected = !uploadComplete || error is FiloInputException ||
+                    error is FiloHttpException && error.status in setOf(400, 401, 403, 404, 409, 413, 415, 429)
+                val failure = trace("send_failed", error, notify = false)
                 if (state.value.attempts[owner]?.clientId == attempt.clientId &&
                     state.value.attempts[owner]?.delivery == RemoteDelivery.SUBMITTING) {
-                    val rejected = !uploadComplete || error is FiloInputException ||
-                        error is FiloHttpException && error.status in setOf(400, 401, 403, 404, 409, 413, 415, 429)
+                    if (failure != null) noticeChannel.trySend(RemoteNotice("send_failed", failure, selected,
+                        remoteErrorDetail(error).takeIf { rejected }, if (rejected) remoteErrorCode(error) else "delivery_unconfirmed"))
+                    if (state.value.owner == owner && failure == RemoteFailure.SESSION_BUSY) {
+                        mutableState.value = state.value.copy(failure = failure)
+                    }
                     mutableState.value = state.value.copy(attempts = state.value.attempts +
                         (owner to attempt.copy(delivery = if (rejected) RemoteDelivery.REJECTED else RemoteDelivery.UNKNOWN)))
                 }

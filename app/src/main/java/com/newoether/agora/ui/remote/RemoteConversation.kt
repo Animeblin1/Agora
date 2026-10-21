@@ -50,7 +50,6 @@ internal fun RemoteConversation(
     state: RemoteState, vm: RemoteViewModel, settings: SettingsRepository, active: Boolean, onBack: () -> Unit,
     onSnackbarOffsetChanged: (androidx.compose.ui.unit.Dp) -> Unit,
     onMediaClick: (List<String>, Int) -> Unit,
-    onMessage: (String, String?, (() -> Unit)?) -> Unit,
 ) {
     val owner = state.owner ?: return
     val session = state.session ?: return
@@ -228,8 +227,6 @@ internal fun RemoteConversation(
         historyProgress.targetState = active && !switching && !interaction.searchActive &&
             state.loadingMore && atHistoryBoundary
     }
-    val unknownDeliveryText = stringResource(R.string.remote_unknown)
-    val allowSendingText = stringResource(R.string.remote_check)
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).clearFocusOnTap()
         .onSizeChanged { scroll.recordViewportHeight(it.height) }) {
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -501,9 +498,6 @@ internal fun RemoteConversation(
                         isBusy = submitting || stopping, showStop = showStop,
                         onBusyShown = { shownBusyAttempt = attempt?.clientId }) {
                         if (showStop) vm.stop()
-                        else if (attempt?.delivery == RemoteDelivery.UNKNOWN) onMessage(unknownDeliveryText, allowSendingText) {
-                            vm.acknowledgeUnknown(owner)
-                        }
                         else { vm.editDraft(owner, field.text.toString()); vm.send() }
                     }
                 })

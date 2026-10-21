@@ -98,7 +98,7 @@ internal fun RemoteOverlay(
     SettingsOverlayHost(visible, onDismiss, onExitFinished = onExitFinished) {
         val hapticsEnabled by settings.hapticsEnabled.collectAsState(initial = false)
         CompositionLocalProvider(LocalAgoraHaptics provides rememberAgoraHaptics(hapticsEnabled && hapticsActive)) {
-            RemoteScreen(remote, settings, visible, onDismiss, onSnackbarOffsetChanged, onMediaClick, onMessage)
+            RemoteScreen(remote, settings, visible, onDismiss, onSnackbarOffsetChanged, onMediaClick)
         }
     }
 }
@@ -106,8 +106,7 @@ internal fun RemoteOverlay(
 @Composable
 internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, active: Boolean, onBack: () -> Unit,
     onSnackbarOffsetChanged: (androidx.compose.ui.unit.Dp) -> Unit,
-    onMediaClick: (List<String>, Int) -> Unit,
-    onMessage: (String, String?, (() -> Unit)?) -> Unit) {
+    onMediaClick: (List<String>, Int) -> Unit) {
     val state by vm.state.collectAsState()
     val inset = maxOf(WindowInsets.ime.asPaddingValues().calculateBottomPadding(),
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
@@ -134,7 +133,7 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
         val displayed = if (current) state else retained
         when {
             page.third != null -> RemoteAddDevice(displayed, vm, back) { forward = false; focus.clearFocus() }
-            page.second != null -> RemoteConversation(displayed, vm, settings, active && current, back, onSnackbarOffsetChanged, onMediaClick, onMessage)
+            page.second != null -> RemoteConversation(displayed, vm, settings, active && current, back, onSnackbarOffsetChanged, onMediaClick)
             page.first != null -> {
                 var showUsage by remember(displayed.deviceId) { mutableStateOf(false) }
                 if (showUsage && current && active) RemoteUsageSheet(vm) { showUsage = false }

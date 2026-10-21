@@ -64,6 +64,37 @@ class RemoteConnectionRecoveryTest {
         return result
     }
 
+    @Test fun sendFailureNoticeKeepsItsOriginalSelectionAndCannotReplayInput() = runTest(dispatcher) {
+        every { client.events(any()) } returns flow { emit(page); awaitCancellation() }
+        for (navigate in listOf(false, true)) {
+            val response = CompletableDeferred<String>()
+            coEvery { client.send(any(), any(), any(), any()) } coAnswers { response.await() }
+            val vm = open()
+            val notices = notices(vm)
+            val owner = requireNotNull(vm.state.value.owner)
+            vm.editDraft(owner, "Keep this input")
+            vm.send(); runCurrent()
+            if (navigate) { vm.selectSession(session.copy(id = "other")); runCurrent() }
+            response.completeExceptionally(IOException("Lost response")); runCurrent()
+            val notice = notices.single()
+            assertEquals("send_failed", notice.stage)
+            assertEquals("delivery_unconfirmed", notice.code)
+            assertNull(notice.detail)
+            assertFalse(notice.canRetryRead)
+            assertEquals(!navigate, vm.isNoticeCurrent(notice))
+            assertEquals(RemoteDelivery.UNKNOWN, vm.state.value.attempts[owner]?.delivery)
+            assertEquals("Keep this input", vm.state.value.drafts[owner])
+            vm.retryNotice(notice); runCurrent()
+            if (navigate) {
+                vm.selectSession(session); runCurrent()
+                assertFalse(vm.isNoticeCurrent(notice))
+            }
+            vm.setVisible(false)
+        }
+        coVerify(exactly = 2) { client.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { client.create(any(), any(), any(), any()) }
+    }
+
     @Test fun transientStreamDisconnectRecoversWithoutOfflineOrSnackbar() = runTest(dispatcher) {
         var reads = 0
         every { client.events(any()) } answers { flow {
