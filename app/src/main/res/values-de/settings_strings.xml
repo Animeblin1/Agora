@@ -536,4 +536,9 @@
     <string name="filo_guide_address_mapping">Trage die erreichbare Dienst-URL über die Tailnet-IPv4-Adresse des Ziels ein. localhost funktioniert nur auf dem Zielcomputer.</string>
     <string name="filo_guide_token_mapping">Kopiere das Zugriffstoken des Installers in das Feld Zugriffstoken. Halte das Token geheim.</string>
     <string name="filo_guide_scope">Quellen und Steuerungsmöglichkeiten hängen von installierten Clients und gemeldeten Fähigkeiten ab. Claude Code benötigt eine ausdrücklich aktivierte Mod. Chat und Cowork werden nicht unterstützt.</string>
+    <string name="install_guide_help">Hilfe</string>
+    <string name="install_guide_open_terminal">Terminal öffnen</string>
+    <string name="install_guide_run_command">Befehl kopieren und ausführen</string>
+    <string name="conch_guide_finish">Kehre zu Gerät hinzufügen zurück. Gib die Dienstadresse und den API-Schlüssel aus der Installation ein, wähle einen Namen und speichere.</string>
+    <string name="filo_guide_finish">Wähle bei Aufforderung das Windows-Konto des nativen Clients. Kehre zu Gerät hinzufügen zurück, gib die erreichbare Dienst-URL und das Zugriffstoken ein und speichere. localhost funktioniert nur auf dem Computer.</string>
 </resources>

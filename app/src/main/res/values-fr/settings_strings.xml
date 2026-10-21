@@ -536,4 +536,9 @@
     <string name="filo_guide_address_mapping">Saisissez l’URL accessible du service via l’IPv4 tailnet de la cible. localhost fonctionne uniquement sur l’ordinateur cible.</string>
     <string name="filo_guide_token_mapping">Copiez le jeton d’accès de l’installateur dans Jeton d’accès. Gardez ce jeton confidentiel.</string>
     <string name="filo_guide_scope">Les sources et commandes dépendent des clients installés et des capacités annoncées. Claude Code nécessite d’activer explicitement son Mod. Chat et Cowork ne sont pas pris en charge.</string>
+    <string name="install_guide_help">Aide</string>
+    <string name="install_guide_open_terminal">Ouvrir le terminal</string>
+    <string name="install_guide_run_command">Copier et exécuter la commande</string>
+    <string name="conch_guide_finish">Revenez à Ajouter un appareil. Saisissez l’adresse du service et la clé API fournies par l’installateur, choisissez un nom, puis enregistrez.</string>
+    <string name="filo_guide_finish">À l’invite, choisissez le compte Windows du client natif. Revenez à Ajouter un appareil, saisissez l’URL accessible du service et le jeton d’accès, puis enregistrez. localhost fonctionne uniquement sur l’ordinateur.</string>
 </resources>

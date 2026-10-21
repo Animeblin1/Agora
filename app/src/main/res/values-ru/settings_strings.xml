@@ -536,4 +536,9 @@
     <string name="filo_guide_address_mapping">Введите доступный URL службы через IPv4-адрес целевого компьютера в tailnet. localhost работает только на самом целевом компьютере.</string>
     <string name="filo_guide_token_mapping">Скопируйте токен доступа из вывода установщика в поле токена доступа. Храните токен в тайне.</string>
     <string name="filo_guide_scope">Источники и управление зависят от установленных клиентов и заявленных возможностей. Claude Code требует явного включения Mod. Chat и Cowork не поддерживаются.</string>
+    <string name="install_guide_help">Справка</string>
+    <string name="install_guide_open_terminal">Откройте терминал</string>
+    <string name="install_guide_run_command">Скопируйте и выполните команду</string>
+    <string name="conch_guide_finish">Вернитесь в раздел добавления устройства. Введите адрес службы и ключ API из установщика, задайте имя и сохраните.</string>
+    <string name="filo_guide_finish">По запросу выберите учётную запись Windows нативного клиента. Вернитесь к добавлению устройства, введите доступный URL службы и токен доступа и сохраните. localhost работает только на самом компьютере.</string>
 </resources>

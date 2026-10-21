@@ -82,8 +82,8 @@ class SettingsInstallationGuidesTest {
                 MaterialTheme {
                     Box(Modifier.size(if (largeFont) 320.dp else 400.dp, 600.dp)) {
                         key(entry) {
-                            if (conch) SettingsConchGuidePage({ backs++ }, { adds++ })
-                            else SettingsFiloGuidePage({ backs++ }, { adds++ })
+                            if (conch) SettingsConchGuidePage { backs++ }
+                            else SettingsFiloGuidePage { backs++ }
                         }
                     }
                 }
@@ -107,6 +107,7 @@ class SettingsInstallationGuidesTest {
     private fun assertPlatformLabelFits(index: Int) {
         val node = compose.onNodeWithTag("conch-guide-platform-label-$index", useUnmergedTree = true)
         node.performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("conch-guide-platform-$index").assertHeightIsAtLeast(72.dp)
         val layouts = mutableListOf<TextLayoutResult>()
         node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         val layout = layouts.single()
@@ -121,58 +122,45 @@ class SettingsInstallationGuidesTest {
     )
 
     @Test
-    fun conchWindowsCopiesDefaultUserCommandAndSystemRequiresExplicitChoice() {
+    fun conchWindowsShowsThreeStepsAndCopiesOnlyTheUserCommand() {
         show()
-        compose.onNodeWithTag("conch-guide-system-mode").assertIsOff()
+        compose.onNodeWithTag("conch-guide-system-mode").assertDoesNotExist()
+        compose.onNodeWithText("1").assertExists()
+        compose.onNodeWithText("2").assertExists()
+        compose.onNodeWithText("3").assertExists()
         compose.onNodeWithTag("conch-guide-terminal-note")
             .assertTextEquals(strings.getValue(R.string.conch_guide_windows_terminal))
-        copyAndAssert("conch-guide", "Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.ps1 | iex")
-        compose.onNodeWithTag("conch-guide-system-mode").performScrollTo().performClick()
-        compose.onNodeWithTag("conch-guide-system-mode").assertIsOn()
-        compose.onNodeWithTag("conch-guide-terminal-note")
-            .assertTextEquals(strings.getValue(R.string.conch_guide_system_mode_desc))
-        compose.onNodeWithText(strings.getValue(R.string.conch_guide_user_mode)).assertDoesNotExist()
-        compose.onNodeWithTag("conch-guide-mode-note")
-            .assertTextEquals(strings.getValue(R.string.conch_guide_system_mode))
-        copyAndAssert("conch-guide", "Set-ExecutionPolicy Bypass -Scope Process -Force; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.ps1))) -Mode system")
+        copyAndAssert("conch-guide", CONCH_USER_WINDOWS_INSTALL)
         compose.runOnIdle {
-            assertEquals(0, adds)
             assertEquals(0, backs)
             assertTrue(openedUrls.isEmpty())
         }
     }
 
     @Test
-    fun linuxDefaultsWithoutSudoAndTermuxClearsTheExplicitSystemChoice() {
+    fun linuxAndTermuxCopyTheUserCommandWithoutAdvancedOptions() {
         show()
         choose(R.string.install_guide_linux)
-        compose.onNodeWithText(strings.getValue(R.string.conch_guide_linger)).assertExists()
-        compose.onNodeWithText(strings.getValue(R.string.conch_guide_mode_preserved)).assertExists()
-        copyAndAssert("conch-guide", "curl -fsSL https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.sh | bash")
-        compose.onNodeWithTag("conch-guide-system-mode").performScrollTo().performClick()
-        compose.onNodeWithText(strings.getValue(R.string.conch_guide_linger)).assertDoesNotExist()
-        copyAndAssert("conch-guide", "curl -fsSL https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.sh | sudo bash -s -- --mode system")
+        copyAndAssert("conch-guide", CONCH_USER_UNIX_INSTALL)
         choose(R.string.install_guide_termux)
         compose.onNodeWithTag("conch-guide-system-mode").assertDoesNotExist()
-        copyAndAssert("conch-guide", "curl -fsSL https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.sh | bash")
+        copyAndAssert("conch-guide", CONCH_USER_UNIX_INSTALL)
         choose(R.string.install_guide_windows)
-        compose.onNodeWithTag("conch-guide-system-mode").assertIsOff()
-        compose.onNodeWithTag("conch-guide-command").assertTextEquals("Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.ps1 | iex")
+        copyAndAssert("conch-guide", CONCH_USER_WINDOWS_INSTALL)
     }
 
     @Test
-    fun filoCopiesTheMaintainedCommandAndAddAndBackAreSingleEntryActions() {
+    fun filoCopiesTheMaintainedCommandAndReturnAndBackAreSingleEntryActions() {
         show(conch = false)
-        compose.onNodeWithText(strings.getValue(R.string.filo_guide_selected_user)).assertExists()
-        compose.onNodeWithText(strings.getValue(R.string.filo_guide_scope)).assertExists()
-        compose.onNodeWithText(strings.getValue(R.string.filo_guide_address_mapping)).assertExists()
-        copyAndAssert("filo-guide", "Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://raw.githubusercontent.com/newo-ether/filo/main/install.ps1 | iex")
-        val add = capturedClick("filo-guide-add-device")
+        compose.onNodeWithText("1").assertExists()
+        compose.onNodeWithText("2").assertExists()
+        compose.onNodeWithText("3").assertExists()
+        copyAndAssert("filo-guide", FILO_WINDOWS_INSTALL)
+        val backToEditor = capturedClick("filo-guide-return")
         compose.runOnIdle {
-            add()
-            add()
-            assertEquals(1, adds)
-            assertEquals(0, backs)
+            backToEditor()
+            backToEditor()
+            assertEquals(1, backs)
         }
         compose.runOnIdle { entry++ }
         compose.waitForIdle()
@@ -181,15 +169,14 @@ class SettingsInstallationGuidesTest {
         compose.runOnIdle {
             back()
             back()
-            assertEquals(1, backs)
-            assertEquals(1, adds)
+            assertEquals(2, backs)
         }
     }
 
     @Test
     fun retainedConchEntryCannotReviveItsOldAddBackCopyOrSourceCallbacks() {
         show()
-        val add = capturedClick("conch-guide-add-device")
+        val add = capturedClick("conch-guide-return")
         val copy = capturedClick("conch-guide-command-copy")
         val source = capturedClick("conch-guide-source")
         val back = requireNotNull(compose.onNodeWithContentDescription(strings.getValue(R.string.back))
@@ -198,7 +185,7 @@ class SettingsInstallationGuidesTest {
         compose.waitForIdle()
         compose.runOnIdle { active = true }
         compose.waitForIdle()
-        compose.onNodeWithTag("conch-guide-add-device").assertIsNotEnabled()
+        compose.onNodeWithTag("conch-guide-return").assertIsNotEnabled()
         compose.onNodeWithTag("conch-guide-command-copy").assertIsNotEnabled()
         compose.runOnIdle {
             add()
@@ -248,10 +235,10 @@ class SettingsInstallationGuidesTest {
         show(largeFont = true)
         for (index in 0..2) assertPlatformLabelFits(index)
         copyAndAssert("conch-guide", "Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.ps1 | iex")
-        compose.onNodeWithTag("conch-guide-add-device").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("conch-guide-return").performScrollTo().assertIsDisplayed().performClick()
         compose.runOnIdle {
-            assertEquals(1, adds)
-            assertEquals(0, backs)
+            assertEquals(0, adds)
+            assertEquals(1, backs)
             assertTrue(openedUrls.isEmpty())
         }
     }

@@ -135,32 +135,22 @@ and WebUI share this contract.
 
 ## Conch and Filo installation guides
 
-Owner approved independent guide destinations on 2026-10-21. Shell devices offers `What Is Conch?`
-and Remote Devices offers `What Is Filo?`, including populated lists. These are ordinary localized
-Settings destination rows with leading icon, title and purpose description. They use the same
-collapsing scaffold, SettingsGroup/SettingsItem, guarded transition and retained scroll owners.
-Platform choices use full-width selectable SettingsItem radio rows with wrapping labels, preserving
-complete Windows/Linux/Termux names on narrow screens, large fonts and RTL layouts.
-They do not move or replace the Add/Edit editor's DocumentationFab or its visibility preference.
-
-Each guide explains purpose, lets the user select a supported target system, provides one explicit
-Copy action for the maintained install command, then maps the install output address and API key/token
-to the existing Add Device editor. State clearly that the command runs on the target computer or
-Termux device. The primary Add Device action opens that existing editor; guides never execute
-installation, save configuration on Back, or add a second connection wizard or QR flow.
-
-Conch offers Windows ordinary PowerShell, Linux without sudo, and Termux for default user mode.
-System mode requires a separate explicit advanced choice and identifies administrator/root access.
-Linux before-login persistence requires an explicit linger choice. Never silently change an
-existing install's mode. Filo currently targets Windows x64 and administrator PowerShell with the
-selected native Windows user. Describe native sources according to shipped capabilities, preserving
-Desktop-only prerequisites and avoiding unsupported macOS/Linux, Chat/Cowork or control claims.
-
-Commands come from the maintained Conch README and Filo installer contract. Filo currently binds
-loopback or an explicitly selected tailnet IPv4 address; `localhost` is not a phone-reachable URL.
-Guide copy identifies a reachable target address without promising generic LAN support. External
-documentation/source actions retain the established external-link icon and launcher. Credentials
-are entered only in the existing protected editor, never embedded in example commands or logs.
+Owner screenshot corrections on 2026-10-21 place `What Is Conch?` and `What Is Filo?` in a top Help
+group on Add Device, before Connection. Device lists and Edit pages do not duplicate the entries.
+Help uses the shared scaffold, guarded transition and scroll owner. Opening help retains the current
+editor-owned draft; Back and the final return action restore that same draft without saving. Closed
+or outgoing editor callbacks cannot regain authority on return. DocumentationFab remains unchanged.
+Conch target-system radio rows have a 72 dp minimum height and wrapping Windows/Linux/Termux labels,
+including narrow screens, large fonts and RTL. A short purpose paragraph precedes the choices.
+Installation has exactly three numbered steps in one group: open the target terminal, copy and run
+the maintained command, then return to fill connection details. Do not add separate Advanced, Copy
+Command or Connect groups or repeated explanatory paragraphs. Commands are displayed/copied only.
+Conch uses default user-mode commands: ordinary Windows PowerShell, Linux without sudo and Termux
+without root. Advanced mode/linger instructions stay in the linked source; existing modes are never
+silently changed. Filo targets Windows x64 administrator PowerShell. Its final step identifies the
+native Windows account and a reachable service URL/token; localhost works only on the computer.
+Do not promise generic LAN, macOS/Linux, Chat/Cowork or unsupported native control. Credentials stay
+in the existing editor. Source links retain the established external-link icon and launcher.
 
 ## Motion and state
 
@@ -272,8 +262,8 @@ are entered only in the existing protected editor, never embedded in example com
   padding, labelSmall and primaryContainer/onPrimaryContainer for both types. Only a nonblank
   description appears below the name, with at most two lines and ellipsis. Addresses and connection
   summaries remain in the detail editor; blank descriptions add no fallback copy or supporting row.
-- Add/Edit follows the MCP details reference: shared collapsing scaffold, Connection group with
-  type first, then name/description and endpoint fields, followed by Authentication and SSH Host Key.
+- Add/Edit follows the MCP details reference: shared collapsing scaffold. Add places Help first;
+  Connection follows with type first, then name/description and endpoint fields, followed by Authentication and SSH Host Key.
   Name and description share one Label-icon item with 12 dp between their independent fields.
   SSH host and port share one Dns-icon item: host fills the remaining width, port is 96 dp and the
   gap is 12 dp. Insufficient width or larger fonts stack the fields with 12 dp vertical spacing.

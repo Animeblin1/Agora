@@ -100,6 +100,8 @@ internal fun RemoteConversation(
     val ultraFastLabel = stringResource(R.string.openai_service_tier_ultrafast)
     val tierLabels = tierChoices.associate { it.id to if (it.id == "ultrafast") ultraFastLabel else it.name }
     val settingsEnabled = active && state.canEditSettings
+    val thinkingControlEnabled = settingsEnabled && "effort" in state.capabilities.settings && effortChoices.isNotEmpty()
+    val tierControlEnabled = settingsEnabled && "serviceTier" in state.capabilities.settings && state.settingsModel?.serviceTiers != null
     val thinkingEnabled = state.selectedEffort != null && state.selectedEffort != "none"
     val thinkingLevel = state.selectedEffort.orEmpty()
     val openAiServiceTierEnabled = state.selectedServiceTier != null
@@ -415,8 +417,7 @@ internal fun RemoteConversation(
                                 }
                             },
                         )
-                        if (effortChoices.isNotEmpty() && "effort" in state.capabilities.settings ||
-                            tierChoices.isNotEmpty() && "serviceTier" in state.capabilities.settings) ExposedDropdownMenuBox(
+                        ExposedDropdownMenuBox(
                             expanded = activeMenu == "tools",
                             onExpandedChange = { }
                         ) {
@@ -446,7 +447,7 @@ internal fun RemoteConversation(
                                 },
                                 matchAnchorWidth = false,
                             ) {
-                                if ("effort" in state.capabilities.settings) AgoraDropdownMenuItem(
+                                AgoraDropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(androidx.compose.ui.res.painterResource(id = com.newoether.agora.R.drawable.neurology_24), null, modifier = Modifier.size(CHAT_DROPDOWN_MENU_ICON_SIZE_DP.dp))
@@ -466,9 +467,9 @@ internal fun RemoteConversation(
                                         }
                                     },
                                     onClick = { activeMenu = null; showThinkingSheet = true },
-                                    enabled = settingsEnabled && effortChoices.isNotEmpty(),
+                                    enabled = thinkingControlEnabled,
                                 )
-                                if ("serviceTier" in state.capabilities.settings) AgoraDropdownMenuItem(
+                                AgoraDropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
@@ -492,7 +493,7 @@ internal fun RemoteConversation(
                                             }
                                         }
                                     },
-                                    enabled = settingsEnabled && state.settingsModel?.serviceTiers != null,
+                                    enabled = tierControlEnabled,
                                     onClick = { activeMenu = null; showOpenAiServiceTierSheet = true },
                                 )
                             }
@@ -516,7 +517,7 @@ internal fun RemoteConversation(
         ) {
             com.newoether.agora.ui.components.DialogWindowEdgeToEdge()
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 16.dp)) {
-                RemoteThinkingControl(state, settingsEnabled, vm::setThinkingLevel)
+                RemoteThinkingControl(state, thinkingControlEnabled, vm::setThinkingLevel)
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -528,7 +529,7 @@ internal fun RemoteConversation(
         ) {
             com.newoether.agora.ui.components.DialogWindowEdgeToEdge()
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 16.dp)) {
-                RemoteServiceTierControl(state, settingsEnabled, tierLabels, vm::setServiceTier)
+                RemoteServiceTierControl(state, tierControlEnabled, tierLabels, vm::setServiceTier)
                 Spacer(Modifier.height(24.dp))
             }
         }

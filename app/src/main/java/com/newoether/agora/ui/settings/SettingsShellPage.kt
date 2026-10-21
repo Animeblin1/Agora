@@ -49,17 +49,15 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val sandboxSharedStorageEnabled by viewModel.settings.sandboxSharedStorageEnabled.collectAsState()
     val showDocFab by viewModel.settings.showDocumentationFab.collectAsState()
     var editorRoute by remember { mutableStateOf<ShellDeviceEditorRoute?>(null) }
-    var showConchGuide by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ShellDeviceConfig?>(null) }
     var showSandboxMgmt by remember { mutableStateOf(false) }
     var sandboxEntryCount by remember { mutableIntStateOf(0) }
     val pageActive = LocalSettingsScrollRetentionActive.current
     val latestPageActive by rememberUpdatedState(pageActive)
-    fun ownsDeviceList() = latestPageActive && editorRoute == null && !showConchGuide && !showSandboxMgmt
+    fun ownsDeviceList() = latestPageActive && editorRoute == null && !showSandboxMgmt
     SideEffect {
         if (!pageActive) {
             editorRoute = null
-            showConchGuide = false
             deleteTarget = null
         }
     }
@@ -80,10 +78,10 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
             }
         } else {
             GuardedAnimatedContent(
-                targetState = editorRoute to showConchGuide,
-                forward = editorRoute != null || showConchGuide,
-                contentKey = { (route, guide) -> route?.initial?.id ?: if (guide) "conch-guide" else "devices" },
-            ) { (route, guide) ->
+                targetState = editorRoute,
+                forward = editorRoute != null,
+                contentKey = { route -> route?.initial?.id ?: "devices" },
+            ) { route ->
                 if (route != null) {
                     SettingsSecondaryPane {
                         SettingsShellDeviceEditor(
@@ -94,18 +92,6 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                             showDocFab = showDocFab,
                             isCurrent = { pageActive && !showSandboxMgmt && editorRoute === route },
                             onBack = { if (editorRoute === route) editorRoute = null },
-                        )
-                    }
-                } else if (guide) {
-                    SettingsSecondaryPane {
-                        SettingsConchGuidePage(
-                            onBack = { if (pageActive && showConchGuide) showConchGuide = false },
-                            onAddDevice = {
-                                if (pageActive && showConchGuide) {
-                                    showConchGuide = false
-                                    editorRoute = ShellDeviceEditorRoute(ShellDeviceConfig(name = ""), isNew = true)
-                                }
-                            },
                         )
                     }
                 } else {
@@ -161,21 +147,6 @@ fun SettingsShellPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                 SettingsGroup(
                                     title = stringResource(R.string.shell_devices),
                                     items = buildList {
-                                        add {
-                                            SettingsItem(
-                                                headlineContent = { Text(stringResource(R.string.conch_guide_title)) },
-                                                supportingContent = { Text(stringResource(R.string.conch_guide_description)) },
-                                                leadingContent = {
-                                                    Icon(Icons.Default.HelpOutline, null, tint = MaterialTheme.colorScheme.primary)
-                                                },
-                                                modifier = Modifier.testTag("shell-conch-guide-entry").clickable(enabled = ownsDeviceList()) {
-                                                    if (ownsDeviceList()) {
-                                                        deleteTarget = null
-                                                        showConchGuide = true
-                                                    }
-                                                },
-                                            )
-                                        }
                                         if (shellDevices.isEmpty()) {
                                             add {
                                                 SettingsItem(

@@ -100,10 +100,10 @@ conversation, device and overlay in their existing order.
 Remote sits below Tasks in their original joined drawer group and opens SettingsOverlayHost.
 Both drawer buttons use the owner-requested 46 dp height, joined 24/5 dp corner shapes and
 2 dp inter-button gap. Their icons, labels, focus clearing and navigation remain unchanged.
-Device selection precedes Sessions; Add Device is a separate shared settings page. Devices also
-offers the independent `What Is Filo?` guide defined by settings-ui-ux.md. Its Add Device action
-opens the existing editor; Save and discarded Back follow the original return to Devices.
-The guide does not change the editor's documentation FAB or save semantics.
+Device selection precedes Sessions; Add Device is a separate shared settings page. Its top Help
+group offers the independent `What Is Filo?` guide defined by settings-ui-ux.md. Guide Back and its
+final return action restore the same unsaved editor draft; the device list has no guide entry.
+Save and discarded Back follow the original return to Devices. Help does not change save semantics.
 Devices renders its scaffold and locally saved rows independently of all network checks.
 No loading text, bar or overlay belongs here. The original MCP status dot reports
 idle/connecting/connected/error. A failed or delayed network check never hides the list.
@@ -430,6 +430,10 @@ may finish; draft entry/refresh does not start them. Actual model loading says L
 not Model Unavailable. Display cached native defaults or local choices without fabrication.
 
 Both original and Remote model dropdowns share the leading check for the selected model.
+Remote always retains the original bottom-bar details button and its Thinking and Service Tier
+rows, including while loading or using a read-only source. Each row is disabled independently when
+its capability, model options or runtime admission is unavailable. The same capability fence applies
+to an already-open sheet if capabilities change. Unsupported rows are never hidden.
 Remote Thinking and Service Tier use plain rows in the original details dropdown. Those rows
 open the original bottom sheets and slider panels; neither the dropdown nor panel exposes a
 toggle. Remote sheets omit the panels' top header/description item and its spacing.

@@ -51,6 +51,7 @@ internal fun SettingsShellDeviceEditor(
     }
     var draft by remember { mutableStateOf(openingSnapshot) }
     var portInput by remember { mutableStateOf(openingSnapshot.sshPort.toString()) }
+    var guideVisible by remember { mutableStateOf(false) }
     var closed by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var saveAttempt by remember { mutableIntStateOf(0) }
@@ -73,7 +74,7 @@ internal fun SettingsShellDeviceEditor(
         validationJob?.cancel()
         verifyJob?.cancel()
     }
-    fun ownsEditor() = !closed && latestIsCurrent()
+    fun ownsEditor() = !closed && latestIsCurrent() && !guideVisible
     fun leave() {
         if (!ownsEditor()) return
         close()
@@ -129,8 +130,10 @@ internal fun SettingsShellDeviceEditor(
     val canSave = ownsEditor() && nameAvailable && !saving && !importingKey && !verifying &&
         (draft.type != "ssh" || draft.sshAuthMode != SSH_AUTH_PRIVATE_KEY || draft.sshPrivateKey.isNotBlank())
 
-    fun save() {
-        if (!canSave || !ownsEditor() || saving) return
+    fun saveDraft() {
+        val nameIsAvailable = isShellDeviceNameAvailable(draft, existingDevices)
+        if (!ownsEditor() || !nameIsAvailable || saving || importingKey || verifying ||
+            (draft.type == "ssh" && draft.sshAuthMode == SSH_AUTH_PRIVATE_KEY && draft.sshPrivateKey.isBlank())) return
         saving = true
         authError = null
         val request = normalizedDraft()
@@ -176,6 +179,24 @@ internal fun SettingsShellDeviceEditor(
         }
     }
 
+    GuardedAnimatedContent(targetState = guideVisible, forward = guideVisible,
+        contentKey = { if (it) "conch-guide" else "editor" }) { guide ->
+        if (guide) {
+            SettingsSecondaryPane {
+                SettingsConchGuidePage(onBack = { if (!closed && latestIsCurrent()) guideVisible = false })
+            }
+        } else {
+            val paneActive by rememberUpdatedState(LocalSettingsScrollRetentionActive.current)
+            var paneClosed by remember { mutableStateOf(false) }
+            SideEffect { if (!paneActive) paneClosed = true }
+            val entryOwnsEditor = ::ownsEditor
+            val ownsEditor = { !paneClosed && paneActive && entryOwnsEditor() }
+            val latestSaveDraft by rememberUpdatedState({ saveDraft() })
+            val save = { if (ownsEditor()) latestSaveDraft() }
+            val updateDraft = ::update
+            val update: (ShellDeviceConfig) -> Unit = { if (ownsEditor()) updateDraft(it) }
+            val editorBack = guardedBack
+            val guardedBack = { if (ownsEditor()) editorBack() }
     CollapsingSettingsScaffold(
         title = if (isNew) stringResource(R.string.shell_add_device) else initial.name,
         onBack = guardedBack,
@@ -191,7 +212,7 @@ internal fun SettingsShellDeviceEditor(
                         if (busy) {
                             MotionAwareCircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                         } else {
-                            IconButton(onClick = ::save, enabled = canSave) {
+                            IconButton(onClick = save, enabled = canSave && ownsEditor()) {
                                 Icon(Icons.Default.Save, stringResource(R.string.save))
                             }
                         }
@@ -202,6 +223,13 @@ internal fun SettingsShellDeviceEditor(
         floatingActionButton = { if (showDocFab) DocumentationFab("shell.md") },
     ) {
         SettingsGroupColumn {
+            if (isNew) SettingsInstallationHelp(
+                conch = true,
+                enabled = ownsEditor() && !saving && !verifying && !importingKey,
+                onClick = {
+                    if (ownsEditor() && !saving && !verifying && !importingKey) guideVisible = true
+                },
+            )
             SettingsGroup(
                 title = stringResource(R.string.mcp_connection),
                 items = buildList {
@@ -335,7 +363,7 @@ internal fun SettingsShellDeviceEditor(
             if (draft.type == "ssh") {
                 SettingsSshAuthenticationEditor(
                     device = draft,
-                    onChange = ::update,
+                    onChange = update,
                     onImportingChange = { if (ownsEditor() && !saving) importingKey = it },
                     saveError = authError,
                     isCurrent = { ownsEditor() && pageActive },
@@ -435,6 +463,8 @@ internal fun SettingsShellDeviceEditor(
             }
         }
         if (showDocFab) Spacer(Modifier.height(80.dp))
+    }
+        }
     }
 
     pendingVerify?.let { (key, fingerprint) ->

@@ -536,4 +536,9 @@
     <string name="filo_guide_address_mapping">接続先の tailnet IPv4 を使った接続可能なサービス URL を入力してください。localhost は接続先のパソコン内でのみ使用できます。</string>
     <string name="filo_guide_token_mapping">インストーラーのアクセストークンをアクセストークン欄にコピーしてください。トークンは秘密にしてください。</string>
     <string name="filo_guide_scope">利用できる接続元と操作は、インストール済みクライアントと通知された機能によって決まります。Claude Code は Mod の明示的な有効化が必要です。Chat と Cowork は非対応です。</string>
+    <string name="install_guide_help">ヘルプ</string>
+    <string name="install_guide_open_terminal">ターミナルを開く</string>
+    <string name="install_guide_run_command">コマンドをコピーして実行する</string>
+    <string name="conch_guide_finish">デバイスの追加に戻り、インストーラーが表示したサービスアドレスと API キーを入力し、名前を付けて保存します。</string>
+    <string name="filo_guide_finish">指示に従ってネイティブクライアントを使う Windows アカウントを選びます。デバイスの追加に戻り、接続可能なサービス URL とアクセストークンを入力して保存します。localhost はコンピューター上でのみ使えます。</string>
 </resources>

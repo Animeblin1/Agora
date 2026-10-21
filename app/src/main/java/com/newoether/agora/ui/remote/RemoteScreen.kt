@@ -113,12 +113,10 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
     SideEffect { if (active && state.session == null) onSnackbarOffsetChanged(inset) }
     val focus = LocalFocusManager.current
     var forward by remember { mutableStateOf(true) }
-    var guideVisible by remember { mutableStateOf(false) }
     val back = {
         forward = false
         focus.clearFocus()
         when {
-            guideVisible -> guideVisible = false
             state.session != null -> vm.selectSession(null)
             state.deviceId != null -> vm.selectDevice(null)
             state.addingDevice -> vm.selectDevice(null)
@@ -127,7 +125,7 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
     }
     BackHandler(active, back)
     val target = Triple(state.deviceId, state.session?.let { "conversation" },
-        if (guideVisible) "guide" else if (state.addingDevice) state.editedDeviceId.orEmpty() else null)
+        if (state.addingDevice) state.editedDeviceId.orEmpty() else null)
     Box(Modifier.fillMaxSize()) {
     GuardedAnimatedContent(targetState = target, forward = forward) { page ->
         var retained by remember(page) { mutableStateOf(state) }
@@ -135,10 +133,7 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
         SideEffect { if (current) retained = state }
         val displayed = if (current) state else retained
         when {
-            page.third == "guide" -> SettingsFiloGuidePage(onBack = back, onAddDevice = {
-                guideVisible = false; forward = true; focus.clearFocus(); vm.addDevice()
-            })
-            page.third != null -> RemoteAddDevice(displayed, vm, back) { forward = false; focus.clearFocus() }
+            page.third != null -> RemoteAddDevice(displayed, vm, active && current, back) { forward = false; focus.clearFocus() }
             page.second != null -> RemoteConversation(displayed, vm, settings, active && current, back, onSnackbarOffsetChanged, onMediaClick)
             page.first != null -> {
                 var showUsage by remember(displayed.deviceId, displayed.confirmationPath) { mutableStateOf(false) }
@@ -260,9 +255,7 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                     }
                 }
             }
-            else -> RemoteDevices(displayed, vm, back, onGuide = {
-                forward = true; focus.clearFocus(); guideVisible = true
-            }) { forward = true }
+            else -> RemoteDevices(displayed, vm, back) { forward = true }
         }
     }
     val progressVisible = remember { androidx.compose.animation.core.MutableTransitionState(false) }
@@ -306,16 +299,10 @@ private fun RemoteSessionIndicator(indicator: DrawerConversationIndicator) {
 
 @Composable
 private fun RemoteDevices(state: RemoteState, vm: RemoteViewModel, onBack: () -> Unit,
-    onGuide: () -> Unit, onForward: () -> Unit) {
+    onForward: () -> Unit) {
     var deleteId by remember { mutableStateOf<String?>(null) }
     val enabled = !state.restoring && !state.saving
     CollapsingSettingsScaffold(title = stringResource(R.string.remote_title), onBack = onBack) {
-        SettingsGroup(title = stringResource(R.string.filo_guide_title), items = listOf({
-            SettingsItem(modifier = Modifier.clickable(enabled = enabled, onClick = onGuide),
-                headlineContent = { Text(stringResource(R.string.filo_guide_title)) },
-                supportingContent = { Text(stringResource(R.string.filo_guide_description)) },
-                leadingContent = { Icon(Icons.Default.Info, null) })
-        }))
         SettingsGroup(
             title = stringResource(R.string.remote_devices),
             items = buildList {
@@ -388,37 +375,57 @@ private fun RemoteDevices(state: RemoteState, vm: RemoteViewModel, onBack: () ->
 }
 
 @Composable
-private fun RemoteAddDevice(state: RemoteState, vm: RemoteViewModel, onBack: () -> Unit, onForward: () -> Unit) {
+internal fun RemoteAddDevice(state: RemoteState, vm: RemoteViewModel, active: Boolean, onBack: () -> Unit, onForward: () -> Unit) {
     val initial = remember { vm.editorConnection() }
     var name by remember { mutableStateOf(remoteDeviceName(initial?.name.orEmpty())) }
     var address by remember { mutableStateOf(initial?.address.orEmpty()) }
     var token by remember { mutableStateOf(initial?.token.orEmpty()) }
+    var guideVisible by remember { mutableStateOf(false) }
+    var closed by remember { mutableStateOf(false) }
+    val pageActive by rememberUpdatedState(active && LocalSettingsScrollRetentionActive.current)
+    SideEffect { if (!pageActive) closed = true }
+    fun ownsEntry() = pageActive && !closed
+    GuardedAnimatedContent(targetState = guideVisible, forward = guideVisible,
+        contentKey = { if (it) "filo-guide" else "editor" }) { guide ->
+        if (guide) SettingsFiloGuidePage(onBack = { if (ownsEntry()) guideVisible = false })
+        else {
+            val paneActive by rememberUpdatedState(LocalSettingsScrollRetentionActive.current)
+            var paneClosed by remember { mutableStateOf(false) }
+            SideEffect { if (!paneActive) paneClosed = true }
+            fun ownsEditor() = ownsEntry() && !guideVisible && paneActive && !paneClosed
     CollapsingSettingsScaffold(
         title = stringResource(if (state.editedDeviceId == null) R.string.remote_add_device else R.string.remote_edit_device),
-        onBack = onBack,
-        actions = { IconButton(onClick = { onForward(); vm.saveDevice(address, token, name) },
-            enabled = !state.restoring && !state.saving && address.isNotBlank() && token.isNotBlank()) {
+        onBack = { if (ownsEditor()) { closed = true; onBack() } },
+        actions = { IconButton(onClick = { if (ownsEditor()) { onForward(); vm.saveDevice(address, token, name) } },
+            enabled = ownsEditor() && !state.restoring && !state.saving && address.isNotBlank() && token.isNotBlank()) {
             Icon(Icons.Default.Save, stringResource(R.string.save))
         } },
     ) {
+        SettingsGroupColumn {
+        if (state.editedDeviceId == null) SettingsInstallationHelp(conch = false,
+            enabled = ownsEditor() && !state.restoring && !state.saving,
+            onClick = { if (ownsEditor() && !state.restoring && !state.saving) guideVisible = true })
         SettingsGroup(title = stringResource(R.string.remote_connection), items = listOf({
             SettingsIconContent(Icons.Default.Computer) {
                 McpLabeledField(label = stringResource(R.string.shell_device_name), value = name,
-                    onValueChange = { name = it }, placeholder = stringResource(R.string.remote_device))
+                    onValueChange = { if (ownsEditor()) name = it }, placeholder = stringResource(R.string.remote_device))
             }
         }, {
             SettingsIconContent(Icons.Default.Link) {
                 McpLabeledField(label = stringResource(R.string.remote_address), value = address,
-                    onValueChange = { address = it }, keyboardType = KeyboardType.Uri,
+                    onValueChange = { if (ownsEditor()) address = it }, keyboardType = KeyboardType.Uri,
                     supportingText = stringResource(R.string.remote_connection_hint),
                     placeholder = stringResource(R.string.remote_address_placeholder))
             }
         }, {
             SettingsIconContent(Icons.Default.Key) {
                 McpLabeledField(label = stringResource(R.string.remote_token), value = token,
-                    onValueChange = { token = it }, keyboardType = KeyboardType.Password, password = true,
+                    onValueChange = { if (ownsEditor()) token = it }, keyboardType = KeyboardType.Password, password = true,
                     placeholder = stringResource(R.string.remote_token_placeholder))
             }
         }))
+        }
+    }
+        }
     }
 }

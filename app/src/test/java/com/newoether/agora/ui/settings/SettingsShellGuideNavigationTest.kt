@@ -13,7 +13,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.ShellDeviceConfig
@@ -27,7 +26,6 @@ import io.mockk.verify
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -84,6 +82,10 @@ class SettingsShellGuideNavigationTest {
     }
 
     private fun guideEntry() = compose.onNodeWithTag("shell-conch-guide-entry")
+    private fun addDevice() {
+        compose.onNodeWithText(strings.getValue(R.string.shell_add_device)).performScrollTo().performClick()
+        compose.waitForIdle()
+    }
     private fun openGuide() {
         guideEntry().performScrollTo().performClick()
         compose.waitForIdle()
@@ -92,8 +94,8 @@ class SettingsShellGuideNavigationTest {
     private fun back() = compose.onNodeWithContentDescription(strings.getValue(R.string.back))
     private fun name() = compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("shell-field-name")))
     private fun save() = compose.onNodeWithContentDescription(strings.getValue(R.string.save))
-    private fun addFromGuide() {
-        compose.onNodeWithTag("conch-guide-add-device").performScrollTo().performClick()
+    private fun returnFromGuide() {
+        compose.onNodeWithTag("conch-guide-return").performScrollTo().performClick()
         compose.waitForIdle()
         name().assertExists()
         compose.onNodeWithTag("conch-install-guide").assertDoesNotExist()
@@ -106,19 +108,22 @@ class SettingsShellGuideNavigationTest {
     @Test
     fun emptyListGuideOpensTheExistingDraftAndBackKeepsItsUnsavedGuard() {
         show()
+        guideEntry().assertDoesNotExist()
+        addDevice()
+        name().performScrollTo().performTextReplacement("Unsaved host")
         openGuide()
         compose.onNodeWithText(strings.getValue(R.string.documentation)).assertDoesNotExist()
         assertNoPersistence()
-        addFromGuide()
-        name().assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
-        save().assertIsNotEnabled()
+        returnFromGuide()
+        name().assertTextContains("Unsaved host")
+        save().assertIsEnabled()
         compose.onNodeWithText(strings.getValue(R.string.documentation)).assertExists()
         name().performScrollTo().performTextReplacement("Unsaved host")
         assertNoPersistence()
         back().performClick()
         compose.onNode(hasText(strings.getValue(R.string.unsaved_changes_discard)) and hasClickAction()).performClick()
         compose.waitForIdle()
-        guideEntry().assertExists()
+        guideEntry().assertDoesNotExist()
         name().assertDoesNotExist()
         assertNoPersistence()
         compose.runOnIdle { assertEquals(0, backs) }
@@ -128,8 +133,9 @@ class SettingsShellGuideNavigationTest {
     fun populatedListGuideOnlyPersistsAfterExplicitSaveAndReturnsToTheList() {
         val initial = ShellDeviceConfig(id = "existing", name = "Existing host")
         show(listOf(initial))
+        addDevice()
         openGuide()
-        addFromGuide()
+        returnFromGuide()
         name().performScrollTo().performTextReplacement("Added from guide")
         assertNoPersistence()
         save().performClick()
@@ -142,7 +148,7 @@ class SettingsShellGuideNavigationTest {
         }
         compose.waitForIdle()
         name().assertDoesNotExist()
-        guideEntry().assertExists()
+        guideEntry().assertDoesNotExist()
         compose.onNodeWithTag("shell-device-row:existing").assertExists()
         compose.onNodeWithTag("shell-device-row:${additions.single().id}").assertExists()
         verify(exactly = 1) { settings.addShellDevice(any(), any(), any()) }
@@ -151,39 +157,57 @@ class SettingsShellGuideNavigationTest {
     }
 
     @Test
-    fun guideBackRestoresRootAndGuideScrollOwnersAcrossReentry() {
+    fun helpBackRestoresTheEditorScrollAcrossReentry() {
         show((1..20).map { ShellDeviceConfig(id = "$it", name = "Host $it") })
+        addDevice()
+        guideEntry().performScrollTo()
+        val editorScroll = compose.onNode(hasScrollAction()).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
         openGuide()
-        val rootPath = listOf(false, "devices")
-        val guidePath = listOf(false, "conch-guide")
-        val rootScroll = retention.scrollState(rootPath)!!.value
-        compose.onNodeWithTag("conch-guide-add-device").performScrollTo()
-        compose.waitForIdle()
-        val guideScroll = retention.scrollState(guidePath)!!.value
-        assertTrue(guideScroll > 0)
+        compose.onNodeWithTag("conch-guide-return").performScrollTo()
         back().performClick()
         compose.waitForIdle()
-        compose.runOnIdle { assertEquals(rootScroll, retention.scrollState(rootPath)!!.value) }
+        val returnedScroll = compose.onNode(hasScrollAction()).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(editorScroll, returnedScroll)
         openGuide()
-        compose.runOnIdle { assertEquals(guideScroll, retention.scrollState(guidePath)!!.value) }
-        compose.onNodeWithTag("conch-guide-add-device").assertIsDisplayed()
+        compose.onNodeWithTag("conch-guide-return").performScrollTo().assertIsDisplayed()
         assertNoPersistence()
         compose.runOnIdle { assertEquals(0, backs) }
     }
 
     @Test
+    fun returnedDraftRejectsTheOldPaneSaveCallbackAndKeepsOneExplicitSave() {
+        show()
+        addDevice()
+        name().performScrollTo().performTextReplacement("Draft before help")
+        val oldSave = requireNotNull(save().fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action)
+        openGuide()
+        returnFromGuide()
+        compose.runOnIdle { oldSave() }
+        assertNoPersistence()
+        name().assertTextContains("Draft before help")
+        save().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals("Draft before help", additions.single().name) }
+    }
+
+    @Test
     fun categoryLossClosesTheGuideAndReturningCannotRestoreItsOldActions() {
         show()
+        addDevice()
         openGuide()
         compose.runOnIdle { active = false }
         compose.waitForIdle()
         compose.runOnIdle { active = true }
         compose.waitForIdle()
         compose.onNodeWithTag("conch-install-guide").assertDoesNotExist()
-        guideEntry().assertExists()
+        guideEntry().assertDoesNotExist()
         name().assertDoesNotExist()
+        addDevice()
         openGuide()
-        addFromGuide()
+        returnFromGuide()
         save().assertIsNotEnabled()
         assertNoPersistence()
     }

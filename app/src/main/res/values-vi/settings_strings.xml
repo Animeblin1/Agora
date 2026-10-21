@@ -536,4 +536,9 @@
     <string name="filo_guide_address_mapping">Nhập URL dịch vụ có thể truy cập qua IPv4 tailnet của máy đích. localhost chỉ hoạt động trên máy tính đích.</string>
     <string name="filo_guide_token_mapping">Sao chép mã truy cập của trình cài đặt vào Mã truy cập. Giữ mã ở chế độ riêng tư.</string>
     <string name="filo_guide_scope">Nguồn và thao tác điều khiển phụ thuộc vào ứng dụng đã cài cùng khả năng được công bố. Claude Code cần chủ động bật Mod. Chat và Cowork không được hỗ trợ.</string>
+    <string name="install_guide_help">Trợ giúp</string>
+    <string name="install_guide_open_terminal">Mở terminal</string>
+    <string name="install_guide_run_command">Sao chép và chạy lệnh</string>
+    <string name="conch_guide_finish">Quay lại Thêm thiết bị. Nhập địa chỉ dịch vụ và khóa API từ trình cài đặt, đặt tên rồi lưu.</string>
+    <string name="filo_guide_finish">Khi được hỏi, chọn tài khoản Windows dùng cho ứng dụng gốc. Quay lại Thêm thiết bị, nhập URL dịch vụ có thể truy cập và mã truy cập rồi lưu. localhost chỉ hoạt động trên máy tính đó.</string>
 </resources>

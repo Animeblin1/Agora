@@ -64,6 +64,34 @@ class RemoteConversationPresentationTest {
         }
     }
 
+    @Test fun detailsRemainsVisibleDuringLoadingWithBothUnavailableRowsDisabled() {
+        state = state.copy(models = emptyList(), modelsLoading = true, loading = true)
+        show()
+        compose.onNodeWithContentDescription(text(R.string.tools)).assertIsDisplayed().assertIsEnabled().performClick()
+        compose.onNodeWithText(text(R.string.thinking)).assertExists().assertIsNotEnabled()
+        compose.onNodeWithText(text(R.string.openai_service_tier_title)).assertExists().assertIsNotEnabled()
+        verify(exactly = 0) { vm.setThinkingLevel(any()) }
+        verify(exactly = 0) { vm.setServiceTier(any()) }
+    }
+    @Test fun readOnlySourceRetainsTheDetailsButtonAndDisabledSettingsRows() {
+        val source = RemoteAdapter("cli", "codex", "cli", "connected",
+            capabilities = RemoteCapabilities(history = true))
+        state = state.copy(devices = state.devices.map { it.copy(multiAdapter = true, adapters = listOf(source)) },
+            adapterSelections = mapOf("device" to "cli"),
+            models = listOf(RemoteModel("model", "Model", true, listOf("low", "high"), "low",
+                listOf(RemoteServiceTier("fast", "Fast")))))
+        show()
+        compose.onNodeWithContentDescription(text(R.string.tools)).assertIsDisplayed().performClick()
+        compose.onNodeWithText(text(R.string.thinking)).assertExists().assertIsNotEnabled()
+        compose.onNodeWithText(text(R.string.openai_service_tier_title)).assertExists().assertIsNotEnabled()
+    }
+    @Test fun supportedThinkingAndUnsupportedTierAreDisabledIndependently() {
+        state = state.copy(models = listOf(RemoteModel("model", "Model", true, listOf("low", "high"), "low")))
+        show()
+        compose.onNodeWithContentDescription(text(R.string.tools)).performClick()
+        compose.onNodeWithText(text(R.string.thinking)).assertIsEnabled()
+        compose.onNodeWithText(text(R.string.openai_service_tier_title)).assertIsNotEnabled()
+    }
     @Test fun unknownDeliveryUsesTheNextSendDirectlyWithoutAnAcknowledgmentAction() {
         val owner = requireNotNull(state.owner)
         state = state.copy(attempts = mapOf(owner to RemoteAttempt("previous", "Unsent draft", RemoteDelivery.UNKNOWN)))
