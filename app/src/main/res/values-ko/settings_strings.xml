@@ -505,4 +505,35 @@
     <string name="unsaved_changes_keep_editing">계속 편집</string>
     <string name="shell_authentication">인증</string>
     <string name="shell_ssh_host_key">호스트 키</string>
+    <!-- Installation guides -->
+    <string name="install_guide_purpose">용도</string>
+    <string name="install_guide_install">설치</string>
+    <string name="install_guide_connect">Agora에서 연결</string>
+    <string name="install_guide_platform">대상 시스템</string>
+    <string name="install_guide_copy_command">명령 복사</string>
+    <string name="install_guide_run_on_target">명령을 복사하여 대상 컴퓨터 또는 대상 기기의 Termux에서 실행하세요.</string>
+    <string name="install_guide_source">소스 코드 보기</string>
+    <string name="install_guide_name_mapping">이 기기의 고유한 이름을 정한 다음 기기 추가에서 저장하세요.</string>
+    <string name="install_guide_windows">Windows</string>
+    <string name="install_guide_linux">Linux</string>
+    <string name="install_guide_termux">Termux</string>
+    <string name="conch_guide_title">Conch란?</string>
+    <string name="conch_guide_description">Conch를 통해 Agora가 기기에서 Shell 명령을 실행하고 파일을 다룰 수 있습니다.</string>
+    <string name="conch_guide_windows_terminal">대상 Windows 컴퓨터에서 일반 PowerShell 창을 여세요.</string>
+    <string name="conch_guide_linux_terminal">일반 Linux 사용자로 터미널을 여세요. 기본 사용자 모드에는 sudo가 필요하지 않습니다.</string>
+    <string name="conch_guide_termux_terminal">대상 Android 기기에서 Termux를 여세요. root 권한 없이 Termux 사용자로 설치합니다.</string>
+    <string name="conch_guide_system_mode">시스템 모드</string>
+    <string name="conch_guide_system_mode_desc">선택적인 시스템 전체 설치입니다. Windows에서는 관리자 PowerShell, Linux에서는 root 권한이 필요합니다.</string>
+    <string name="conch_guide_user_mode">새 설치는 기본적으로 사용자 모드를 사용합니다. 시스템 전체 서비스가 필요한 경우에만 시스템 모드를 선택하세요.</string>
+    <string name="conch_guide_linger">Linux에서 로그인 전에 실행하려면 linger를 명시적으로 활성화해야 합니다. 필요한 경우에만 켜세요.</string>
+    <string name="conch_guide_mode_preserved">기존 설치는 명시적으로 변경하려는 경우가 아니면 현재 모드를 유지하세요.</string>
+    <string name="conch_guide_address_mapping">설치 프로그램에 표시된 접근 가능한 서비스 주소를 서버 URL에 입력하세요.</string>
+    <string name="conch_guide_key_mapping">설치 프로그램의 API 키를 API 키 필드에 복사하세요. 키를 비공개로 보관하세요.</string>
+    <string name="filo_guide_title">Filo란?</string>
+    <string name="filo_guide_description">Filo는 Agora를 컴퓨터에서 지원되는 네이티브 코딩 세션에 연결합니다.</string>
+    <string name="filo_guide_windows_terminal">대상 Windows x64 컴퓨터에서 PowerShell을 관리자 권한으로 여세요.</string>
+    <string name="filo_guide_selected_user">네이티브 클라이언트를 실행하는 Windows 계정을 선택하세요. Codex Desktop에 접근하려면 해당 계정에 설치하고 초기 설정을 마쳐야 합니다.</string>
+    <string name="filo_guide_address_mapping">대상의 tailnet IPv4를 사용하는 접근 가능한 서비스 URL을 입력하세요. localhost는 대상 컴퓨터에서만 작동합니다.</string>
+    <string name="filo_guide_token_mapping">설치 프로그램의 액세스 토큰을 액세스 토큰 필드에 복사하세요. 토큰을 비공개로 보관하세요.</string>
+    <string name="filo_guide_scope">소스와 제어 기능은 설치된 클라이언트 및 알려진 지원 기능에 따라 달라집니다. Claude Code는 Mod를 직접 활성화해야 합니다. Chat과 Cowork는 지원되지 않습니다.</string>
 </resources>

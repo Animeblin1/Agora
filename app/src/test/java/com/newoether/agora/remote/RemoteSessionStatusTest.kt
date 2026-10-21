@@ -22,6 +22,7 @@ class RemoteSessionStatusTest {
     @Before fun setup() {
         Dispatchers.setMain(dispatcher)
         coEvery { store.load() } returns listOf(RemoteConnection("Computer", address, "token"))
+        every { client.adapters } returns null
         every { client.address } returns address
         coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { client.sessions(any()) } answers { page() }
@@ -82,6 +83,7 @@ class RemoteSessionStatusTest {
     @Test fun sameSessionIdOnTwoDevicesKeepsIndependentStatus() = runTest(dispatcher) {
         val otherAddress = "http://second/"
         val otherClient = mockk<FiloClient>()
+        every { otherClient.adapters } returns null
         every { otherClient.address } returns otherAddress
         coEvery { otherClient.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { otherClient.sessions(any()) } returns RemoteSessionPage(

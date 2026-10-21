@@ -1,24 +1,31 @@
 # Remote Sessions
 
-Status: current owner-approved Filo integration, 2026-09-11. Earlier staged plans and
-superseded UI decisions are retained in Git and the single active task log.
+Status: current owner-approved Filo multi-source integration, 2026-10-21. Earlier staged
+plans and superseded decisions are retained in Git and the single active task log.
 
 ## Ownership and protocol
 
-Remote connects Agora to an independent Filo service. The current Codex adapter supports
-the original desktop owner for execution and bounded read-only native history for browsing.
-Isolated native helpers may handle peripheral operations such as model catalog, rename
-and archive. Filo's REDLINES.md and HARNESS.md govern ownership and qualification. Never patch Codex,
-redirect its global backend, write native transcripts or acquire a competing writer.
-Failed desktop discovery/dispatch cannot fall back to another host, queue or fork.
-Every operation prefers verified Codex Desktop IPC; only an established capability
-gap permits an additional unchanged Desktop-provided runtime. No separate Codex CLI
-installation or desktop page/focus/input automation is allowed. Filo-created tasks may
-execute on that runtime. An existing idle task may be recovered only inside an explicit
-Send or settings request after verifying the native account, idle state and absent
-IPC owner. Recheck ownership before allocation and preserve native resume writer-lock
-conflicts. Browsing, subscriptions, active state and unknown outcomes grant no writer
-authority. An existing IPC owner always takes precedence.
+Remote connects Agora to an independent Filo service. Configured sources are Codex Desktop,
+Codex CLI and Claude Code. Source selection is an explicit catalog filter and access path;
+capabilities reflect implemented and verified operations on that path. The Desktop adapter
+supports its original owner for execution and bounded read-only native history for browsing.
+Isolated native helpers may handle peripheral operations such as model catalog, rename and
+archive. Filo's maintained project and connection contracts govern native qualification.
+Never patch native binaries, redirect global backends, write native transcripts or acquire a
+competing writer. Failed dispatch cannot fall back to another source, host, queue or fork.
+Desktop operations prefer verified Codex Desktop IPC; only an established capability gap
+permits an additional unchanged Desktop-provided runtime. Desktop-only use never requires
+a separate Codex CLI installation or desktop page/focus/input automation. CLI source access
+uses the selected account's existing official shared daemon and never starts or replaces it
+while browsing. Embedded/no-daemon CLI sessions do not imply attach/control support.
+Claude Code initially exposes only open sessions with the opted-in official JavaScript Mod
+loaded. Busy input is rejected. Phone-created Claude sessions are outside this stage.
+Claude Desktop Code can use that Mod when supported; Chat/Cowork are not advertised.
+Filo-created Codex Desktop tasks may execute on its runtime. An existing idle Desktop task
+may be recovered only inside an explicit Send or settings request after verifying the
+native account, idle state and absent IPC owner. Recheck ownership before allocation and
+preserve native resume writer-lock conflicts. Browsing, subscriptions, active state and
+unknown outcomes grant no writer authority. An existing IPC owner always takes precedence.
 Filo service stop/crash/kill/removal must not affect normal Codex or accepted native
 execution. Independent completion and writer release require actual qualification.
 
@@ -28,17 +35,59 @@ Only the selected session owns Remote history/subscription. Changing selection, 
 visibility or read generation cancels old reads and rejects late results. In-flight writes
 stay bound to their original owner. No automatic POST retry or input replay is allowed.
 
-Protocol 2 uses the shared authenticated encrypted channel, an explicit service address,
-native-steer delivery and live-messages output. Bearer authentication is private-loopback
-only; public callers cannot bypass the encrypted envelope. Idle Send starts a native turn; active Send steers the exact
-original turn. Stop requires its native active ID. HTTP acceptance and native client-ID
-visibility are separate confirmations; unknown delivery is reconciled without blind resend.
+Protocol 2 uses the shared authenticated encrypted channel and an explicit service address.
+Legacy `/v1/*` remains the fixed Codex Desktop projection. Negotiated `extensions.multiAdapter=1`
+adds at most three configured source descriptors and `/v1/adapters/{adapterId}/...` routes.
+A new client against an old service synthesizes one connection-local legacy Desktop source;
+a Claude-only service never pretends to be legacy Codex. Unknown required schemas fail closed.
+Create, history, live, idle Send, active Send semantics, Stop, individual settings, model/usage,
+rename/archive, uploads and lazy messages are separate capabilities, defaulting unsupported.
+A bounded history snapshot is explicitly identified and never presented as complete history.
+Bearer authentication is private-loopback only; public callers cannot bypass the encrypted
+envelope. Codex Desktop idle Send starts a native turn and active Send steers its exact original
+turn. Other sources expose only their admitted semantics. Stop requires its native active ID.
+HTTP acceptance and native client-ID visibility are separate confirmations; unknown delivery
+is reconciled without blind resend.
 Native mutations have a 210-second mobile read/whole-call budget, enclosing Filo's
 180-second private request, 90-second executor readiness and 60-second protected
 creation budgets. Ordinary reads retain their shorter timeout. Cancellation still
 closes only the request; a timeout never grants permission to replay accepted input.
 Native approvals remain with their owner. Remote supports raw photo/file uploads as defined
 below; approval handling, transcript editing, branching and tool-execution controls remain unsupported.
+
+## Canonical identity and source-qualified control
+
+The extension returns opaque `nativeScopeId` and `canonicalSessionRef` in explicit session/page
+access metadata. Device connection + verified family/account/store scope + native session identity
+owns shared drafts and viewed-turn state. `adapterId` selects access, not durable native identity.
+No account names, SIDs, store paths or auth secrets belong in public scope values. Account/store
+replacement changes scope. Equal native IDs, cwd, title, URL or message content never prove equality.
+A source may intentionally use an isolated scope until continuity can be verified.
+
+An old service has no canonical identity evidence. Preserve its connection-local legacy Desktop
+viewed entries; do not automatically copy them into a newly advertised scope. Migration requires
+real installation/account continuity evidence, retains the original entries, and is atomic and
+idempotent. Without that proof, unread may be reevaluated. Extension toggles retain independent
+namespaces. Lossless downgrade through an older APK that drops unknown fields is not qualified.
+
+Runtime, settings and control remain qualified by selected adapter and current access binding.
+Canonical sharing does not transfer control. The server revalidates an exact binding and owner/turn
+at dispatch. Existing-session scoped mutation JSON carries `accessBinding` inside the encrypted
+body; arbitrary HTTP headers are not forwarded by the shared channel. The service removes this
+transport field before native settings validation. Source-level creation/uploads have no existing
+session binding. They carry the expected descriptor `nativeScopeId` in encrypted JSON, which the
+service checks against its freshly verified request scope before admission. Upload chunks and
+completion remain bound by their source/scope token. A Desktop-filter row owned only by CLI is read-only there; switching source is explicit.
+Send and Stop keep their admitted path, generation, client ID and native turn after navigation.
+Never replay or transfer them. Canonical coalescing prevents duplicate admission across source paths.
+Every scoped cursor, upload, payload/image reference, SSE and cache key remains source-qualified;
+shared device read/cache/stream/upload limits never multiply with configured sources.
+
+Unsupported create/settings/send/Stop/manage controls stay hidden or disabled by explicit capability;
+history remains readable and drafts editable. Read-only sources subscribe only when their explicit
+live capability permits native observation; read-only history alone never starts a live subscription.
+Native acceptance still requires the actual client ID, user-message identity and turn identity;
+a text match, poll index or locally invented acknowledgement is not evidence.
 
 ## Devices and local persistence
 
@@ -51,7 +100,10 @@ conversation, device and overlay in their existing order.
 Remote sits below Tasks in their original joined drawer group and opens SettingsOverlayHost.
 Both drawer buttons use the owner-requested 46 dp height, joined 24/5 dp corner shapes and
 2 dp inter-button gap. Their icons, labels, focus clearing and navigation remain unchanged.
-Device selection precedes Sessions; Add Device is a separate shared settings page.
+Device selection precedes Sessions; Add Device is a separate shared settings page. Devices also
+offers the independent `What Is Filo?` guide defined by settings-ui-ux.md. Its Add Device action
+opens the existing editor; Save and discarded Back follow the original return to Devices.
+The guide does not change the editor's documentation FAB or save semantics.
 Devices renders its scaffold and locally saved rows independently of all network checks.
 No loading text, bar or overlay belongs here. The original MCP status dot reports
 idle/connecting/connected/error. A failed or delayed network check never hides the list.
@@ -125,18 +177,22 @@ preserves the last confirmed value; it cannot fabricate idle, completion or exec
 This is presentation state only; Filo verifies native ownership/state at dispatch, and Stop requires its exact native turn.
 
 The session catalog title is the configured device name (localized Device fallback), replacing
-Sessions. Immediately below it, a horizontally scrollable chip row currently contains one
-informational Codex Desktop chip with the existing OpenAI icon and an 8dp status dot. No visible
-Online, Connecting or Offline label belongs inside the capsule. It retains its 40dp height,
-secondaryContainer/onSecondaryContainer colors, no outline and bounded informational press ripple.
-Pressing never navigates, selects a provider, changes state or sends a request.
+Sessions. Immediately below it, a horizontally scrollable source selector shows only configured
+Codex Desktop, Codex CLI and Claude Code sources. There is one chip per source, never per process.
+Unavailable configured sources remain visible with their status; source selection never follows
+availability automatically. Preserve the last explicit configured selection, defaulting to Desktop
+when configured, otherwise the first configured source. A selection scopes list and New Chat,
+invalidates old reads and never launches a native session. Chips retain their existing 40dp height,
+8dp status dot, secondaryContainer/onSecondaryContainer treatment, no outline and bounded ripple.
+No visible Online, Connecting or Offline label belongs inside the capsule. Selected semantics
+identify the active source. Claude origin can distinguish Terminal and Desktop Code within rows.
 
-The dot reports authenticated `/v1/info` `desktop.state`, independently of gateway reachability:
-`connected` uses the shared connected dot; `connecting` uses connecting; `unavailable` uses the
-shared error dot; `disconnected`, absent or unknown state uses neutral idle. Only an actual native
-`connected` snapshot establishes Online. Accessibility includes the corresponding localized status
-alongside Codex Desktop. Dot changes use a 200ms opacity Crossfade in fixed geometry, including
-Reduced Motion. A successful gateway, model catalog or history read cannot fabricate native readiness.
+Each dot reports its authenticated source status independently of gateway reachability. Legacy
+Desktop uses `/v1/info` `desktop.state`: `connected` uses connected, `connecting` connecting,
+`unavailable` error, and absent/unknown/disconnected neutral idle. Only a real native connected
+snapshot establishes Online. Accessibility includes the localized status and source name.
+Dot changes use a 200ms opacity Crossfade in fixed geometry, including Reduced Motion.
+A successful gateway, model catalog or history read cannot fabricate native readiness.
 
 The existing device directory owns at most one serial Desktop observer, scoped to the selected,
 visible catalog or conversation, including an empty catalog and local New Chat. Initial gateway
@@ -152,7 +208,8 @@ pending health results, then resumes the same delayed observer. Explicit reconne
 older periodic results before starting its coalesced check. Devices retains entry/save-only gateway checks. The chat
 subtitle and empty guidance use the actual Desktop state; a gateway connection in progress/failure
 can remove readiness but cannot establish Online. Native read admission, history and control retain
-their independent runtime/gateway semantics. No backend discovery or future-provider registry is introduced.
+their independent runtime/gateway semantics. One bounded configured-source advertisement and
+existing directory observer own source status; no generic provider/plugin registry is introduced.
 
 Sessions keeps row detail/More menus and read-only navigation available while rename, archive
 or another native mutation is pending. Busy admission belongs to the conflicting mutation,
@@ -302,8 +359,10 @@ exact English fallback Thought for a while; when the card contains tools it rema
 Thought for a while, called X tools. The fallback only replaces the duration, never the
 native tool count. Genuine timing retains original duration text.
 
-Errors and unknown runtime never disable an explicit Send with nonblank input. Filo decides
-whether the original owner can accept that request; HTTP/SSE failures use stable Filo error
+Errors and unknown runtime never disable an explicitly supported Send with nonblank input.
+Unavailable or unsupported source/session operations do not acquire a control capability through
+an error or history read. Filo decides whether the original owner can accept an admitted request;
+HTTP/SSE failures use stable Filo error
 codes to select an actionable Snackbar in the current application locale. Unknown codes and
 older servers retain the bounded native detail beside a localized category. Keep the detail
 in the transient notice for diagnosis; never log this text or credentials. Every default
@@ -381,8 +440,11 @@ none/budget/tier options are absent/disabled; unknown current values stay unknow
 Explicit Thinking and Service Tier choices update their presentation optimistically and keep
 both controls usable while native confirmation is pending. Native runtime remains authoritative;
 this transient projection must not fabricate an applied native setting or overwrite runtime.
-For one native owner, serialize setting mutations and merge newer unsent choices into a bounded
-latest patch. Omitted fields stay unchanged and explicit `serviceTier:null` selects native Default.
+For one exact native access binding, serialize setting mutations and merge newer unsent choices
+into a bounded latest patch. Shared canonical draft identity never merges pending settings across
+source paths. An unresolved old-path mutation blocks conflicting new-path admission; no queued
+patch transfers to another source. Omitted fields stay unchanged and explicit `serviceTier:null`
+selects native Default.
 Each dispatched patch is attempted once and requires native application/read-back for success;
 never replay a mutation automatically. Older snapshots or acknowledgements cannot replace a
 newer optimistic choice. Failure removes only the affected optimistic choice, restores the last
@@ -443,7 +505,7 @@ races. Use focused tests while iterating, then the full build and matching deplo
 Service startup, unit tests, APK hash/install and actual UI acceptance are distinct evidence.
 Physical phone UI acceptance belongs to the owner; no taps/screenshots/UI dumps are implied.
 
-Sessions rows expose the original three-dot dropdown with Rename and Archive and reuse
+Codex Desktop Sessions rows expose the original three-dot dropdown with Rename and Archive and reuse
 ChatRenameDialog/ChatDeleteConfirmDialog with archive-specific copy. The owner requires
 only Codex thread/archive, preserving history and synchronizing the desktop archive
 notification. Neither desktop ownership nor generation disables Archive. Update/remove

@@ -14,7 +14,7 @@
     <string name="remote_response_too_large">A resposta ou o anexo excede o tamanho permitido.</string>
     <string name="remote_invalid_request">O Filo não pode ler a solicitação. Confira os valores informados.</string>
     <string name="remote_not_found">O item solicitado não está mais disponível. Atualize a lista.</string>
-    <string name="remote_not_supported">O cliente conectado não oferece esta operação.</string>
+    <string name="remote_not_supported">Esta fonte não oferece suporte a esta ação.</string>
     <string name="remote_desktop_unavailable">O Filo não consegue acessar o Codex Desktop. Abra o Codex no computador de destino.</string>
     <string name="remote_session_unavailable">O Codex ainda não preparou esta conversa. Confira no computador de destino.</string>
     <string name="remote_helper_unavailable">O Filo não consegue acessar seu processo auxiliar de usuário. Confira o serviço Filo no computador de destino.</string>

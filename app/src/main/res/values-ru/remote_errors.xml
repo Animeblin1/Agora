@@ -14,7 +14,7 @@
     <string name="remote_response_too_large">Ответ или вложение превышает допустимый размер.</string>
     <string name="remote_invalid_request">Filo не может прочитать запрос. Проверьте введённые значения.</string>
     <string name="remote_not_found">Запрошенный элемент больше недоступен. Обновите список.</string>
-    <string name="remote_not_supported">Подключённый клиент не поддерживает эту операцию.</string>
+    <string name="remote_not_supported">Этот источник не поддерживает это действие.</string>
     <string name="remote_desktop_unavailable">Filo не может подключиться к Codex Desktop. Откройте Codex на целевом компьютере.</string>
     <string name="remote_session_unavailable">Codex ещё не подготовил этот диалог. Проверьте его на целевом компьютере.</string>
     <string name="remote_helper_unavailable">Filo не может связаться со вспомогательным процессом пользователя. Проверьте службу Filo на целевом компьютере.</string>

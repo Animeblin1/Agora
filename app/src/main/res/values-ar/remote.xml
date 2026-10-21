@@ -35,4 +35,11 @@
     <string name="remote_empty_offline_hint">Codex غير متصل</string>
     <string name="remote_empty_retry_hint">تعذر تحميل المحادثة</string>
     <string name="remote_empty_conversation_hint">لا توجد رسائل بعد</string>
+    <string name="remote_source_codex_desktop">Codex Desktop</string>
+    <string name="remote_source_codex_cli">Codex CLI</string>
+    <string name="remote_source_claude_code">Claude Code</string>
+    <string name="remote_source_read_only">هذه المحادثة متاحة للقراءة فقط عبر هذا المصدر.</string>
+    <string name="remote_history_bounded">لا يوفر هذا المصدر سوى لقطة حديثة من سجل المحادثة.</string>
+    <string name="remote_source_unavailable">هذا المصدر غير متاح. تحقق من عميله الأصلي على الكمبيوتر المستهدف.</string>
+    <string name="remote_history_observed">يعرض فقط النص الذي جُمع بعد تسجيل Claude Mod. لا يشمل السجل السابق أو نشاط الأدوات أو الوسائط أو التفكير.</string>
 </resources>

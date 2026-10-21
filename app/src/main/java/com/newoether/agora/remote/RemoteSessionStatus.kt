@@ -6,12 +6,13 @@ internal fun RemoteState.mergeListedSessionStatuses(
 ): Map<String, RemoteSessionStatus> {
     val exact = page.statuses.associateBy { it.id }
     val listed = page.sessions.mapNotNull { session ->
-        val key = "$address/${session.id}"
+        val key = sessionKey(session.id)
         val old = sessionStatuses[key]
         val item = exact[session.id]
             ?: session.status?.let { old?.copy(status = it) ?: RemoteSessionStatus(session.id, it) }
             ?: return@mapNotNull null
-        key to reconcileRemoteSessionStatus(old, item)
+        val confirmed = if (item.status == "running") item.copy(status = "active") else item
+        key to reconcileRemoteSessionStatus(old, confirmed)
     }.toMap()
     return sessionStatuses + listed
 }

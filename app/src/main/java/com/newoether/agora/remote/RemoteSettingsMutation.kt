@@ -9,7 +9,9 @@ import kotlinx.coroutines.launch
 internal class RemoteSettingsMutation(
     private val scope: CoroutineScope,
     private val mutableState: MutableStateFlow<RemoteState>,
-    private val clientForDevice: (String?) -> FiloClient?,
+    private val clientForState: (RemoteState) -> FiloClient?,
+    private val connectionForDevice: (String?) -> FiloClient?,
+    private val sameSource: (RemoteState, FiloClient) -> Boolean,
     private val selectionEpoch: () -> Long,
     private val readEpoch: () -> Long,
     private val acceptPage: suspend (FiloClient, String, Long, RemoteConversationPage) -> Unit,
@@ -19,9 +21,13 @@ internal class RemoteSettingsMutation(
     private data class Patch(val settings: RemoteSettings, val selection: Long)
     private class Owner(
         val id: String,
+        val snapshot: RemoteState,
+        val canonical: String,
+        val access: String?,
         val device: String,
         val session: String,
         val client: FiloClient,
+        val connection: FiloClient,
         var pending: Patch?,
         var active: Patch? = null,
         var confirmed: RemoteRuntime? = null,
@@ -32,8 +38,12 @@ internal class RemoteSettingsMutation(
     fun acceptsSnapshot(version: Long, ownerId: String): Boolean =
         version == settingsVersion && owners[ownerId]?.active == null
     fun confirmedRuntime(ownerId: String): RemoteRuntime? = owners[ownerId]?.takeIf {
-        clientForDevice(it.device) === it.client
+        connectionForDevice(it.device) === it.connection
     }?.confirmed
+
+    fun hasConflict(snapshot: RemoteState): Boolean = owners.values.any {
+        it.canonical == snapshot.owner && it.id != snapshot.settingsKey && (it.active != null || it.pending != null)
+    }
 
     fun setThinkingEnabled(enabled: Boolean) {
         val snapshot = mutableState.value
@@ -46,7 +56,7 @@ internal class RemoteSettingsMutation(
 
     fun setThinkingLevel(effort: String) {
         val snapshot = mutableState.value
-        if (effort == snapshot.selectedEffort || effort !in snapshot.settingsModel?.reasoningEfforts.orEmpty()) return
+        if ("effort" !in snapshot.capabilities.settings || effort == snapshot.selectedEffort || effort !in snapshot.settingsModel?.reasoningEfforts.orEmpty()) return
         change(RemoteSettings(effort = effort))
     }
 
@@ -61,7 +71,7 @@ internal class RemoteSettingsMutation(
 
     fun setServiceTier(tier: String?) {
         val snapshot = mutableState.value
-        if (snapshot.settingsModel?.serviceTiers == null || (tier == snapshot.selectedServiceTier && snapshot.serviceTierKnown) ||
+        if ("serviceTier" !in snapshot.capabilities.settings || snapshot.settingsModel?.serviceTiers == null || (tier == snapshot.selectedServiceTier && snapshot.serviceTierKnown) ||
             tier != null && snapshot.settingsModel?.serviceTiers.orEmpty().none { it.id == tier }) return
         change(RemoteSettings(serviceTier = tier, updateServiceTier = true))
     }
@@ -73,45 +83,54 @@ internal class RemoteSettingsMutation(
             mutableState.value = snapshot.copy(draftSettings = snapshot.draftSettings.merge(settings))
             return
         }
-        val ownerId = snapshot.owner ?: return
+        val ownerId = snapshot.settingsKey ?: return
+        val canonical = snapshot.owner ?: return
+        if (hasConflict(snapshot)) return
         val device = snapshot.deviceId ?: return
         val session = snapshot.session ?: return
-        val client = clientForDevice(device) ?: return
+        val client = clientForState(snapshot) ?: return
+        val connection = connectionForDevice(device) ?: return
         val existing = owners[ownerId]
         // A replaced connection cannot inherit a write admitted with different credentials.
-        if (existing != null && existing.client !== client) return
+        if (existing != null && existing.connection !== connection) return
         val patch = Patch(settings, selectionEpoch())
         if (existing != null) {
             existing.pending = patch.copy(settings = (existing.pending?.settings ?: RemoteSettings()).merge(settings))
             publish(existing)
             return
         }
-        val owner = Owner(ownerId, device, session.id, client, patch, confirmed = snapshot.runtime)
+        val owner = Owner(ownerId, snapshot, canonical, snapshot.accessOwner, device, session.id, client, connection,
+            patch, confirmed = snapshot.runtime)
         owners[ownerId] = owner
         publish(owner)
         scope.launch { drain(owner) }
     }
 
     /** Model changes retain the ordinary control barrier rather than becoming optimistic. */
-    suspend fun changeModel(client: FiloClient, session: String, settings: RemoteSettings) {
-        val snapshot = mutableState.value
-        val ownerId = snapshot.owner ?: return
+    suspend fun changeModel(client: FiloClient, session: String, settings: RemoteSettings, snapshot: RemoteState) {
+        val ownerId = snapshot.settingsKey ?: return
+        val canonical = snapshot.owner ?: return
+        if (hasConflict(snapshot)) return
         val device = snapshot.deviceId ?: return
-        val owner = Owner(ownerId, device, session, client, null)
-        writeAndRead(owner, Patch(settings, selectionEpoch()))
+        val connection = connectionForDevice(device) ?: return
+        val selected = selectionEpoch()
+        val generation = readEpoch()
+        val owner = Owner(ownerId, snapshot, canonical, snapshot.accessOwner, device, session, client, connection, null)
+        writeAndRead(owner, Patch(settings, selected), generation)
     }
 
     private suspend fun drain(owner: Owner) {
         var succeeded = false
         try {
-            while (clientForDevice(owner.device) === owner.client) {
+            while (connectionForDevice(owner.device) === owner.connection && sameSource(owner.snapshot, owner.client)) {
                 val patch = owner.pending ?: break
                 owner.pending = null
                 owner.active = patch
                 publish(owner)
                 try {
                     succeeded = false
-                    writeAndRead(owner, patch)
+                    val generation = readEpoch()
+                    writeAndRead(owner, patch, generation)
                     succeeded = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -141,12 +160,14 @@ internal class RemoteSettingsMutation(
         }
     }
 
-    private suspend fun writeAndRead(owner: Owner, patch: Patch) {
+    private suspend fun writeAndRead(owner: Owner, patch: Patch, generation: Long) {
+        if (!sameSource(owner.snapshot, owner.client)) return
         settingsVersion++
         try {
             owner.client.updateSettings(owner.session, patch.settings)
-            val generation = readEpoch()
+            if (!sameSource(owner.snapshot, owner.client)) return
             val page = owner.client.conversation(owner.session)
+            if (!sameSource(owner.snapshot, owner.client)) return
             owner.confirmed = page.runtime
             if (isCurrent(owner, patch.selection)) acceptPage(owner.client, owner.session, generation, page)
             check(confirms(page.runtime, patch.settings)) { "Native settings were not confirmed" }
@@ -160,15 +181,15 @@ internal class RemoteSettingsMutation(
 
     private fun isSelected(owner: Owner): Boolean {
         val snapshot = mutableState.value
-        return snapshot.owner == owner.id && snapshot.deviceId == owner.device &&
-            snapshot.session?.id == owner.session && clientForDevice(owner.device) === owner.client
+        return sameSource(owner.snapshot, owner.client) && snapshot.settingsKey == owner.id && snapshot.accessOwner == owner.access && snapshot.deviceId == owner.device &&
+            snapshot.session?.id == owner.session && connectionForDevice(owner.device) === owner.connection
     }
 
     private fun publish(owner: Owner) {
         val snapshot = mutableState.value
         val active = owner.active?.settings
         val pending = owner.pending?.settings
-        val projection = if (clientForDevice(owner.device) !== owner.client) null else when {
+        val projection = if (connectionForDevice(owner.device) !== owner.connection) null else when {
             active != null && pending != null -> active.merge(pending)
             else -> pending ?: active
         }

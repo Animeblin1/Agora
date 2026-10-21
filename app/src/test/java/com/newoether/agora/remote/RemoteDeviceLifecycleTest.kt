@@ -226,6 +226,7 @@ internal class RemoteDeviceLifecycleTest : RemoteViewModelFixture() {
         val saveGate = CompletableDeferred<Unit>()
         coEvery { client.connect() } coAnswers { withContext(NonCancellable) { oldCheck.await() } }
         val replacement = mockk<FiloClient>()
+        every { replacement.adapters } returns null
         every { replacement.address } returns "http://new/"
         coEvery { replacement.connect() } returns RemoteDeviceStatus.CONNECTED
         val vm = RemoteViewModel(connections, projectionDispatcher = dispatcher) { address, _ -> if (address == "http://new/") replacement else client }
@@ -282,6 +283,7 @@ internal class RemoteDeviceLifecycleTest : RemoteViewModelFixture() {
         val gate = CompletableDeferred<RemoteDeviceStatus>()
         coEvery { client.connect() } coAnswers { withContext(NonCancellable) { gate.await() } }
         val replacement = mockk<FiloClient>()
+        every { replacement.adapters } returns null
         every { replacement.address } returns "http://computer/"
         coEvery { replacement.connect() } returns RemoteDeviceStatus.CONNECTED
         val vm = RemoteViewModel(connections, projectionDispatcher = dispatcher) { _, token -> if (token == "changed") replacement else client }

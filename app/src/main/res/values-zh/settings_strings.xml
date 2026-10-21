@@ -522,4 +522,35 @@
     <string name="unsaved_changes_keep_editing">继续编辑</string>
     <string name="shell_authentication">身份验证</string>
     <string name="shell_ssh_host_key">主机密钥</string>
+    <!-- Installation guides -->
+    <string name="install_guide_purpose">用途</string>
+    <string name="install_guide_install">安装</string>
+    <string name="install_guide_connect">在 Agora 中连接</string>
+    <string name="install_guide_platform">目标系统</string>
+    <string name="install_guide_copy_command">复制命令</string>
+    <string name="install_guide_run_on_target">复制命令，在目标电脑或目标设备的 Termux 中执行。</string>
+    <string name="install_guide_source">查看源码</string>
+    <string name="install_guide_name_mapping">为此设备取一个唯一名称，然后在添加设备中保存。</string>
+    <string name="install_guide_windows">Windows</string>
+    <string name="install_guide_linux">Linux</string>
+    <string name="install_guide_termux">Termux</string>
+    <string name="conch_guide_title">什么是 Conch？</string>
+    <string name="conch_guide_description">Conch 让 Agora 能在你的设备上执行 Shell 命令、读写文件。</string>
+    <string name="conch_guide_windows_terminal">在目标 Windows 电脑上打开普通 PowerShell 窗口。</string>
+    <string name="conch_guide_linux_terminal">以普通 Linux 用户打开终端，默认用户模式无需 sudo。</string>
+    <string name="conch_guide_termux_terminal">在目标 Android 设备上打开 Termux，使用 Termux 用户安装，无需 root。</string>
+    <string name="conch_guide_system_mode">系统模式</string>
+    <string name="conch_guide_system_mode_desc">可选的系统级安装。Windows 需使用管理员 PowerShell，Linux 需 root 权限。</string>
+    <string name="conch_guide_user_mode">新安装默认使用用户模式，仅在需要系统级服务时选择系统模式。</string>
+    <string name="conch_guide_linger">Linux 若需在登录前运行，必须明确选择启用 linger。只在需要此行为时开启。</string>
+    <string name="conch_guide_mode_preserved">已有安装请保持当前模式，除非你明确打算更改。</string>
+    <string name="conch_guide_address_mapping">将安装器显示的可访问服务地址填入服务器 URL。</string>
+    <string name="conch_guide_key_mapping">将安装器给出的 API 密钥填入 API Key，请妥善保管。</string>
+    <string name="filo_guide_title">什么是 Filo？</string>
+    <string name="filo_guide_description">Filo 将 Agora 连接到电脑上受支持的原生编程会话。</string>
+    <string name="filo_guide_windows_terminal">在目标 Windows x64 电脑上，以管理员身份打开 PowerShell。</string>
+    <string name="filo_guide_selected_user">选择运行原生客户端的 Windows 账户。使用 Codex Desktop 时，需先为该账户安装并完成初始化。</string>
+    <string name="filo_guide_address_mapping">填写目标电脑可访问的 tailnet IPv4 服务 URL，localhost 仅能在目标电脑本机访问。</string>
+    <string name="filo_guide_token_mapping">将安装器给出的访问令牌填入访问令牌字段，请妥善保管。</string>
+    <string name="filo_guide_scope">可用来源和操作取决于已安装的客户端及其公布的能力。Claude Code 需主动启用 Mod，不支持 Chat 和 Cowork。</string>
 </resources>

@@ -505,4 +505,35 @@
     <string name="unsaved_changes_keep_editing">متابعة التعديل</string>
     <string name="shell_authentication">المصادقة</string>
     <string name="shell_ssh_host_key">مفتاح المضيف</string>
+    <!-- Installation guides -->
+    <string name="install_guide_purpose">الغرض</string>
+    <string name="install_guide_install">التثبيت</string>
+    <string name="install_guide_connect">الاتصال في Agora</string>
+    <string name="install_guide_platform">النظام المستهدف</string>
+    <string name="install_guide_copy_command">نسخ الأمر</string>
+    <string name="install_guide_run_on_target">انسخ الأمر وشغّله على الكمبيوتر المستهدف أو في جلسة Termux على الجهاز المستهدف.</string>
+    <string name="install_guide_source">عرض الشفرة المصدرية</string>
+    <string name="install_guide_name_mapping">اختر اسمًا فريدًا لهذا الجهاز، ثم احفظه في إضافة جهاز.</string>
+    <string name="install_guide_windows">Windows</string>
+    <string name="install_guide_linux">Linux</string>
+    <string name="install_guide_termux">Termux</string>
+    <string name="conch_guide_title">ما هو Conch؟</string>
+    <string name="conch_guide_description">يتيح Conch لـ Agora تشغيل أوامر Shell والعمل مع الملفات على أجهزتك.</string>
+    <string name="conch_guide_windows_terminal">افتح نافذة PowerShell عادية على كمبيوتر Windows المستهدف.</string>
+    <string name="conch_guide_linux_terminal">افتح طرفية بحساب مستخدم Linux العادي. وضع المستخدم الافتراضي لا يحتاج إلى sudo.</string>
+    <string name="conch_guide_termux_terminal">افتح Termux على جهاز Android المستهدف. يستخدم التثبيت حساب Termux دون صلاحيات root.</string>
+    <string name="conch_guide_system_mode">وضع النظام</string>
+    <string name="conch_guide_system_mode_desc">تثبيت اختياري على مستوى النظام. يتطلب PowerShell بصلاحيات المسؤول على Windows أو صلاحيات root على Linux.</string>
+    <string name="conch_guide_user_mode">تستخدم التثبيتات الجديدة وضع المستخدم افتراضيًا. اختر وضع النظام فقط إذا كنت تحتاج إلى خدمة على مستوى النظام.</string>
+    <string name="conch_guide_linger">على Linux، يتطلب التشغيل قبل تسجيل الدخول تفعيل linger صراحةً. فعّله فقط إذا كنت تريد هذا السلوك.</string>
+    <string name="conch_guide_mode_preserved">إذا كان هناك تثبيت حالي، احتفظ بوضعه ما لم تكن تنوي تغييره صراحةً.</string>
+    <string name="conch_guide_address_mapping">أدخل عنوان الخدمة القابل للوصول الذي يعرضه المثبّت في عنوان URL للخادم.</string>
+    <string name="conch_guide_key_mapping">انسخ مفتاح API الذي يقدمه المثبّت إلى حقل مفتاح API. احتفظ بالمفتاح سرًا.</string>
+    <string name="filo_guide_title">ما هو Filo؟</string>
+    <string name="filo_guide_description">يربط Filo تطبيق Agora بجلسات البرمجة الأصلية المدعومة على الكمبيوتر.</string>
+    <string name="filo_guide_windows_terminal">على كمبيوتر Windows x64 المستهدف، افتح PowerShell بصلاحيات المسؤول.</string>
+    <string name="filo_guide_selected_user">اختر حساب Windows الذي يشغّل العميل الأصلي. يتطلب الوصول إلى Codex Desktop تثبيته وتهيئته لهذا الحساب.</string>
+    <string name="filo_guide_address_mapping">أدخل عنوان URL لخدمة الجهاز المستهدف باستخدام عنوان IPv4 قابل للوصول في tailnet. يعمل localhost على الكمبيوتر المستهدف فقط.</string>
+    <string name="filo_guide_token_mapping">انسخ رمز الوصول الذي يقدمه المثبّت إلى حقل رمز الوصول. احتفظ بالرمز سرًا.</string>
+    <string name="filo_guide_scope">تعتمد المصادر وعناصر التحكم على العملاء المثبّتين والقدرات المعلنة. يتطلب Claude Code تفعيل Mod صراحةً. لا يدعم Chat وCowork.</string>
 </resources>

@@ -505,4 +505,35 @@
     <string name="unsaved_changes_keep_editing">Weiter bearbeiten</string>
     <string name="shell_authentication">Authentifizierung</string>
     <string name="shell_ssh_host_key">Hostschlüssel</string>
+    <!-- Installation guides -->
+    <string name="install_guide_purpose">Zweck</string>
+    <string name="install_guide_install">Installation</string>
+    <string name="install_guide_connect">In Agora verbinden</string>
+    <string name="install_guide_platform">Zielsystem</string>
+    <string name="install_guide_copy_command">Befehl kopieren</string>
+    <string name="install_guide_run_on_target">Kopiere den Befehl und führe ihn auf dem Zielcomputer oder in Termux auf dem Android-Zielgerät aus.</string>
+    <string name="install_guide_source">Quellcode ansehen</string>
+    <string name="install_guide_name_mapping">Wähle einen eindeutigen Namen für das Gerät und speichere es unter Gerät hinzufügen.</string>
+    <string name="install_guide_windows">Windows</string>
+    <string name="install_guide_linux">Linux</string>
+    <string name="install_guide_termux">Termux</string>
+    <string name="conch_guide_title">Was ist Conch?</string>
+    <string name="conch_guide_description">Mit Conch kann Agora Shell-Befehle ausführen und Dateien auf deinen Geräten bearbeiten.</string>
+    <string name="conch_guide_windows_terminal">Öffne auf dem Windows-Zielcomputer ein normales PowerShell-Fenster.</string>
+    <string name="conch_guide_linux_terminal">Öffne ein Terminal als normaler Linux-Benutzer. Der standardmäßige Benutzermodus benötigt kein sudo.</string>
+    <string name="conch_guide_termux_terminal">Öffne Termux auf dem Android-Zielgerät. Die Installation nutzt den Termux-Benutzer ohne Root-Rechte.</string>
+    <string name="conch_guide_system_mode">Systemmodus</string>
+    <string name="conch_guide_system_mode_desc">Optionale systemweite Installation. Erfordert PowerShell als Administrator unter Windows oder Root-Rechte unter Linux.</string>
+    <string name="conch_guide_user_mode">Neue Installationen nutzen standardmäßig den Benutzermodus. Wähle den Systemmodus nur, wenn du einen systemweiten Dienst benötigst.</string>
+    <string name="conch_guide_linger">Unter Linux erfordert der Betrieb vor der Anmeldung eine ausdrückliche Aktivierung von linger. Aktiviere es nur, wenn du das möchtest.</string>
+    <string name="conch_guide_mode_preserved">Behalte bei einer bestehenden Installation den aktuellen Modus bei, sofern du ihn nicht ausdrücklich ändern möchtest.</string>
+    <string name="conch_guide_address_mapping">Trage die vom Installer angezeigte erreichbare Dienstadresse als Server-URL ein.</string>
+    <string name="conch_guide_key_mapping">Kopiere den API-Schlüssel des Installers in das Feld API-Schlüssel. Halte den Schlüssel geheim.</string>
+    <string name="filo_guide_title">Was ist Filo?</string>
+    <string name="filo_guide_description">Filo verbindet Agora mit unterstützten nativen Programmiersitzungen auf deinem Computer.</string>
+    <string name="filo_guide_windows_terminal">Öffne auf dem Windows-x64-Zielcomputer PowerShell als Administrator.</string>
+    <string name="filo_guide_selected_user">Wähle das Windows-Konto, das den nativen Client ausführt. Für Codex Desktop muss dieser für das Konto installiert und eingerichtet sein.</string>
+    <string name="filo_guide_address_mapping">Trage die erreichbare Dienst-URL über die Tailnet-IPv4-Adresse des Ziels ein. localhost funktioniert nur auf dem Zielcomputer.</string>
+    <string name="filo_guide_token_mapping">Kopiere das Zugriffstoken des Installers in das Feld Zugriffstoken. Halte das Token geheim.</string>
+    <string name="filo_guide_scope">Quellen und Steuerungsmöglichkeiten hängen von installierten Clients und gemeldeten Fähigkeiten ab. Claude Code benötigt eine ausdrücklich aktivierte Mod. Chat und Cowork werden nicht unterstützt.</string>
 </resources>

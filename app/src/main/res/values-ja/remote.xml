@@ -35,4 +35,11 @@
     <string name="remote_empty_offline_hint">Codex はオフラインです</string>
     <string name="remote_empty_retry_hint">会話を読み込めません</string>
     <string name="remote_empty_conversation_hint">まだメッセージはありません</string>
+    <string name="remote_source_codex_desktop">Codex Desktop</string>
+    <string name="remote_source_codex_cli">Codex CLI</string>
+    <string name="remote_source_claude_code">Claude Code</string>
+    <string name="remote_source_read_only">この接続元では、この会話は閲覧のみ可能です。</string>
+    <string name="remote_history_bounded">この接続元では、最近の履歴のスナップショットのみ利用できます。</string>
+    <string name="remote_source_unavailable">この接続元は利用できません。接続先のパソコンでネイティブクライアントを確認してください。</string>
+    <string name="remote_history_observed">Claude Mod の登録後に取得したテキストのみ表示します。それ以前の履歴、ツールの実行内容、メディア、思考内容は含まれません。</string>
 </resources>

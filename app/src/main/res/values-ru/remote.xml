@@ -35,4 +35,11 @@
     <string name="remote_empty_offline_hint">Codex не в сети</string>
     <string name="remote_empty_retry_hint">Не удалось загрузить разговор</string>
     <string name="remote_empty_conversation_hint">Пока нет сообщений</string>
+    <string name="remote_source_codex_desktop">Codex Desktop</string>
+    <string name="remote_source_codex_cli">Codex CLI</string>
+    <string name="remote_source_claude_code">Claude Code</string>
+    <string name="remote_source_read_only">Через этот источник разговор доступен только для чтения.</string>
+    <string name="remote_history_bounded">Этот источник предоставляет только снимок недавней истории.</string>
+    <string name="remote_source_unavailable">Этот источник недоступен. Проверьте его нативный клиент на целевом компьютере.</string>
+    <string name="remote_history_observed">Показывает только текст, полученный после регистрации Claude Mod. Предыдущая история, действия инструментов, медиафайлы и рассуждения не включены.</string>
 </resources>

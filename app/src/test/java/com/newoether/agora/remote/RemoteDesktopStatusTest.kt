@@ -222,10 +222,12 @@ internal class RemoteDesktopStatusTest : RemoteViewModelFixture() {
         val otherAddress = "http://second/"
         val other = mockk<FiloClient>()
         val replacement = mockk<FiloClient>()
+        every { other.adapters } returns null
         every { other.address } returns otherAddress
         coEvery { other.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { other.sessions(any()) } returns RemoteSessionPage(emptyList(), null)
         coEvery { other.models() } returns emptyList()
+        every { replacement.adapters } returns null
         every { replacement.address } returns address
         coEvery { replacement.connect() } returns RemoteDeviceStatus.IDLE
         coEvery { connections.load() } returns listOf(
@@ -703,6 +705,7 @@ internal class RemoteDesktopStatusTest : RemoteViewModelFixture() {
 
     @Test fun replacingCredentialsAtSameAddressRejectsTheOldChatsLateDesktopResult() = runTest(dispatcher) {
         val replacement = mockk<FiloClient>()
+        every { replacement.adapters } returns null
         every { replacement.address } returns address
         coEvery { replacement.connect() } returns RemoteDeviceStatus.ERROR
         coEvery { replacement.sessions(any()) } returns RemoteSessionPage(emptyList(), null)

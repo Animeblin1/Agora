@@ -22,6 +22,7 @@ internal class RemoteDeviceDirectory(
     private val selectDevice: (String?) -> Unit,
     private val refresh: () -> Unit,
     private val updateDevice: (String, (RemoteDevice) -> RemoteDevice) -> Unit,
+    private val sourcesChanged: (String, List<RemoteAdapter>, Boolean) -> Unit,
     private val report: (String, Exception?) -> RemoteFailure?,
 ) {
     private val state = mutableState.asStateFlow()
@@ -33,6 +34,16 @@ internal class RemoteDeviceDirectory(
     private var observedDevice: String? = null
     private var observationGeneration = 0L
     private var storing: Job? = null
+
+    fun admitted(id: String, client: FiloClient, desktop: RemoteDeviceStatus) {
+        val advertised = client.adapters
+        val prior = state.value.devices.firstOrNull { it.id == id } ?: return
+        val multi = advertised?.any { !it.legacy } == true || advertised?.isEmpty() == true
+        val sources = if (multi) advertised.orEmpty() else emptyList()
+        updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
+            desktopStatus = desktop, adapters = sources, multiAdapter = multi) }
+        sourcesChanged(id, prior.adapters, prior.multiAdapter)
+    }
 
     fun restoreConnections() {
         if (storing?.isActive == true) return
@@ -171,23 +182,31 @@ internal class RemoteDeviceDirectory(
                 try {
                     val desktop = checkSlots.withPermit { client.connect() }
                     if (generation != observationGeneration || mutableClients[observedId] !== client) return@launch
-                    updateDevice(observedId) { it.copy(desktopStatus = desktop) }
+                    val advertised = client.adapters
+                    val prior = state.value.devices.firstOrNull { it.id == observedId } ?: return@launch
+                    val multi = advertised?.any { !it.legacy } == true || advertised?.isEmpty() == true
+                    val sources = if (advertised == null) prior.adapters else if (multi) advertised else emptyList()
+                    updateDevice(observedId) { it.copy(desktopStatus = desktop, adapters = sources, multiAdapter = multi) }
+                    sourcesChanged(observedId, prior.adapters, prior.multiAdapter)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) {
                     if (generation != observationGeneration || mutableClients[observedId] !== client) return@launch
                     // Failed observation cannot keep claiming an online Desktop or erase readable history.
-                    updateDevice(observedId) { it.copy(desktopStatus = RemoteDeviceStatus.IDLE) }
+                    updateDevice(observedId) { it.copy(desktopStatus = RemoteDeviceStatus.IDLE,
+                        adapters = it.adapters.map { source -> source.copy(state = "disconnected") }) }
                 }
             }
         }
     }
 
     /** New authenticated unavailability supersedes all older status reads on this page. */
-    fun desktopUnavailable(id: String) {
+    fun sourceUnavailable(id: String, adapterId: String) {
         if (observedDevice == id) observeDesktop(null)
         checks.remove(id)?.cancel()
         updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
-            desktopStatus = RemoteDeviceStatus.ERROR) }
+            desktopStatus = if (adapterId == RemoteAdapter.LEGACY_DESKTOP || adapterId == "codex-desktop")
+                RemoteDeviceStatus.ERROR else it.desktopStatus,
+            adapters = it.adapters.map { source -> if (source.id == adapterId) source.copy(state = "unavailable") else source }) }
         observeDesktop(id)
     }
     fun checkDevice(id: String) {
@@ -200,8 +219,7 @@ internal class RemoteDeviceDirectory(
             try {
                 val desktop = checkSlots.withPermit { client.connect() }
                 if (!isActive || mutableClients[id] !== client) return@launch
-                updateDevice(id) { it.copy(status = RemoteDeviceStatus.CONNECTED, failure = null,
-                    desktopStatus = desktop) }
+                admitted(id, client, desktop)
                 if (state.value.deviceId == id) {
                     if (state.value.isDraft) mutableState.value = state.value.copy(loading = false, failure = null)
                     refresh()

@@ -14,7 +14,7 @@
     <string name="remote_response_too_large">응답 또는 첨부 파일이 지원되는 크기를 초과합니다.</string>
     <string name="remote_invalid_request">Filo가 요청을 읽을 수 없습니다. 입력 내용을 확인하세요.</string>
     <string name="remote_not_found">요청한 항목을 더 이상 사용할 수 없습니다. 목록을 새로고침하세요.</string>
-    <string name="remote_not_supported">연결된 클라이언트에서 이 작업을 지원하지 않습니다.</string>
+    <string name="remote_not_supported">이 소스는 이 작업을 지원하지 않습니다.</string>
     <string name="remote_desktop_unavailable">Filo가 Codex Desktop에 연결할 수 없습니다. 대상 컴퓨터에서 Codex를 여세요.</string>
     <string name="remote_session_unavailable">Codex에서 이 대화가 아직 준비되지 않았습니다. 대상 컴퓨터에서 확인하세요.</string>
     <string name="remote_helper_unavailable">Filo가 사용자 보조 프로세스에 연결할 수 없습니다. 대상 컴퓨터의 Filo 서비스를 확인하세요.</string>

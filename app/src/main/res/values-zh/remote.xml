@@ -35,4 +35,11 @@
     <string name="remote_empty_offline_hint">Codex 已离线</string>
     <string name="remote_empty_retry_hint">无法加载对话</string>
     <string name="remote_empty_conversation_hint">暂无消息</string>
+    <string name="remote_source_codex_desktop">Codex Desktop</string>
+    <string name="remote_source_codex_cli">Codex CLI</string>
+    <string name="remote_source_claude_code">Claude Code</string>
+    <string name="remote_source_read_only">通过此来源只能查看此对话。</string>
+    <string name="remote_history_bounded">此来源仅提供近期历史快照。</string>
+    <string name="remote_source_unavailable">此来源不可用，请检查目标电脑上的原生客户端。</string>
+    <string name="remote_history_observed">仅显示 Claude Mod 注册后采集的文本，不含此前历史、工具活动、媒体和思考内容。</string>
 </resources>

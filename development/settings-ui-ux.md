@@ -133,6 +133,35 @@ and WebUI share this contract.
 - Gate the FAB with the shared documentation-visibility setting and add the established 80 dp bottom spacer only to the same scrollable surface.
 - Every target path must be present in MkDocs navigation and resolve for every built locale through a maintained page or the configured English fallback.
 
+## Conch and Filo installation guides
+
+Owner approved independent guide destinations on 2026-10-21. Shell devices offers `What Is Conch?`
+and Remote Devices offers `What Is Filo?`, including populated lists. These are ordinary localized
+Settings destination rows with leading icon, title and purpose description. They use the same
+collapsing scaffold, SettingsGroup/SettingsItem, guarded transition and retained scroll owners.
+Platform choices use full-width selectable SettingsItem radio rows with wrapping labels, preserving
+complete Windows/Linux/Termux names on narrow screens, large fonts and RTL layouts.
+They do not move or replace the Add/Edit editor's DocumentationFab or its visibility preference.
+
+Each guide explains purpose, lets the user select a supported target system, provides one explicit
+Copy action for the maintained install command, then maps the install output address and API key/token
+to the existing Add Device editor. State clearly that the command runs on the target computer or
+Termux device. The primary Add Device action opens that existing editor; guides never execute
+installation, save configuration on Back, or add a second connection wizard or QR flow.
+
+Conch offers Windows ordinary PowerShell, Linux without sudo, and Termux for default user mode.
+System mode requires a separate explicit advanced choice and identifies administrator/root access.
+Linux before-login persistence requires an explicit linger choice. Never silently change an
+existing install's mode. Filo currently targets Windows x64 and administrator PowerShell with the
+selected native Windows user. Describe native sources according to shipped capabilities, preserving
+Desktop-only prerequisites and avoiding unsupported macOS/Linux, Chat/Cowork or control claims.
+
+Commands come from the maintained Conch README and Filo installer contract. Filo currently binds
+loopback or an explicitly selected tailnet IPv4 address; `localhost` is not a phone-reachable URL.
+Guide copy identifies a reachable target address without promising generic LAN support. External
+documentation/source actions retain the established external-link icon and launcher. Credentials
+are entered only in the existing protected editor, never embedded in example commands or logs.
+
 ## Motion and state
 
 - State changes inside a fixed layout slot use a 250 ms crossfade.

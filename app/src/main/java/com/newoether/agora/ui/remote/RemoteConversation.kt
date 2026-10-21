@@ -52,6 +52,7 @@ internal fun RemoteConversation(
     onMediaClick: (List<String>, Int) -> Unit,
 ) {
     val owner = state.owner ?: return
+    val payloadOwner = state.payloadOwner ?: return
     val session = state.session ?: return
     val connectionStatus = state.remoteConnectionStatus()
     val density = LocalDensity.current
@@ -75,7 +76,7 @@ internal fun RemoteConversation(
     val attachments = state.attachments[owner].orEmpty()
     val running = state.runtime?.isRunning == true
     val stopping = state.isStopping
-    val ready = state.isDraft || state.runtime?.status in setOf("idle", "active", "ready")
+    val ready = state.isDraft || state.runtime?.status in setOf("idle", "active", "running", "ready")
     val newChatEntry = remember(owner) { state.composerFocusOwner == owner }
     ChatLaunchInteractionEffects(
         initialComposerFocusReady = active && ready && state.composerFocusOwner == owner,
@@ -129,17 +130,17 @@ internal fun RemoteConversation(
                 !showThinkingSheet && !showOpenAiServiceTierSheet) haptics.confirm()
         }
     }
-    val observe = remember(owner) { { id: String -> vm.observeMessage(owner, id) } }
-    val loadToolImage: suspend (String, String) -> com.newoether.agora.model.ToolImageAttachment = remember(owner, vm) {
+    val observe = remember(owner, payloadOwner) { { id: String -> vm.observeMessage(owner, id) } }
+    val loadToolImage: suspend (String, String) -> com.newoether.agora.model.ToolImageAttachment = remember(owner, payloadOwner, vm) {
         { id, revision -> vm.loadToolImage(owner, id, revision) }
     }
-    val initialMessage = remember(owner) { { id: String ->
+    val initialMessage = remember(owner, payloadOwner) { { id: String ->
         if (vm.state.value.owner == owner) vm.cachedMessage(owner, id) else null
     } }
     val streaming = tail?.let { message ->
-        key(owner, message.id) {
+        key(payloadOwner, message.id) {
             // A suspended observer does not delete the body already shown during navigation.
-            val flow = remember(owner, message.id) { vm.observeMessage(owner, message.id).filterNotNull() }
+            val flow = remember(payloadOwner, message.id) { vm.observeMessage(owner, message.id).filterNotNull() }
             val payload by flow.collectAsState(initial = vm.cachedMessage(owner, message.id))
             payload
         }
@@ -150,8 +151,8 @@ internal fun RemoteConversation(
     val historyOverscroll = rememberRemoteHistoryOverscroll(scroll.listState)
     val focusManager = LocalFocusManager.current
     val searchMessages: suspend (String, List<String>) -> List<com.newoether.agora.model.ChatMessage> =
-        remember(owner, state.hydrationRevision) { { _, ids -> vm.searchMessages(owner, ids) } }
-    val searchAllMessages = remember(owner, vm, state.hydrationEnabled) {
+        remember(owner, payloadOwner, state.hydrationRevision) { { _, ids -> vm.searchMessages(owner, ids) } }
+    val searchAllMessages = remember(owner, payloadOwner, vm, state.hydrationEnabled) {
         { query: String -> vm.searchHistory(query) }
     }
     val interaction = rememberConversationInteractionState(owner, messageState, scroll.listState, searchMessages,
@@ -252,7 +253,7 @@ internal fun RemoteConversation(
                 onSearchNext = { if (interaction.nextSearchMatch()) haptics.selection() },
                 onSearchDismiss = { interaction.dismissSearch(); focusManager.clearFocus() },
                 onNavigateBack = onBack, onOpenDrawer = onBack, onSystemPromptClick = {}, onNewChat = vm::newSession,
-                newChatEnabled = active && !state.controlling,
+                newChatEnabled = active && state.canCreate && !state.controlling,
                 moreMenuContent = { dismiss ->
                     AgoraDropdownMenuItem(
                         text = { Text(stringResource(R.string.conversation_search)) },
@@ -341,6 +342,10 @@ internal fun RemoteConversation(
             ChatComposerLayout(field, focus, scroll::setComposerInputFocused, expanded, spacer.isRunning,
                 onExpand = { expanded = true }, onCollapse = { expanded = false },
                 statusContent = {
+                    if (!state.canSend) Text(stringResource(R.string.remote_source_read_only),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (state.historyBounded) Text(stringResource(remoteHistoryBoundaryLabel(state)),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     ComposerStatusColumn(state.queued, { it.id }) { QueuedMessageRow(text = it.text) }
                 },
                 attachmentContent = {
@@ -352,13 +357,13 @@ internal fun RemoteConversation(
                 },
                 controls = {
                     ComposerControlGroup {
-                        RemoteAttachmentPicker(owner, active && !submitting, vm)
-                        ComposerModelSelector(
+                        if (state.capabilities.uploads) RemoteAttachmentPicker(owner, active && !submitting, vm)
+                        if (state.capabilities.models) ComposerModelSelector(
                             displayText = (state.models.firstOrNull { it.id == state.selectedModel }?.name
                                 ?: state.selectedModel)?.replace('-', ' ') ?: stringResource(
                                     if (state.modelsLoading || state.loading) R.string.loading_label else R.string.remote_model_unavailable),
                             isModelValid = state.selectedModel != null, expanded = activeMenu == "model",
-                            enabled = active && (state.isDraft || state.canChooseModel) && !submitting && !stopping && !state.controlling,
+                            enabled = active && state.canChooseModel && !submitting && !stopping && !state.controlling,
                             onClick = {
                                 val now = System.currentTimeMillis()
                                 if (activeMenu == "model") activeMenu = null
@@ -410,7 +415,8 @@ internal fun RemoteConversation(
                                 }
                             },
                         )
-                        ExposedDropdownMenuBox(
+                        if (effortChoices.isNotEmpty() && "effort" in state.capabilities.settings ||
+                            tierChoices.isNotEmpty() && "serviceTier" in state.capabilities.settings) ExposedDropdownMenuBox(
                             expanded = activeMenu == "tools",
                             onExpandedChange = { }
                         ) {
@@ -440,7 +446,7 @@ internal fun RemoteConversation(
                                 },
                                 matchAnchorWidth = false,
                             ) {
-                                AgoraDropdownMenuItem(
+                                if ("effort" in state.capabilities.settings) AgoraDropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(androidx.compose.ui.res.painterResource(id = com.newoether.agora.R.drawable.neurology_24), null, modifier = Modifier.size(CHAT_DROPDOWN_MENU_ICON_SIZE_DP.dp))
@@ -462,7 +468,7 @@ internal fun RemoteConversation(
                                     onClick = { activeMenu = null; showThinkingSheet = true },
                                     enabled = settingsEnabled && effortChoices.isNotEmpty(),
                                 )
-                                AgoraDropdownMenuItem(
+                                if ("serviceTier" in state.capabilities.settings) AgoraDropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
@@ -493,8 +499,8 @@ internal fun RemoteConversation(
                         }
                     }
                     val showStop = running && !stopping && field.text.isBlank() && attachments.isEmpty()
-                    ComposerSendButton(isActionable = active && !stopping && !state.controlling && (showStop || !state.settingsPending) && !submitting &&
-                        (if (showStop) state.runtime?.activeTurnId != null else field.text.isNotBlank() || attachments.isNotEmpty()),
+                    ComposerSendButton(isActionable = active && !stopping && !state.controlling && !state.controlPending && (showStop || !state.settingsPending) && !submitting &&
+                        (if (showStop) state.canStop else state.canSend && (field.text.isNotBlank() || attachments.isNotEmpty())),
                         isBusy = submitting || stopping, showStop = showStop,
                         onBusyShown = { shownBusyAttempt = attempt?.clientId }) {
                         if (showStop) vm.stop()

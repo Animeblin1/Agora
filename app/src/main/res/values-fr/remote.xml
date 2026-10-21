@@ -35,4 +35,11 @@
     <string name="remote_empty_offline_hint">Codex est hors ligne</string>
     <string name="remote_empty_retry_hint">Impossible de charger la conversation</string>
     <string name="remote_empty_conversation_hint">Aucun message pour le moment</string>
+    <string name="remote_source_codex_desktop">Codex Desktop</string>
+    <string name="remote_source_codex_cli">Codex CLI</string>
+    <string name="remote_source_claude_code">Claude Code</string>
+    <string name="remote_source_read_only">Cette conversation est en lecture seule via cette source.</string>
+    <string name="remote_history_bounded">Cette source fournit uniquement un instantané de l’historique récent.</string>
+    <string name="remote_source_unavailable">Cette source est indisponible. Vérifiez son client natif sur l’ordinateur cible.</string>
+    <string name="remote_history_observed">Affiche uniquement le texte capturé après l’enregistrement de Claude Mod. L’historique antérieur, l’activité des outils, les médias et le raisonnement ne sont pas inclus.</string>
 </resources>

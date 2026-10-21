@@ -14,7 +14,7 @@
     <string name="remote_response_too_large">响应或附件超出了支持的大小。</string>
     <string name="remote_invalid_request">Filo 无法读取此请求，请检查输入内容。</string>
     <string name="remote_not_found">请求的内容已不可用，请刷新列表。</string>
-    <string name="remote_not_supported">当前连接的客户端不支持此操作。</string>
+    <string name="remote_not_supported">此来源不支持此操作。</string>
     <string name="remote_desktop_unavailable">Filo 无法连接 Codex Desktop，请在目标电脑上打开 Codex。</string>
     <string name="remote_session_unavailable">Codex 尚未准备好此对话，请在目标电脑上检查。</string>
     <string name="remote_helper_unavailable">Filo 无法连接用户辅助进程，请检查目标电脑上的 Filo 服务。</string>

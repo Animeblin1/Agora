@@ -35,4 +35,11 @@
     <string name="remote_empty_offline_hint">Codex đang ngoại tuyến</string>
     <string name="remote_empty_retry_hint">Không thể tải cuộc trò chuyện</string>
     <string name="remote_empty_conversation_hint">Chưa có tin nhắn</string>
+    <string name="remote_source_codex_desktop">Codex Desktop</string>
+    <string name="remote_source_codex_cli">Codex CLI</string>
+    <string name="remote_source_claude_code">Claude Code</string>
+    <string name="remote_source_read_only">Cuộc trò chuyện này chỉ có thể đọc qua nguồn này.</string>
+    <string name="remote_history_bounded">Nguồn này chỉ cung cấp bản chụp lịch sử gần đây.</string>
+    <string name="remote_source_unavailable">Nguồn này không khả dụng. Hãy kiểm tra ứng dụng gốc trên máy tính đích.</string>
+    <string name="remote_history_observed">Chỉ hiển thị văn bản được thu thập sau khi Claude Mod đăng ký. Không bao gồm lịch sử trước đó, hoạt động của công cụ, nội dung đa phương tiện và phần suy nghĩ.</string>
 </resources>

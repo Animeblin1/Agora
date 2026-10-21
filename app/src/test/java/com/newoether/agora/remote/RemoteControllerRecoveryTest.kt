@@ -4,6 +4,7 @@ import io.mockk.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
@@ -17,6 +18,9 @@ internal class RemoteControllerRecoveryTest : RemoteViewModelFixture() {
     private fun TestScope.open(events: MutableSharedFlow<RemoteConversationPage>? = null): RemoteViewModel {
         if (events != null) every { client.events(any()) } returns events
         val vm = RemoteViewModel(connections, projectionDispatcher = dispatcher) { _, _ -> client }
+        backgroundScope.launch(dispatcher, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            try { awaitCancellation() } finally { vm.setVisible(false) }
+        }
         runCurrent(); saveAndSelect(vm); vm.setVisible(true); runCurrent()
         vm.selectSession(session); runCurrent()
         return vm

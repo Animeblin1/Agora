@@ -23,7 +23,7 @@ internal fun remoteConnectionStatusLabel(status: McpConnectionStatus): Int = whe
 /** Display native Desktop availability; gateway failure can only remove readiness. */
 internal fun RemoteState.remoteConnectionStatus(): McpConnectionStatus {
     val device = devices.firstOrNull { it.id == deviceId } ?: return McpConnectionStatus.IDLE
-    return (if (device.status == RemoteDeviceStatus.CONNECTED) device.desktopStatus else device.status)
+    return (if (device.status == RemoteDeviceStatus.CONNECTED) selectedAdapter.status else device.status)
         .toMcpConnectionStatus()
 }
 
@@ -33,6 +33,8 @@ internal fun RemoteState.remoteEmptyConversationHint(): Int? {
     if (session == null || messageGroups.isNotEmpty()) return null
     val connection = remoteConnectionStatus()
     return when {
+        !selectedAdapter.legacy && (error || connection == McpConnectionStatus.IDLE ||
+            connection == McpConnectionStatus.ERROR) -> R.string.remote_source_unavailable
         error -> R.string.remote_empty_retry_hint
         loading || connection == McpConnectionStatus.CONNECTING -> R.string.remote_empty_connecting_hint
         isDraft && connection == McpConnectionStatus.CONNECTED -> R.string.remote_new_chat_hint

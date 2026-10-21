@@ -25,6 +25,7 @@ internal abstract class RemoteViewModelFixture {
     @Before fun setup() {
         Dispatchers.setMain(dispatcher)
         coEvery { connections.load() } returns emptyList()
+        every { client.adapters } returns null
         every { client.address } returns "http://computer/"
         coEvery { client.connect() } returns RemoteDeviceStatus.CONNECTED
         coEvery { client.sessions(any()) } returns RemoteSessionPage(listOf(session), null)

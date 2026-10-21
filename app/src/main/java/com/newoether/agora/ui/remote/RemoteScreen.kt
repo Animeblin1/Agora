@@ -113,10 +113,12 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
     SideEffect { if (active && state.session == null) onSnackbarOffsetChanged(inset) }
     val focus = LocalFocusManager.current
     var forward by remember { mutableStateOf(true) }
+    var guideVisible by remember { mutableStateOf(false) }
     val back = {
         forward = false
         focus.clearFocus()
         when {
+            guideVisible -> guideVisible = false
             state.session != null -> vm.selectSession(null)
             state.deviceId != null -> vm.selectDevice(null)
             state.addingDevice -> vm.selectDevice(null)
@@ -124,7 +126,8 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
         }
     }
     BackHandler(active, back)
-    val target = Triple(state.deviceId, state.session?.let { "conversation" }, if (state.addingDevice) state.editedDeviceId.orEmpty() else null)
+    val target = Triple(state.deviceId, state.session?.let { "conversation" },
+        if (guideVisible) "guide" else if (state.addingDevice) state.editedDeviceId.orEmpty() else null)
     Box(Modifier.fillMaxSize()) {
     GuardedAnimatedContent(targetState = target, forward = forward) { page ->
         var retained by remember(page) { mutableStateOf(state) }
@@ -132,10 +135,13 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
         SideEffect { if (current) retained = state }
         val displayed = if (current) state else retained
         when {
+            page.third == "guide" -> SettingsFiloGuidePage(onBack = back, onAddDevice = {
+                guideVisible = false; forward = true; focus.clearFocus(); vm.addDevice()
+            })
             page.third != null -> RemoteAddDevice(displayed, vm, back) { forward = false; focus.clearFocus() }
             page.second != null -> RemoteConversation(displayed, vm, settings, active && current, back, onSnackbarOffsetChanged, onMediaClick)
             page.first != null -> {
-                var showUsage by remember(displayed.deviceId) { mutableStateOf(false) }
+                var showUsage by remember(displayed.deviceId, displayed.confirmationPath) { mutableStateOf(false) }
                 if (showUsage && current && active) RemoteUsageSheet(vm) { showUsage = false }
                 val listState = rememberLazyListState()
                 val visibleRows = remember { mutableStateMapOf<String, Boolean>() }
@@ -157,12 +163,12 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                     title = displayed.devices.firstOrNull { it.id == displayed.deviceId }?.name
                         ?.ifBlank { null } ?: stringResource(R.string.remote_device), onBack = back,
                     actions = {
-                        IconButton(onClick = { showUsage = true }, enabled = current && active) {
+                        if (displayed.capabilities.usage) IconButton(onClick = { showUsage = true }, enabled = current && active) {
                             Icon(Icons.Default.DataUsage, stringResource(R.string.remote_usage))
                         }
                     },
                     floatingActionButton = {
-                        Box(Modifier.fillMaxWidth().padding(end = 24.dp, bottom = 8.dp), contentAlignment = Alignment.BottomEnd) {
+                        if (displayed.canCreate) Box(Modifier.fillMaxWidth().padding(end = 24.dp, bottom = 8.dp), contentAlignment = Alignment.BottomEnd) {
                             FloatingActionButton(modifier = Modifier.size(64.dp), shape = CircleShape, onClick = { if (current && active && !displayed.controlling) { forward = true; vm.newSession() } }) {
                                 Icon(Icons.Default.Add, stringResource(R.string.new_chat), Modifier.size(32.dp))
                             }
@@ -170,8 +176,12 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                     },
                 ) {
                     item(key = "agents") {
-                        RemoteAgentChipRow(displayed.devices.firstOrNull { it.id == displayed.deviceId }?.desktopStatus
-                            ?: RemoteDeviceStatus.IDLE)
+                        val sources = displayed.devices.firstOrNull { it.id == displayed.deviceId }?.let {
+                            if (it.multiAdapter) it.adapters else listOf(displayed.selectedAdapter)
+                        }.orEmpty()
+                        if (displayed.selectedAdapter.legacy) RemoteAgentChipRow(displayed.selectedAdapter.status)
+                        else RemoteAgentChipRow(sources, displayed.selectedAdapter.id, vm::selectAdapter,
+                            enabled = current && active)
                     }
                     if (!displayed.loading && displayed.sessions.isEmpty() && !displayed.error) {
                         item { Text(stringResource(R.string.remote_empty), Modifier.padding(16.dp)) }
@@ -180,7 +190,7 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                         SettingsGroup(
                             title = stringResource(R.string.remote_sessions),
                             items = displayed.sessions.map { session -> {
-                                key(session.id) {
+                                key(displayed.confirmationPath, session.id) {
                                     var showMenu by remember { mutableStateOf(false) }
                                     var action by remember { mutableStateOf<String?>(null) }
                                     val actionsEnabled = current && active && !displayed.controlling
@@ -200,7 +210,7 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                                         trailingContent = {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 RemoteSessionIndicator(resolveDrawerConversationIndicator(
-                                                    isGenerating = displayed.sessionStatuses["${displayed.deviceId}/${session.id}"]?.status == "active",
+                                                    isGenerating = displayed.sessionStatuses[displayed.sessionKey(session.id)]?.status == "active",
                                                     isSelected = false,
                                                     hasUnreadGeneration = displayed.hasUnreadGeneration(session.id),
                                                 ))
@@ -216,13 +226,13 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                                                         AgoraDropdownMenuItem(
                                                             text = { Text(stringResource(R.string.rename)) },
                                                             leadingIcon = { Icon(Icons.Default.Edit, null) },
-                                                            enabled = actionsEnabled,
+                                                            enabled = actionsEnabled && displayed.capabilitiesFor(session).rename,
                                                             onClick = { showMenu = false; action = "rename" },
                                                         )
                                                         AgoraDropdownMenuItem(
                                                             text = { Text(stringResource(R.string.remote_archive), color = MaterialTheme.colorScheme.error) },
                                                             leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                                                            enabled = actionsEnabled,
+                                                            enabled = actionsEnabled && displayed.capabilitiesFor(session).archive,
                                                             onClick = { showMenu = false; action = "archive" },
                                                         )
                                                     }
@@ -250,7 +260,9 @@ internal fun RemoteScreen(vm: RemoteViewModel, settings: SettingsRepository, act
                     }
                 }
             }
-            else -> RemoteDevices(displayed, vm, back) { forward = true }
+            else -> RemoteDevices(displayed, vm, back, onGuide = {
+                forward = true; focus.clearFocus(); guideVisible = true
+            }) { forward = true }
         }
     }
     val progressVisible = remember { androidx.compose.animation.core.MutableTransitionState(false) }
@@ -293,10 +305,17 @@ private fun RemoteSessionIndicator(indicator: DrawerConversationIndicator) {
 }
 
 @Composable
-private fun RemoteDevices(state: RemoteState, vm: RemoteViewModel, onBack: () -> Unit, onForward: () -> Unit) {
+private fun RemoteDevices(state: RemoteState, vm: RemoteViewModel, onBack: () -> Unit,
+    onGuide: () -> Unit, onForward: () -> Unit) {
     var deleteId by remember { mutableStateOf<String?>(null) }
     val enabled = !state.restoring && !state.saving
     CollapsingSettingsScaffold(title = stringResource(R.string.remote_title), onBack = onBack) {
+        SettingsGroup(title = stringResource(R.string.filo_guide_title), items = listOf({
+            SettingsItem(modifier = Modifier.clickable(enabled = enabled, onClick = onGuide),
+                headlineContent = { Text(stringResource(R.string.filo_guide_title)) },
+                supportingContent = { Text(stringResource(R.string.filo_guide_description)) },
+                leadingContent = { Icon(Icons.Default.Info, null) })
+        }))
         SettingsGroup(
             title = stringResource(R.string.remote_devices),
             items = buildList {

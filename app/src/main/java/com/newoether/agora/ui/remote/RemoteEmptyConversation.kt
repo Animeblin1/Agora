@@ -46,7 +46,7 @@ internal fun RemoteEmptyConversation(
     val hint = state.remoteEmptyConversationHint() ?: return
     val normalWelcome = hint == R.string.remote_new_chat_hint || hint == R.string.remote_empty_conversation_hint ||
         hint == R.string.remote_empty_connecting_hint
-    val headline = if (normalWelcome) "Codex Desktop" else stringResource(hint)
+    val headline = if (normalWelcome) remoteSourceName(state.selectedAdapter) else stringResource(hint)
     val deviceName = remoteDeviceName(state.devices.firstOrNull { it.id == state.deviceId }?.name.orEmpty())
         .ifEmpty { stringResource(R.string.remote_device) }
     val retryVisible = state.canRetryEmptyConnection()
@@ -62,7 +62,7 @@ internal fun RemoteEmptyConversation(
                 .verticalScroll(scrollState, overscrollEffect = null),
             content = {
                 Icon(
-                    painter = painterResource(R.drawable.provider_openai),
+                    painter = painterResource(remoteSourceIcon(state.selectedAdapter)),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.testTag("remote-welcome-mark"),
@@ -88,6 +88,16 @@ internal fun RemoteEmptyConversation(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (!state.canSend) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(stringResource(R.string.remote_source_read_only), style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    }
+                    if (state.historyBounded) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(stringResource(remoteHistoryBoundaryLabel(state)), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    }
                     if (retryVisible) {
                         Spacer(Modifier.height(16.dp))
                         TextButton(enabled = active && !state.loading, onClick = onRetry) {

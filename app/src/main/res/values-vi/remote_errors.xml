@@ -14,7 +14,7 @@
     <string name="remote_response_too_large">Phản hồi hoặc tệp đính kèm vượt quá kích thước được hỗ trợ.</string>
     <string name="remote_invalid_request">Filo không thể đọc yêu cầu. Hãy kiểm tra dữ liệu đã nhập.</string>
     <string name="remote_not_found">Mục được yêu cầu không còn khả dụng. Hãy làm mới danh sách.</string>
-    <string name="remote_not_supported">Ứng dụng khách đang kết nối không hỗ trợ thao tác này.</string>
+    <string name="remote_not_supported">Nguồn này không hỗ trợ thao tác này.</string>
     <string name="remote_desktop_unavailable">Filo không thể kết nối Codex Desktop. Hãy mở Codex trên máy đích.</string>
     <string name="remote_session_unavailable">Codex chưa chuẩn bị xong cuộc trò chuyện này. Hãy kiểm tra trên máy đích.</string>
     <string name="remote_helper_unavailable">Filo không thể kết nối tiến trình hỗ trợ người dùng. Hãy kiểm tra dịch vụ Filo trên máy đích.</string>

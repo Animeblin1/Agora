@@ -14,7 +14,7 @@
     <string name="remote_response_too_large">The response or attachment exceeds the supported size.</string>
     <string name="remote_invalid_request">Filo could not read this request. Check the supplied values.</string>
     <string name="remote_not_found">The requested item is no longer available. Refresh the list.</string>
-    <string name="remote_not_supported">This operation is unavailable in the connected client.</string>
+    <string name="remote_not_supported">This source does not support this action.</string>
     <string name="remote_desktop_unavailable">Filo cannot reach Codex Desktop. Open Codex on the target computer.</string>
     <string name="remote_session_unavailable">Codex has not made this conversation ready. Check it on the target computer.</string>
     <string name="remote_helper_unavailable">Filo cannot reach its user helper. Check the Filo service on the target computer.</string>
