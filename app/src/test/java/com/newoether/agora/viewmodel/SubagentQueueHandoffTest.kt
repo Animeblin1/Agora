@@ -18,6 +18,7 @@ import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -129,7 +130,7 @@ class SubagentQueueHandoffTest {
                     state.awaitSendAvailable()
                     assertEquals(1, coordinator.admittedChildCount("parent"))
                 }
-                assertEquals(0, coordinator.admittedChildCount("parent"))
+                awaitChildAdmissionReleased(coordinator, "parent")
                 coVerify(exactly = 1) {
                     conversations.createRunWithMessages(any(), any(), any(), any(), any(), any())
                 }
@@ -140,6 +141,18 @@ class SubagentQueueHandoffTest {
                 state.dispose()
             }
         }
+    }
+
+    /**
+     * The queued successor's settled-job admission release hops off the worker coroutine
+     * (settleCoroutineAsync), so the coordinator may still count the child for a few dispatcher
+     * turns after the handoff. Wait for the release instead of racing the hop.
+     */
+    private suspend fun awaitChildAdmissionReleased(
+        coordinator: ConversationExecutionCoordinator,
+        parentId: String,
+    ) = withTimeout(10_000) {
+        while (coordinator.admittedChildCount(parentId) != 0) delay(10)
     }
 
     private fun toUiMessage(entity: MessageEntity) = ChatMessage(

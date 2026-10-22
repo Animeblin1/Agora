@@ -71,13 +71,10 @@ abstract class BaseOpenAiProvider : LlmProvider {
      */
     protected open fun acceptsToolCall(toolName: String): Boolean = true
 
-    /**
-     * Headers for model discovery. A provider whose catalog is readable with a credential other
-     * than the user's key (an anonymous lane, for instance) overrides this.
-     *
-     * Open rather than protected: `fetchModels` is part of the public [LlmProvider] contract, and a
-     * provider outside this package (or a test double) cannot override a protected member.
-     */
+    /** Headers for model discovery: a provider whose catalog is readable with a credential other
+     *  than the user's key (an anonymous lane, for instance) overrides this.
+     *  Open rather than protected: `fetchModels` is part of the public [LlmProvider] contract, and
+     *  a provider outside this package (or a test double) cannot override a protected member. */
     open fun modelFetchHeaders(apiKey: String): Map<String, String> =
         openAiAuthHeaders(resolveApiKey(apiKey))
 
@@ -193,8 +190,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
                         presencePenalty = config.presencePenalty,
                         promptCacheKey = config.promptCacheKey,
                     )
-                    // customizeRequest owns the whole request shape, so a provider that must
-                    // rewrite tools or add fields it alone knows about is applied once, here.
+                    // customizeRequest owns the whole request shape: applied once, here.
                     request = customizeRequest(request, config)
                     request.requireValidWireFormat(name)
                     json.encodeToString(OpenAiChatRequest.serializer(), request)
