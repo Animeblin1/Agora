@@ -76,9 +76,16 @@ class RemoteUsageSheetTest {
             compose.onNodeWithContentDescription(text(R.string.remote_usage)).performClick()
             val expected = if (available) RuntimeEnvironment.getApplication()
                 .getString(R.string.remote_usage_remaining, 51) else text(R.string.remote_usage_unavailable)
+            // The sheet is its own dialog composition driven by the test clock, and its loading
+            // spinner never idles. After the click no idle sync remains to grant a frame, so the
+            // poll advances the clock manually until the fetched usage renders.
+            compose.mainClock.autoAdvance = false
             compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeBy(50)
                 compose.onAllNodesWithText(expected).fetchSemanticsNodes().isNotEmpty()
             }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
             compose.onNodeWithText(expected).assertExists()
             if (available) compose.onNodeWithText(text(R.string.remote_usage_unavailable)).assertDoesNotExist()
             assertEquals(listOf("GET /v1/usage"), requests.toList())
