@@ -242,10 +242,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
                             "model=${config.modelId} messages=${apiMessages.size} " +
                             "tools=${config.tools?.size ?: 0}",
                     )
-                    // Opening the request can fail before any response headers exist (connect
-                    // timeout, TLS failure, reset). Those escaped the retry loop entirely before,
-                    // so a single flaky connection became a hard failure. Nothing has streamed at
-                    // this point, so replaying is always safe.
+                    // Opening can fail before any response headers exist; nothing has streamed, so replaying is safe.
                     val handle = try {
                         if (streamingRequest != null) {
                             HttpClient.streamPostBody(
@@ -278,10 +275,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
                     }
                     try {
                         if (handle.code == 200) {
-                            // HTTP 200 only proves the request was accepted. Whether the MESSAGE
-                            // completed is decided from semantic markers below, so a relay that
-                            // cuts the stream at a content-block boundary can no longer pass as a
-                            // finished answer.
+                            // HTTP 200 proves acceptance only; semantic markers below decide whether the MESSAGE completed,
+                            // so a relay cutting the stream mid-block cannot pass as finished.
                             val termination = if (config.responsesApiEnabled) {
                                 consumeResponsesStream(handle, config) { emit(it) }
                             } else {
@@ -520,9 +515,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
             else emitTracked(StreamEvent.ToolCallsRequest(calls))
         }
 
-        // Read timeouts are tolerated for long thinking pauses (read timeout = 5 min), but a
-        // silently-dead connection (NAT drop with no RST) must not hang forever: give up after
-        // 3 consecutive timeouts (~15 min without a single byte).
+        // Tolerate read timeouts for long thinking pauses, but a silently-dead connection
+        // must not hang forever: give up after 3 consecutive timeouts.
         var consecutiveReadTimeouts = 0
         while (currentCoroutineContext().isActive) {
             terminalDeadlineNanos?.let { deadline ->
@@ -612,9 +606,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
                             return@forEach
                         }
                         tc.function?.arguments?.let {
-                            // Snapshot-tolerant: a relay that resends the whole argument string in
-                            // every delta must not produce `{"a":1}{"a":1}`, and an empty
-                            // placeholder delta must not erase what was already accumulated.
+                            // Snapshot-tolerant: relays that resend the full argument string must not duplicate it,
+                            // and empty placeholder deltas must not erase it.
                             pending.args.append(
                                 if (it is JsonPrimitive) it.content else it.toString()
                             )
@@ -667,9 +660,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
             }
         }
 
-        // Do not promote an open structured call at transport EOF. Only [DONE] or finish_reason
-        // can prove that its metadata is complete; leaving it pending makes the termination error
-        // carry toolCallInFlight=true and prevents execution of a truncated invocation.
+        // Do not promote an open structured call at transport EOF: only [DONE] or finish_reason
+        // prove its metadata is complete; leaving it pending blocks execution of a truncated call.
 
         if (!currentCoroutineContext().isActive) {
             throw CancellationException("Stream cancelled")
