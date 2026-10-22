@@ -80,9 +80,18 @@ class RemoteUsageSheetTest {
             // spinner never idles. After the click no idle sync remains to grant a frame, so the
             // poll advances the clock manually until the fetched usage renders.
             compose.mainClock.autoAdvance = false
+            var polls = 0
             compose.waitUntil(10_000) {
                 compose.mainClock.advanceTimeBy(50)
+                // With the clock paused, a plain idle pump is safe (the spinner has no pending
+                // frames) and drains the main queue the HTTP resumption lands its writes on.
+                compose.waitForIdle()
                 compose.onAllNodesWithText(expected).fetchSemanticsNodes().isNotEmpty()
+                    .also { rendered ->
+                        if (!rendered && ++polls % 40 == 0) {
+                            println("UsageSheetDebug: polls=$polls requests=$requests")
+                        }
+                    }
             }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
