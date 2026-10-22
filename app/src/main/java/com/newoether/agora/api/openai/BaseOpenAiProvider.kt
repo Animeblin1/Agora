@@ -172,7 +172,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
                             },
                         serviceTier = config.openAiServiceTier,
                         temperature = config.temperature,
-                        maxOutputTokens = config.maxTokens,
+                        maxOutputTokens = config.effectiveOpenAiMaxTokens(),
                         topP = config.topP,
                         promptCacheKey = config.promptCacheKey,
                     )
@@ -187,7 +187,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
                         serviceTier = config.openAiServiceTier,
                         tools = config.tools,
                         temperature = config.temperature,
-                        maxTokens = config.maxTokens,
+                        maxTokens = config.effectiveOpenAiMaxTokens(),
                         topP = config.topP,
                         frequencyPenalty = config.frequencyPenalty,
                         presencePenalty = config.presencePenalty,
@@ -297,13 +297,20 @@ abstract class BaseOpenAiProvider : LlmProvider {
                                     "attempt=$attempt/$maxAttempts",
                             )
                             if (termination.isRetryable && attempt < maxAttempts) {
-                                // Nothing was surfaced yet, so a replay cannot duplicate output.
+                                // Consumers roll back only this attempt before the retry begins.
                                 DebugLog.w(
                                     "AgoraAPI",
                                     "[$name] Incomplete stream on attempt $attempt/$maxAttempts, retrying",
                                 )
                                 val retryDelayMs = retryDelayMillis(attempt)
-                                emit(StreamEvent.Retrying(attempt, ProviderRetryPolicy.MAX_RETRIES))
+                                emit(
+                                    StreamEvent.Retrying(
+                                        attempt,
+                                        ProviderRetryPolicy.MAX_RETRIES,
+                                        resetCurrentAttempt = termination.producedContent ||
+                                            ProviderRetryPolicy.requiresResponseReadRetry(termination.streamError),
+                                    ),
+                                )
                                 delay(retryDelayMs)
                                 retryScheduled = true
                             } else {
@@ -313,7 +320,10 @@ abstract class BaseOpenAiProvider : LlmProvider {
                         } else {
                             val errorRaw = handle.errorBody.orEmpty()
                             val hasV1Fallback = endpointIndex + 1 < endpointUrls.size
-                            if (hasV1Fallback) {
+                            if (hasV1Fallback &&
+                                !ProviderRetryPolicy.isResponseReadHttpFailure(handle.code, errorRaw) &&
+                                !ProviderRetryPolicy.isPermanentHttpFailure(handle.code, errorRaw)
+                            ) {
                                 DebugLog.w(
                                     "AgoraAPI",
                                     "[$name] HTTP ${handle.code}; trying endpoint candidate " +
@@ -387,6 +397,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
                 handle.readLine()
             } catch (error: SocketTimeoutException) {
                 if (!currentCoroutineContext().isActive) break
+                responseBodyReadError = error.asRetryableResponseBodyReadError()
+                if (responseBodyReadError != null) break
                 if (++consecutiveReadTimeouts >= 3) {
                     timedOut = true
                     break
@@ -529,6 +541,8 @@ abstract class BaseOpenAiProvider : LlmProvider {
                 handle.readLine()
             } catch (e: SocketTimeoutException) {
                 if (!currentCoroutineContext().isActive) break
+                streamError = e.asRetryableResponseBodyReadError()
+                if (streamError != null) break
                 // A semantic terminal event already completed the model response. This timeout
                 // only closes its optional usage/[DONE] grace tail and is therefore success.
                 if (terminalDeadlineNanos != null) break

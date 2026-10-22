@@ -50,7 +50,7 @@ abstract class ChatDatabase : RoomDatabase() {
     abstract fun semanticIndexDao(): SemanticIndexDao
 
     companion object {
-        const val CURRENT_VERSION = 36
+        const val CURRENT_VERSION = 39
         const val DB_NAME = "agora_db"
 
         val ALL_MIGRATIONS = listOf(
@@ -201,6 +201,35 @@ abstract class ChatDatabase : RoomDatabase() {
             object : Migration(35, 36) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE conversations ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0")
+                }
+            },
+            object : Migration(36, 37) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN todoJson TEXT")
+                }
+            },
+            object : Migration(37, 38) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN parentConversationId TEXT")
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN subagentResultJson TEXT")
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN subagentResultId TEXT")
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN subagentResultStatus TEXT")
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN subagentDeliveredResultId TEXT")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_conversations_parentConversationId ON conversations (parentConversationId)")
+                }
+            },
+            object : Migration(38, 39) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN createdAt INTEGER NOT NULL DEFAULT 0")
+                    // Legacy rows have no exact creation record. Freeze their earliest stored activity once.
+                    db.execSQL("""
+                        UPDATE conversations SET createdAt = MIN(lastUpdated,
+                            COALESCE((SELECT MIN(startedAt) FROM runs
+                                WHERE conversationId = conversations.id), lastUpdated),
+                            COALESCE((SELECT MIN(timestamp) FROM messages
+                                WHERE conversationId = conversations.id), lastUpdated))
+                    """)
+                    db.execSQL("UPDATE conversations SET dataChangedAt = MAX(dataChangedAt + 1, lastUpdated, createdAt)")
                 }
             },
         )
