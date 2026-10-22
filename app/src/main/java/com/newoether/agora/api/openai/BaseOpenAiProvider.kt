@@ -37,8 +37,6 @@ abstract class BaseOpenAiProvider : LlmProvider {
 
     protected val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
 
-    // -- Override points --
-
     /**
      * Modify the outgoing request before serialization (e.g. add reasoning_effort, plugins).
      * The default implementation returns the request unchanged.
