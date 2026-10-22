@@ -618,7 +618,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">验证并固定主机密钥</string>
     <string name="shell_ssh_host_key_pinned">已固定主机密钥</string>
-    <string name="shell_ssh_host_key_not_pinned">未固定主机密钥 — 易受中间人攻击</string>
+    <string name="shell_ssh_host_key_not_pinned">未固定主机密钥，易受中间人攻击</string>
     <string name="shell_ssh_verify_title">验证 SSH 主机密钥</string>
     <string name="shell_ssh_verify_message">信任前请确认此指纹与您的服务器一致。固定主机密钥可防范中间人攻击。</string>
     <string name="shell_ssh_trust">信任并固定</string>

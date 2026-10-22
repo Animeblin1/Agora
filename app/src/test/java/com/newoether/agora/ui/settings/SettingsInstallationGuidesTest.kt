@@ -19,7 +19,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.AnnotatedString
@@ -60,7 +62,10 @@ class SettingsInstallationGuidesTest {
             val density = LocalDensity.current
             clipboard = LocalClipboardManager.current
             strings = listOf(
-                R.string.back, R.string.install_guide_windows, R.string.install_guide_linux,
+                R.string.back, R.string.install_guide_purpose, R.string.install_guide_install,
+                R.string.install_guide_project_address, R.string.install_guide_platform, R.string.copy,
+                R.string.conch_guide_description,
+                R.string.filo_guide_description, R.string.install_guide_windows, R.string.install_guide_linux,
                 R.string.install_guide_termux, R.string.conch_guide_windows_terminal,
                 R.string.conch_guide_system_mode_desc, R.string.conch_guide_system_mode,
                 R.string.conch_guide_user_mode, R.string.conch_guide_linger,
@@ -104,10 +109,17 @@ class SettingsInstallationGuidesTest {
         compose.runOnIdle { assertEquals(expected, clipboard.getText()?.text) }
     }
 
+    private fun platformTab(index: Int): SemanticsNodeInteraction {
+        val label = listOf(R.string.install_guide_windows, R.string.install_guide_linux, R.string.install_guide_termux)[index]
+        return compose.onNode(hasText(strings.getValue(label)) and hasClickAction())
+    }
+
     private fun assertPlatformLabelFits(index: Int) {
-        val node = compose.onNodeWithTag("conch-guide-platform-label-$index", useUnmergedTree = true)
+        val label = listOf(R.string.install_guide_windows, R.string.install_guide_linux, R.string.install_guide_termux)[index]
+        val node = compose.onNodeWithText(strings.getValue(label), useUnmergedTree = true)
         node.performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("conch-guide-platform-$index").assertHeightIsAtLeast(72.dp)
+        platformTab(index).assertHeightIsAtLeast(44.dp)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
         val layouts = mutableListOf<TextLayoutResult>()
         node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         val layout = layouts.single()
@@ -124,6 +136,23 @@ class SettingsInstallationGuidesTest {
     @Test
     fun conchWindowsShowsThreeStepsAndCopiesOnlyTheUserCommand() {
         show()
+        compose.onNodeWithTag("conch-guide-introduction")
+            .assert(hasAnyDescendant(hasText(strings.getValue(R.string.conch_guide_description))))
+        compose.onNodeWithTag("conch-guide-platform")
+            .assert(hasAnyAncestor(hasTestTag("conch-guide-installation")))
+        val cardTop = compose.onNodeWithTag("conch-guide-platform").getUnclippedBoundsInRoot().top
+        val titleTop = compose.onNodeWithText(strings.getValue(R.string.install_guide_platform))
+            .getUnclippedBoundsInRoot().top
+        assertEquals(16f, (titleTop - cardTop).value, 0.5f)
+        platformTab(0).assertIsSelected()
+        compose.onAllNodes(hasContentDescription(strings.getValue(R.string.copy)) and hasClickAction())
+            .assertCountEquals(0)
+        compose.onNodeWithTag("conch-guide-source")
+            .assert(hasAnyAncestor(hasTestTag("conch-guide-project")))
+            .assertTextContains("github.com/newo-ether/conch")
+        compose.onNodeWithText(strings.getValue(R.string.install_guide_purpose)).assertExists()
+        compose.onNodeWithText(strings.getValue(R.string.install_guide_install)).assertExists()
+        compose.onNodeWithText(strings.getValue(R.string.install_guide_project_address)).assertExists()
         compose.onNodeWithTag("conch-guide-system-mode").assertDoesNotExist()
         compose.onNodeWithText("1").assertExists()
         compose.onNodeWithText("2").assertExists()
@@ -152,6 +181,12 @@ class SettingsInstallationGuidesTest {
     @Test
     fun filoCopiesTheMaintainedCommandAndReturnAndBackAreSingleEntryActions() {
         show(conch = false)
+        compose.onNodeWithTag("filo-guide-introduction")
+            .assert(hasAnyDescendant(hasText(strings.getValue(R.string.filo_guide_description))))
+        compose.onNodeWithTag("filo-guide-source")
+            .assert(hasAnyAncestor(hasTestTag("filo-guide-project")))
+            .assertTextContains("github.com/newo-ether/filo")
+        compose.onNodeWithTag("filo-guide-installation").assertExists()
         compose.onNodeWithText("1").assertExists()
         compose.onNodeWithText("2").assertExists()
         compose.onNodeWithText("3").assertExists()
@@ -179,6 +214,7 @@ class SettingsInstallationGuidesTest {
         val add = capturedClick("conch-guide-return")
         val copy = capturedClick("conch-guide-command-copy")
         val source = capturedClick("conch-guide-source")
+        val selectLinux = requireNotNull(platformTab(1).fetchSemanticsNode().config[SemanticsActions.OnClick].action)
         val back = requireNotNull(compose.onNodeWithContentDescription(strings.getValue(R.string.back))
             .fetchSemanticsNode().config[SemanticsActions.OnClick].action)
         compose.runOnIdle { active = false }
@@ -187,16 +223,20 @@ class SettingsInstallationGuidesTest {
         compose.waitForIdle()
         compose.onNodeWithTag("conch-guide-return").assertIsNotEnabled()
         compose.onNodeWithTag("conch-guide-command-copy").assertIsNotEnabled()
+        for (index in 0..2) platformTab(index).assertIsNotEnabled()
         compose.runOnIdle {
             add()
             back()
             copy()
             source()
+            selectLinux()
             assertEquals(0, adds)
             assertEquals(0, backs)
             assertEquals("unchanged", clipboard.getText()?.text)
             assertTrue(openedUrls.isEmpty())
         }
+        platformTab(0).assertIsSelected()
+        compose.onNodeWithTag("conch-guide-command").assertTextEquals(CONCH_USER_WINDOWS_INSTALL)
     }
 
     @Test
@@ -214,12 +254,13 @@ class SettingsInstallationGuidesTest {
     }
 
     @Test
-    fun narrowLargeFontRtlPlatformRowsKeepFullLabelsAndTheirOriginalDestinations() {
+    fun narrowLargeFontRtlPlatformChipsKeepFullLabelsAndTheirOriginalDestinations() {
         show(largeFont = true, rtl = true)
         for (index in 0..2) {
             assertPlatformLabelFits(index)
-            compose.onNodeWithTag("conch-guide-platform-$index").performScrollTo().performClick()
-            compose.onNodeWithTag("conch-guide-platform-$index").assertIsSelected()
+            platformTab(index).performScrollTo().performClick()
+            platformTab(index).assertIsSelected()
+            for (other in 0..2) if (other != index) platformTab(other).assertIsNotSelected()
             val expected = if (index == 0) CONCH_USER_WINDOWS_INSTALL else CONCH_USER_UNIX_INSTALL
             copyAndAssert("conch-guide", expected)
         }

@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">Verificar y fijar la clave del host</string>
     <string name="shell_ssh_host_key_pinned">Clave del host fijada</string>
-    <string name="shell_ssh_host_key_not_pinned">Clave del host no fijada — vulnerable a interceptación</string>
+    <string name="shell_ssh_host_key_not_pinned">Clave del host no fijada; vulnerable a interceptación</string>
     <string name="shell_ssh_verify_title">Verificar la clave del host SSH</string>
     <string name="shell_ssh_verify_message">Confirma que esta huella coincide con la de tu servidor antes de confiar en él. Fijarla protege frente a ataques de intermediario.</string>
     <string name="shell_ssh_trust">Confiar y fijar</string>

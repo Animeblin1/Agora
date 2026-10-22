@@ -20,6 +20,10 @@ Browser math placeholders expand only in rendered text nodes, never in source at
 link attributes, or code literals. Source mapping stays intact; each occurrence creates exactly
 one formula node and cannot duplicate surrounding prose or emit HTML attribute fragments.
 
+`ChatMarkdownCodeBlock` also renders standalone raw code with the same code background, padding,
+typography and wrapping. Its copy header stays enabled by default. A host that already owns a guarded
+copy action may omit that header without changing other consumers or duplicating the code renderer.
+
 Native release builds must preserve JLaTeXMath's `NewCommandMacro` class, public zero-argument
 constructor and `executeMacro(TeXParser, String[])` method. Environment expansion, including
 `pmatrix`, resolves that handler by reflection; ordinary debug rendering tests do not validate

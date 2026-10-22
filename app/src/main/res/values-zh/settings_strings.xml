@@ -523,7 +523,8 @@
     <string name="shell_authentication">身份验证</string>
     <string name="shell_ssh_host_key">主机密钥</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">用途</string>
+    <string name="install_guide_purpose">介绍</string>
+    <string name="install_guide_project_address">项目地址</string>
     <string name="install_guide_install">安装</string>
     <string name="install_guide_connect">在 Agora 中连接</string>
     <string name="install_guide_platform">目标系统</string>

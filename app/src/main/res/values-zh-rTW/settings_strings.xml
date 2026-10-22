@@ -511,7 +511,8 @@
     <string name="shell_authentication">身分驗證</string>
     <string name="shell_ssh_host_key">主機金鑰</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">用途</string>
+    <string name="install_guide_purpose">介紹</string>
+    <string name="install_guide_project_address">專案網址</string>
     <string name="install_guide_install">安裝</string>
     <string name="install_guide_connect">在 Agora 中連線</string>
     <string name="install_guide_platform">目標系統</string>

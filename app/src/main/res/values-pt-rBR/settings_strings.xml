@@ -506,7 +506,8 @@
     <string name="shell_authentication">Autenticação</string>
     <string name="shell_ssh_host_key">Chave do host</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">Finalidade</string>
+    <string name="install_guide_purpose">Introdução</string>
+    <string name="install_guide_project_address">Endereço do projeto</string>
     <string name="install_guide_install">Instalação</string>
     <string name="install_guide_connect">Conectar no Agora</string>
     <string name="install_guide_platform">Sistema de destino</string>

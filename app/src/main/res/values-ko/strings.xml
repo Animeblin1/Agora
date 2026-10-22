@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">호스트 키 확인 및 고정</string>
     <string name="shell_ssh_host_key_pinned">호스트 키 고정됨</string>
-    <string name="shell_ssh_host_key_not_pinned">호스트 키가 고정되지 않음 — 가로채기에 취약</string>
+    <string name="shell_ssh_host_key_not_pinned">호스트 키가 고정되지 않아 가로채기에 취약합니다</string>
     <string name="shell_ssh_verify_title">SSH 호스트 키 확인</string>
     <string name="shell_ssh_verify_message">신뢰하기 전에 이 지문이 서버와 일치하는지 확인하세요. 고정하면 중간자 공격으로부터 보호됩니다.</string>
     <string name="shell_ssh_trust">신뢰 및 고정</string>

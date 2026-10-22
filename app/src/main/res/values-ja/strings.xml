@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">ホストキーを検証して固定</string>
     <string name="shell_ssh_host_key_pinned">ホストキーを固定済み</string>
-    <string name="shell_ssh_host_key_not_pinned">ホストキーが未固定 — 傍受に対して脆弱</string>
+    <string name="shell_ssh_host_key_not_pinned">ホストキーが未固定のため、傍受に対して脆弱です</string>
     <string name="shell_ssh_verify_title">SSH ホストキーを検証</string>
     <string name="shell_ssh_verify_message">信頼する前に、このフィンガープリントがサーバーと一致することを確認してください。固定することで中間者攻撃から保護されます。</string>
     <string name="shell_ssh_trust">信頼して固定</string>

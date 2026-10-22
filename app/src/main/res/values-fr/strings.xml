@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">Vérifier et épingler la clé d\'hôte</string>
     <string name="shell_ssh_host_key_pinned">Clé d\'hôte épinglée</string>
-    <string name="shell_ssh_host_key_not_pinned">Clé d\'hôte non épinglée — vulnérable à l\'interception</string>
+    <string name="shell_ssh_host_key_not_pinned">Clé d\'hôte non épinglée, vulnérable à l\'interception</string>
     <string name="shell_ssh_verify_title">Vérifier la clé d\'hôte SSH</string>
     <string name="shell_ssh_verify_message">Confirmez que cette empreinte correspond à votre serveur avant de lui faire confiance. L\'épinglage protège contre les attaques de l\'homme du milieu.</string>
     <string name="shell_ssh_trust">Faire confiance et épingler</string>

@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">التحقق من مفتاح المضيف وتثبيته</string>
     <string name="shell_ssh_host_key_pinned">تم تثبيت مفتاح المضيف</string>
-    <string name="shell_ssh_host_key_not_pinned">مفتاح المضيف غير مثبّت — عرضة للاعتراض</string>
+    <string name="shell_ssh_host_key_not_pinned">مفتاح المضيف غير مثبّت، مما يجعله عرضة للاعتراض</string>
     <string name="shell_ssh_verify_title">التحقق من مفتاح مضيف SSH</string>
     <string name="shell_ssh_verify_message">تأكّد من تطابق هذه البصمة مع خادمك قبل الوثوق به. يحمي التثبيت من هجمات الوسيط.</string>
     <string name="shell_ssh_trust">الوثوق والتثبيت</string>

@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">Проверить и закрепить ключ хоста</string>
     <string name="shell_ssh_host_key_pinned">Ключ хоста закреплён</string>
-    <string name="shell_ssh_host_key_not_pinned">Ключ хоста не закреплён — уязвимо для перехвата</string>
+    <string name="shell_ssh_host_key_not_pinned">Ключ хоста не закреплён, уязвимо для перехвата</string>
     <string name="shell_ssh_verify_title">Проверить ключ хоста SSH</string>
     <string name="shell_ssh_verify_message">Прежде чем доверять, убедитесь, что этот отпечаток совпадает с вашим сервером. Закрепление защищает от атак «человек посередине».</string>
     <string name="shell_ssh_trust">Доверять и закрепить</string>

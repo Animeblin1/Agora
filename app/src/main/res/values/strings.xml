@@ -614,7 +614,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">Verify &amp; Pin Host Key</string>
     <string name="shell_ssh_host_key_pinned">Host key pinned</string>
-    <string name="shell_ssh_host_key_not_pinned">Host key not pinned — vulnerable to interception</string>
+    <string name="shell_ssh_host_key_not_pinned">Host key not pinned; vulnerable to interception</string>
     <string name="shell_ssh_verify_title">Verify SSH Host Key</string>
     <string name="shell_ssh_verify_message">Confirm this fingerprint matches your server before trusting it. Pinning protects against man-in-the-middle attacks.</string>
     <string name="shell_ssh_trust">Trust &amp; Pin</string>

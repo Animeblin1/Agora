@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">Verificar e fixar a chave do host</string>
     <string name="shell_ssh_host_key_pinned">Chave do host fixada</string>
-    <string name="shell_ssh_host_key_not_pinned">Chave do host não fixada — vulnerável a interceptação</string>
+    <string name="shell_ssh_host_key_not_pinned">Chave do host não fixada; vulnerável a interceptação</string>
     <string name="shell_ssh_verify_title">Verificar a chave do host SSH</string>
     <string name="shell_ssh_verify_message">Confirme que esta impressão digital corresponde ao seu servidor antes de confiar nele. Fixá-la protege contra ataques man-in-the-middle.</string>
     <string name="shell_ssh_trust">Confiar e fixar</string>

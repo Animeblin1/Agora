@@ -3,23 +3,24 @@ package com.newoether.agora.ui.settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
+import com.newoether.agora.ui.chat.message.ChatMarkdownCodeBlock
 
 internal const val CONCH_USER_UNIX_INSTALL =
     "curl -fsSL https://raw.githubusercontent.com/newo-ether/conch/main/scripts/install.sh | bash"
@@ -71,59 +72,82 @@ private fun InstallationGuide(conch: Boolean, platform: Int, onPlatform: (Int) -
         modifier = Modifier.testTag(if (conch) "conch-install-guide" else "filo-install-guide"),
     ) {
         SettingsGroupColumn {
-            Text(
-                stringResource(if (conch) R.string.conch_guide_description else R.string.filo_guide_description),
-                modifier = Modifier.padding(horizontal = 16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            if (conch) SettingsGroup(
-                title = stringResource(R.string.install_guide_platform),
-                modifier = Modifier.selectableGroup().testTag("conch-guide-platform"),
-                items = listOf(R.string.install_guide_windows, R.string.install_guide_linux, R.string.install_guide_termux)
-                    .mapIndexed { index, label -> {
-                        SettingsItem(
-                            headlineContent = {
-                                Text(stringResource(label), modifier = Modifier.fillMaxWidth()
-                                    .testTag("conch-guide-platform-label-$index"))
-                            },
-                            leadingContent = { RadioButton(selected = platform == index, onClick = null, enabled = active) },
-                            modifier = Modifier.heightIn(min = 72.dp).testTag("conch-guide-platform-$index")
-                                .selectable(selected = platform == index, enabled = active, role = Role.RadioButton) {
-                                    if (ownsGuide()) onPlatform(index)
-                                },
-                        )
-                    } },
-            )
-            SettingsGroup(stringResource(R.string.install_guide_install), items = listOf(
-                {
-                    InstallationStep(1, stringResource(R.string.install_guide_open_terminal)) {
-                        Text(
-                            stringResource(when {
-                                !conch -> R.string.filo_guide_windows_terminal
-                                platform == 0 -> R.string.conch_guide_windows_terminal
-                                platform == 1 -> R.string.conch_guide_linux_terminal
-                                else -> R.string.conch_guide_termux_terminal
-                            }),
-                            modifier = Modifier.testTag("$prefix-terminal-note"),
-                        )
-                    }
+            SettingsGroup(
+                title = stringResource(R.string.install_guide_purpose),
+                modifier = Modifier.testTag("$prefix-introduction"),
+                items = listOf {
+                    SettingsItem(
+                        headlineContent = { Text(if (conch) "Conch" else "Filo") },
+                        supportingContent = {
+                            Text(stringResource(if (conch) R.string.conch_guide_description else R.string.filo_guide_description))
+                        },
+                        leadingContent = { Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary) },
+                    )
                 },
-                {
-                    InstallationStep(2, stringResource(R.string.install_guide_run_command)) {
-                        InstallCommand(command, active, "$prefix-command")
+            )
+            SettingsGroup(
+                title = stringResource(R.string.install_guide_install),
+                modifier = Modifier.testTag("$prefix-installation"),
+                items = buildList {
+                    if (conch) add {
+                        SettingsIconContent(
+                            icon = Icons.Default.Devices,
+                            modifier = Modifier.testTag("conch-guide-platform"),
+                        ) {
+                            Text(
+                                stringResource(R.string.install_guide_platform),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            PillTabSwitcher(
+                                tabs = listOf(R.string.install_guide_windows, R.string.install_guide_linux, R.string.install_guide_termux)
+                                    .map { stringResource(it) },
+                                selectedIndex = platform,
+                                onSelect = { if (ownsGuide()) onPlatform(it) },
+                                enabled = active,
+                                wrapLabels = true,
+                            )
+                        }
                     }
-                },
-                {
-                    InstallationStep(3, stringResource(R.string.install_guide_connect)) {
-                        Text(stringResource(if (conch) R.string.conch_guide_finish else R.string.filo_guide_finish))
-                        TextButton(onClick = back, enabled = active, modifier = Modifier.testTag("$prefix-return")) {
-                            Text(stringResource(R.string.back))
+                    add {
+                        InstallationStep(1, stringResource(R.string.install_guide_open_terminal)) {
+                            Text(
+                                stringResource(when {
+                                    !conch -> R.string.filo_guide_windows_terminal
+                                    platform == 0 -> R.string.conch_guide_windows_terminal
+                                    platform == 1 -> R.string.conch_guide_linux_terminal
+                                    else -> R.string.conch_guide_termux_terminal
+                                }),
+                                modifier = Modifier.testTag("$prefix-terminal-note"),
+                            )
+                        }
+                    }
+                    add {
+                        InstallationStep(2, stringResource(R.string.install_guide_run_command)) {
+                            InstallCommand(command, active, "$prefix-command")
+                        }
+                    }
+                    add {
+                        InstallationStep(3, stringResource(R.string.install_guide_connect)) {
+                            Text(stringResource(if (conch) R.string.conch_guide_finish else R.string.filo_guide_finish))
+                            TextButton(onClick = back, enabled = active, modifier = Modifier.testTag("$prefix-return")) {
+                                Text(stringResource(R.string.back))
+                            }
                         }
                     }
                 },
-            ))
-            InstallSourceLink(if (conch) "https://github.com/newo-ether/conch" else "https://github.com/newo-ether/filo",
-                active, "$prefix-source")
+            )
+            SettingsGroup(
+                title = stringResource(R.string.install_guide_project_address),
+                modifier = Modifier.testTag("$prefix-project"),
+                items = listOf {
+                    InstallSourceLink(
+                        if (conch) "https://github.com/newo-ether/conch" else "https://github.com/newo-ether/filo",
+                        active, "$prefix-source",
+                    )
+                },
+            )
         }
     }
 }
@@ -132,7 +156,11 @@ private fun InstallationGuide(conch: Boolean, platform: Int, onPlatform: (Int) -
 private fun InstallationStep(number: Int, title: String, content: @Composable ColumnScope.() -> Unit) {
     SettingsItem(
         headlineContent = { Text(title) },
-        leadingContent = { Text(number.toString(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary) },
+        leadingContent = {
+            Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) {
+                Text(number.toString(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            }
+        },
         supportingContent = { Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = content) },
     )
 }
@@ -143,8 +171,12 @@ private fun InstallCommand(command: String, active: Boolean, tag: String) {
     val clipboard = LocalClipboardManager.current
     val latestActive by rememberUpdatedState(active)
     SelectionContainer {
-        Text(command, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-            modifier = Modifier.testTag(tag))
+        ChatMarkdownCodeBlock(
+            code = command,
+            autoWrap = true,
+            showHeader = false,
+            modifier = Modifier.testTag(tag).semantics(mergeDescendants = true) {},
+        )
     }
     TextButton(
         onClick = { if (latestActive) clipboard.setText(AnnotatedString(command)) },
@@ -160,10 +192,13 @@ private fun InstallCommand(command: String, active: Boolean, tag: String) {
 private fun InstallSourceLink(url: String, active: Boolean, tag: String) {
     val uriHandler = LocalUriHandler.current
     val latestActive by rememberUpdatedState(active)
-    TextButton(onClick = { if (latestActive) runCatching { uriHandler.openUri(url) } },
-        enabled = active, modifier = Modifier.testTag(tag)) {
-        Text(stringResource(R.string.install_guide_source))
-        Spacer(Modifier.width(8.dp))
-        Icon(Icons.Default.OpenInNew, null)
-    }
+    SettingsItem(
+        headlineContent = { Text(stringResource(R.string.about_github)) },
+        supportingContent = { Text(url.removePrefix("https://")) },
+        leadingContent = { Icon(Icons.Default.Code, null, tint = MaterialTheme.colorScheme.primary) },
+        trailingContent = { Icon(Icons.Default.OpenInNew, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        modifier = Modifier.testTag(tag).clickable(enabled = active, role = Role.Button) {
+            if (latestActive) runCatching { uriHandler.openUri(url) }
+        },
+    )
 }

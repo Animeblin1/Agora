@@ -523,10 +523,11 @@
     <string name="shell_authentication">Authentication</string>
     <string name="shell_ssh_host_key">Host Key</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">Purpose</string>
+    <string name="install_guide_purpose">Introduction</string>
+    <string name="install_guide_project_address">Project Address</string>
     <string name="install_guide_install">Installation</string>
     <string name="install_guide_connect">Connect in Agora</string>
-    <string name="install_guide_platform">Target system</string>
+    <string name="install_guide_platform">Target System</string>
     <string name="install_guide_copy_command">Copy Command</string>
     <string name="install_guide_run_on_target">Copy the command and run it on the target computer, or in Termux on the target Android device.</string>
     <string name="install_guide_source">View Source</string>
@@ -554,8 +555,8 @@
     <string name="filo_guide_token_mapping">Copy the installer’s access token into Access token. Keep the token private.</string>
     <string name="filo_guide_scope">Sources and controls depend on the installed clients and advertised capabilities. Claude Code requires its opted-in Mod. Chat and Cowork are not supported.</string>
     <string name="install_guide_help">Help</string>
-    <string name="install_guide_open_terminal">Open the terminal</string>
-    <string name="install_guide_run_command">Copy and run the command</string>
+    <string name="install_guide_open_terminal">Open the Terminal</string>
+    <string name="install_guide_run_command">Copy and Run the Command</string>
     <string name="conch_guide_finish">Return to Add Device. Enter the installer’s service address and API key, choose a name, then save.</string>
     <string name="filo_guide_finish">Choose the Windows account used by your native client when prompted. Return to Add Device, enter the reachable service URL and access token, then save. localhost only works on the computer.</string>
 </resources>

@@ -140,11 +140,24 @@ group on Add Device, before Connection. Device lists and Edit pages do not dupli
 Help uses the shared scaffold, guarded transition and scroll owner. Opening help retains the current
 editor-owned draft; Back and the final return action restore that same draft without saving. Closed
 or outgoing editor callbacks cannot regain authority on return. DocumentationFab remains unchanged.
-Conch target-system radio rows have a 72 dp minimum height and wrapping Windows/Linux/Termux labels,
-including narrow screens, large fonts and RTL. A short purpose paragraph precedes the choices.
-Installation has exactly three numbered steps in one group: open the target terminal, copy and run
-the maintained command, then return to fill connection details. Do not add separate Advanced, Copy
-Command or Connect groups or repeated explanatory paragraphs. Commands are displayed/copied only.
+Conch and Filo help pages have exactly three named `SettingsGroup` categories in this order:
+Introduction, Installation, and Project Address (owner correction, 2026-10-21 21:45). Introduction
+uses one standard icon/title/supporting-description item. Installation has exactly three numbered
+steps in one group: open the target terminal, copy and run the maintained command, then return to
+fill connection details. Conch target-system choices appear at the start of Installation,
+before the numbered steps, not in a fourth category. Owner screenshot correction on 2026-10-22
+uses the existing `PillTabSwitcher` instead of radio rows. Its icon/title/chips card uses
+`SettingsIconContent` with the same 16 dp top/bottom inset as ordinary cards and a 12 dp title-to-chips
+gap. The control does not repeat a supporting description. Windows/Linux/Termux labels wrap without
+truncation on narrow screens, at large fonts and in RTL; selection and disabled semantics remain
+accessible. Step numbers reserve the same 24 dp leading width as standard icons. Step two renders
+the exact command with the shared `ChatMarkdownCodeBlock`, wrapped and selectable. The host retains
+its existing guarded Copy Command action and omits the block's built-in copy header, so an outgoing
+or closed page cannot copy through an unfenced second action. Project Address contains one whole-row external link
+with a Code icon, GitHub title,
+visible repository address, and the established external-link icon and launcher. Do not leave the
+introduction or project link as ungrouped text/buttons or add separate Advanced, Copy Command or
+Connect groups or repeated explanatory paragraphs. Commands are displayed/copied only.
 Conch uses default user-mode commands: ordinary Windows PowerShell, Linux without sudo and Termux
 without root. Advanced mode/linger instructions stay in the linked source; existing modes are never
 silently changed. Filo targets Windows x64 administrator PowerShell. Its final step identifies the
@@ -318,6 +331,9 @@ in the existing editor. Source links retain the established external-link icon a
 - Password remains the default for existing devices. Only the selected authentication method is
   used by commands and host-key Verify. Preserve explicit trust/pinning and do not fall back from
   failed key authentication to a retained password. Switching device type clears irrelevant fields.
+- The unpinned host-key warning uses ordinary locale punctuation rather than a dash separator
+  (owner screenshot correction, 2026-10-22). Simplified Chinese reads `未固定主机密钥，易受中间人攻击`;
+  translations preserve both the unpinned state and interception risk. Trust and verification behavior stay unchanged.
 - The existing encrypted device configuration stores private-key content and its passphrase.
   File labels and authentication mode contain no key bytes; backup boundaries belong to
   import-export.md. Failed validation must not log keys, passphrases or source file content.

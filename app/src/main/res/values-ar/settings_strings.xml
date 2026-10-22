@@ -506,7 +506,8 @@
     <string name="shell_authentication">المصادقة</string>
     <string name="shell_ssh_host_key">مفتاح المضيف</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">الغرض</string>
+    <string name="install_guide_purpose">مقدمة</string>
+    <string name="install_guide_project_address">عنوان المشروع</string>
     <string name="install_guide_install">التثبيت</string>
     <string name="install_guide_connect">الاتصال في Agora</string>
     <string name="install_guide_platform">النظام المستهدف</string>

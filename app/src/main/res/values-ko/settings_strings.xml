@@ -506,7 +506,8 @@
     <string name="shell_authentication">인증</string>
     <string name="shell_ssh_host_key">호스트 키</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">용도</string>
+    <string name="install_guide_purpose">소개</string>
+    <string name="install_guide_project_address">프로젝트 주소</string>
     <string name="install_guide_install">설치</string>
     <string name="install_guide_connect">Agora에서 연결</string>
     <string name="install_guide_platform">대상 시스템</string>

@@ -506,7 +506,8 @@
     <string name="shell_authentication">Xác thực</string>
     <string name="shell_ssh_host_key">Khóa máy chủ</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">Công dụng</string>
+    <string name="install_guide_purpose">Giới thiệu</string>
+    <string name="install_guide_project_address">Địa chỉ dự án</string>
     <string name="install_guide_install">Cài đặt</string>
     <string name="install_guide_connect">Kết nối trong Agora</string>
     <string name="install_guide_platform">Hệ thống đích</string>

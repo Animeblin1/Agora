@@ -575,7 +575,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">Xác minh &amp; ghim khóa máy chủ</string>
     <string name="shell_ssh_host_key_pinned">Khóa máy chủ đã được ghim</string>
-    <string name="shell_ssh_host_key_not_pinned">Khóa máy chủ chưa được ghim — có nguy cơ bị chặn bắt dữ liệu</string>
+    <string name="shell_ssh_host_key_not_pinned">Khóa máy chủ chưa được ghim, có nguy cơ bị chặn bắt dữ liệu</string>
     <string name="shell_ssh_verify_title">Xác minh khóa máy chủ SSH</string>
     <string name="shell_ssh_verify_message">Xác nhận xem dấu vân tay này có khớp với máy chủ của bạn trước khi tin cậy hay không. Ghim giúp bảo vệ chống lại tấn công giả mạo (man-in-the-middle).</string>
     <string name="shell_ssh_trust">Tin cậy &amp; ghim</string>

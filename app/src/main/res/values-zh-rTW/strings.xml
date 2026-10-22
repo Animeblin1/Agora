@@ -609,7 +609,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">驗證並固定主機金鑰</string>
     <string name="shell_ssh_host_key_pinned">已固定主機金鑰</string>
-    <string name="shell_ssh_host_key_not_pinned">未固定主機金鑰 — 易受中間人攻擊</string>
+    <string name="shell_ssh_host_key_not_pinned">未固定主機金鑰，易受中間人攻擊</string>
     <string name="shell_ssh_verify_title">驗證 SSH 主機金鑰</string>
     <string name="shell_ssh_verify_message">信任前請確認此指紋與您的伺服器一致。固定主機金鑰可防範中間人攻擊。</string>
     <string name="shell_ssh_trust">信任並固定</string>

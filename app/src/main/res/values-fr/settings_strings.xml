@@ -507,6 +507,7 @@
     <string name="shell_ssh_host_key">Clé de l\'hôte</string>
     <!-- Installation guides -->
     <string name="install_guide_purpose">Présentation</string>
+    <string name="install_guide_project_address">Adresse du projet</string>
     <string name="install_guide_install">Installation</string>
     <string name="install_guide_connect">Connexion dans Agora</string>
     <string name="install_guide_platform">Système cible</string>

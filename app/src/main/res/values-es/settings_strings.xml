@@ -506,7 +506,8 @@
     <string name="shell_authentication">Autenticación</string>
     <string name="shell_ssh_host_key">Clave del host</string>
     <!-- Installation guides -->
-    <string name="install_guide_purpose">Función</string>
+    <string name="install_guide_purpose">Introducción</string>
+    <string name="install_guide_project_address">Dirección del proyecto</string>
     <string name="install_guide_install">Instalación</string>
     <string name="install_guide_connect">Conectar en Agora</string>
     <string name="install_guide_platform">Sistema de destino</string>

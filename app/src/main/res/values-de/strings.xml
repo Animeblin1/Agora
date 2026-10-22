@@ -567,7 +567,7 @@
     <!-- SSH host-key pinning -->
     <string name="shell_ssh_verify_host_key">Hostschlüssel prüfen und anheften</string>
     <string name="shell_ssh_host_key_pinned">Hostschlüssel angeheftet</string>
-    <string name="shell_ssh_host_key_not_pinned">Hostschlüssel nicht angeheftet — anfällig für Abhören</string>
+    <string name="shell_ssh_host_key_not_pinned">Hostschlüssel nicht angeheftet; anfällig für Abhören</string>
     <string name="shell_ssh_verify_title">SSH-Hostschlüssel prüfen</string>
     <string name="shell_ssh_verify_message">Bestätige, dass dieser Fingerabdruck mit deinem Server übereinstimmt, bevor du ihm vertraust. Das Anheften schützt vor Man-in-the-Middle-Angriffen.</string>
     <string name="shell_ssh_trust">Vertrauen und anheften</string>
