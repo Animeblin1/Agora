@@ -84,7 +84,7 @@
     <string name="prompts_template_blank">空白</string>
     <string name="prompts_template_blank_desc">空の編集可能なシステムプロンプトから始めます。</string>
     <string name="prompts_template_default">デフォルト</string>
-    <string name="prompts_template_default_desc">ランタイムコンテキスト、メモリ、Web 検索、シェル、デバイスファイルアクセスのルールを含む Agora のデフォルトプロンプトを使用します。</string>
+    <string name="prompts_template_default_desc">Agora の標準の応答ルール、ツールガイド、スキルカタログ、アクティブメモリを使用します。</string>
     <string name="prompts_duplicate">複製</string>
     <string name="prompts_duplicate_title">%1$s のコピー</string>
     <string name="prompts_empty_preview">空のプロンプト</string>
@@ -200,12 +200,10 @@
     <string name="tool_call_display_mode">思考とツールブロック</string>
     <string name="tool_call_display_mode_timeline">タイムライン</string>
     <string name="tool_call_display_mode_grouped_timeline">グループ</string>
-    <string name="tool_call_display_mode_compact">コンパクト</string>
     <string name="tool_call_display_mode_timeline_desc">回答、思考、ツールブロックを時系列で表示します</string>
     <string name="tool_call_display_mode_grouped_timeline_desc">時系列を保ちながら、連続する思考、ツール、画像ブロックを結合します</string>
     <string name="auto_expand_active_group">アクティブなグループを自動展開</string>
     <string name="auto_expand_active_group_desc">現在の思考・ツールグループを自動で展開し、モデルが次へ進むと折りたたみます。</string>
-    <string name="tool_call_display_mode_compact_desc">思考とツールブロックを回答の上にまとめて表示します</string>
     <string name="interaction_feedback">操作フィードバック</string>
     <string name="stick_to_bottom">下端に固定</string>
     <string name="stick_to_bottom_desc">応答の生成中、新しい内容を自動的に追従します。</string>
@@ -540,6 +538,6 @@
     <string name="install_guide_help">ヘルプ</string>
     <string name="install_guide_open_terminal">ターミナルを開く</string>
     <string name="install_guide_run_command">コマンドをコピーして実行する</string>
-    <string name="conch_guide_finish">デバイスの追加に戻り、インストーラーが表示したサービスアドレスと API キーを入力し、名前を付けて保存します。</string>
-    <string name="filo_guide_finish">指示に従ってネイティブクライアントを使う Windows アカウントを選びます。デバイスの追加に戻り、接続可能なサービス URL とアクセストークンを入力して保存します。localhost はコンピューター上でのみ使えます。</string>
+    <string name="conch_guide_finish">インストーラーが表示したサービスアドレスと API キーでデバイスを追加します。</string>
+    <string name="filo_guide_finish">指示に従って Windows アカウントと接続元を選び、インストーラーが表示したサービス URL とアクセストークンでデバイスを追加します。</string>
 </resources>

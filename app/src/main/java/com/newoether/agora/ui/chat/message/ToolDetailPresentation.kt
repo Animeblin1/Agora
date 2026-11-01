@@ -21,6 +21,8 @@ internal data class ToolDetailPresentation(
     val body: ToolDetailBody,
     /** Long string argument pulled out of [arguments] and shown as code. */
     val codeArgument: ToolDetailCodeArgument? = null,
+    /** Native result metadata not consumed by a specialized body remains visible as JSON. */
+    val supplemental: List<String> = emptyList(),
 )
 
 /** [rows] is set when the value is file content and gets a line-number gutter. */
@@ -36,7 +38,13 @@ internal sealed interface ToolDetailBody {
     data class Stopped(val text: String) : ToolDetailBody
     data class Muted(val text: String) : ToolDetailBody
     data class JsonContent(val values: List<String>) : ToolDetailBody
-    data class Shell(val status: String, val device: String, val error: String?, val output: String?) : ToolDetailBody
+    data class Shell(
+        val status: String,
+        val device: String,
+        val error: String?,
+        val output: String?,
+        val metadata: String? = null,
+    ) : ToolDetailBody
     data class Paths(val values: List<ToolDetailPath>) : ToolDetailBody
     data class Grep(val groups: List<ToolDetailMatchGroup>) : ToolDetailBody
     /** [lines] is set for line-mode reads so the number gutter is rendered outside the text. */
@@ -54,6 +62,7 @@ internal sealed interface ToolDetailBody {
         val replaceAllLabel: String,
         val hunks: List<ToolDetailDiffHunk>,
         val status: String,
+        val files: List<ToolDetailEditFile> = emptyList(),
     ) : ToolDetailBody
     data class Search(val results: List<ToolDetailSearchResult>) : ToolDetailBody
 }
@@ -66,6 +75,7 @@ internal data class ToolDetailSearchResult(
 )
 
 internal fun Resources.toolDetailPresentation(segment: MessageSegment): ToolDetailPresentation {
+    if (segment.remoteToolSource != null) return remoteToolDetailPresentation(segment)
     val presentation = ToolPresentationResolver.resolve(segment)
     val body = toolDetailBody(presentation)
     val codeSource = codeArgumentSource(presentation)
@@ -84,8 +94,17 @@ internal fun Resources.toolDetailPresentation(segment: MessageSegment): ToolDeta
         resultLabel = getString(R.string.result_label),
         mcpDevice = presentation.device?.takeIf(String::isNotBlank),
         body = body,
+        supplemental = if (presentation.kind == ToolKind.MCP && presentation.state == ToolPresentationState.FAILED) {
+            mcpResultValues(presentation).filterNot { it == presentation.errorMessage }
+        } else emptyList(),
     )
 }
+
+/** Failed MCP calls retain their raw evidence without changing the recorded lifecycle. */
+private fun mcpResultValues(presentation: ToolPresentation): List<String> = listOfNotNull(
+    presentation.rawTextResult?.takeIf(String::isNotBlank),
+    presentation.rawStructuredResult?.takeIf(String::isNotBlank),
+).ifEmpty { listOfNotNull(presentation.rawResult?.takeIf(String::isNotBlank)) }
 
 /**
  * Shell commands and written file, memory or skill content read better as code than as an escaped
@@ -153,7 +172,16 @@ private const val MAX_LIVE_COMMAND_ARGUMENT_CHARS = 96 * 1024
 
 private fun Resources.toolDetailBody(presentation: ToolPresentation): ToolDetailBody {
     if (presentation.kind in setOf(ToolKind.SHELL_EXECUTE, ToolKind.SHELL_JOB_GET, ToolKind.SHELL_JOB_WAIT, ToolKind.SHELL_JOB_STOP)) {
+        val args = codeArgumentSource(presentation) ?: presentation.arguments
+        val result = presentation.result as? JsonObject
+        val job = (result?.get("result") as? JsonObject) ?: result
+        val metadata = listOf("job_id", "description").mapNotNull { key ->
+            val value = job?.get(key) ?: result?.get(key)
+            value?.takeIf { it is JsonPrimitive && it.isString && it.content.isNotBlank() && it != args?.get(key) }
+                ?.let { key to it }
+        }.toMap().takeIf { it.isNotEmpty() }?.let { JsonObject(it).toString() }
         return ToolDetailBody.Shell(
+            metadata = metadata,
             status = shellExecutionSummary(presentation),
             device = presentation.device?.takeIf(String::isNotBlank) ?: getString(R.string.tool_unknown_device),
             error = presentation.errorMessage?.takeIf { presentation.state == ToolPresentationState.FAILED && it.isNotBlank() },
@@ -258,10 +286,7 @@ private fun Resources.completedToolDetailBody(presentation: ToolPresentation): T
             else ToolDetailBody.Search(results)
         }
         ToolKind.MCP -> {
-            val values = listOfNotNull(
-                presentation.rawTextResult?.takeIf(String::isNotBlank),
-                presentation.rawStructuredResult?.takeIf(String::isNotBlank),
-            )
+            val values = mcpResultValues(presentation)
             if (values.isEmpty()) rawToolDetailBody(presentation) else ToolDetailBody.JsonContent(values)
         }
         else -> rawToolDetailBody(presentation)
@@ -275,7 +300,7 @@ private fun Resources.completedToolDetailBody(presentation: ToolPresentation): T
  */
 private fun Resources.storedFileReadBody(presentation: ToolPresentation): ToolDetailBody? {
     val content = presentation.rawTextResult ?: presentation.rawResult ?: return null
-    val activeMemory = presentation.toolName == "read_active_memory"
+    val activeMemory = presentation.toolName == "active_memory_read"
     // The resolver sets a read's subject only when exactly one file was requested.
     val name = presentation.subject?.takeUnless { activeMemory }
     val lines = if (activeMemory || name != null) numberedCodeLines(content) else null

@@ -161,6 +161,10 @@ class SettingsRepository(
     val webSearchApiKeys: StateFlow<Map<String, String>> = publication.hot(settingsManager.webSearchApiKeys, emptyMap())
     val webSearchNumResults: StateFlow<Int> = publication.hot(settingsManager.webSearchNumResults, 5)
     val webSearchBaseUrl: StateFlow<String> = publication.hot(settingsManager.webSearchBaseUrl, "")
+    val imageQuality = publication.hot(settingsManager.imageQuality.settings, com.newoether.agora.data.ImageQualitySettings())
+    fun updateImageQuality(mode: String? = null, customMaxLongEdge: Int? = null, customJpegQuality: Int? = null) = scope.launch {
+        settingsManager.imageQuality.update(mode, customMaxLongEdge, customJpegQuality)
+    }
     val imageGenEnabled: StateFlow<Boolean> = publication.hot(settingsManager.imageGenEnabled, false)
     val imageGenModel: StateFlow<String?> = publication.hot(settingsManager.imageGenModel, null)
     val imageGenSize: StateFlow<String> = publication.hot(settingsManager.imageGenSize, "1024x1024")
@@ -186,6 +190,7 @@ class SettingsRepository(
     val askUserTimeoutMinutes: StateFlow<Int> = publication.hot(settingsManager.askUserTimeoutMinutes, com.newoether.agora.data.DEFAULT_ASK_USER_TIMEOUT_MINUTES)
     val todoEnabled: StateFlow<Boolean> = publication.hot(settingsManager.todoEnabled, true)
     val subagentToolsEnabled: StateFlow<Boolean> = publication.hot(settingsManager.subagentToolsEnabled, true)
+    val subagentDeleteEnabled: StateFlow<Boolean> = publication.hot(settingsManager.subagentDeleteEnabled, false)
     val subagentMaxTotal: StateFlow<Int> = publication.hot(settingsManager.subagentMaxTotal, DEFAULT_SUBAGENT_MAX_TOTAL)
     val subagentMaxConcurrent: StateFlow<Int> = publication.hot(settingsManager.subagentMaxConcurrent, DEFAULT_SUBAGENT_MAX_CONCURRENT)
     suspend fun getSubagentMaxTotal(): Int = settingsManager.subagentMaxTotal.first()
@@ -687,7 +692,6 @@ class SettingsRepository(
     fun setToolCallDisplayMode(mode: String) = scope.launch { settingsManager.saveToolCallDisplayMode(mode) }
     fun setThinkingSegmentDisplayMode(mode: String) =
         scope.launch { settingsManager.saveThinkingSegmentDisplayMode(mode) }
-
     fun setAutoExpandActiveGroup(enabled: Boolean) =
         scope.launch { settingsManager.saveAutoExpandActiveGroup(enabled) }
     fun setSchemeStyle(style: String) = scope.launch { settingsManager.saveSchemeStyle(style) }
@@ -697,7 +701,6 @@ class SettingsRepository(
     fun setSearchMatchLimit(n: Int) = scope.launch { settingsManager.saveSearchMatchLimit(n) }
     fun setSearchContextWindow(n: Int) = scope.launch { settingsManager.saveSearchContextWindow(n) }
     fun setRagThreshold(threshold: Float) = scope.launch { settingsManager.saveRagThreshold(threshold) }
-
     fun setShellConfirmEnabled(enabled: Boolean) = scope.launch { settingsManager.saveShellConfirmEnabled(enabled) }
     fun setAskUserEnabled(enabled: Boolean) = scope.launch { settingsManager.saveAskUserEnabled(enabled) }
     fun setAskUserTimeoutMinutes(minutes: Int) = scope.launch { settingsManager.saveAskUserTimeoutMinutes(minutes) }
@@ -705,6 +708,7 @@ class SettingsRepository(
     fun setSubagentMaxTotal(value: Int) = scope.launch { settingsManager.saveSubagentMaxTotal(value) }
     fun setSubagentMaxConcurrent(value: Int) = scope.launch { settingsManager.saveSubagentMaxConcurrent(value) }
     fun setSubagentToolsEnabled(enabled: Boolean) = scope.launch { settingsManager.saveSubagentToolsEnabled(enabled) }
+    fun setSubagentDeleteEnabled(enabled: Boolean) = scope.launch { settingsManager.saveSubagentDeleteEnabled(enabled) }
     fun setSubagentCapsuleDisplayMode(mode: String) = scope.launch { settingsManager.saveSubagentCapsuleDisplayMode(mode) }
     fun addShellDevice(device: ShellDeviceConfig, onResult: (Boolean) -> Unit = {}, onError: (Exception) -> Unit = { onResult(false) }) =
         persistShellDevice(device, creating = true, onResult, onError)
@@ -737,14 +741,7 @@ class SettingsRepository(
         return keys.find { it.id == activeIds[provider] }?.key
     }
 
-    // ── Suspending DataStore access ───────────────────────────
-    //
-    // The StateFlows above are eagerly-shared with a default initial value, so at app
-    // startup `.value` may briefly be the default before DataStore loads. These suspend
-    // accessors read/write DataStore directly (awaiting the on-disk value, preserving
-    // write ordering) for callers that need the persisted value immediately or ordered,
-    // read-after-write semantics. They keep [SettingsManager] encapsulated as an internal
-    // detail of this repository — the single owner of the settings surface.
+    // Suspending accessors preserve DataStore ordering before the eager flows publish.
 
     suspend fun getAutoUpdateCheck(): Boolean = settingsManager.autoUpdateCheck.first()
     suspend fun getAutoCacheEnabled(): Boolean = settingsManager.autoCacheEnabled.first()
@@ -791,6 +788,8 @@ class SettingsRepository(
     suspend fun saveAutoDeleteEnabled(enabled: Boolean) = settingsManager.saveAutoDeleteEnabled(enabled)
     suspend fun saveAutoDeletePeriodHours(hours: Int) = settingsManager.saveAutoDeletePeriodHours(hours)
 
+    val phoneUseStore = settingsManager.phoneUse
+    val phoneUse = publication.hot(phoneUseStore.values, com.newoether.agora.phone.PhoneUseSettings())
     fun stableProviderReference(reference: String): String {
         val normalized = reference.trim()
         return customProviders.value.firstOrNull { provider ->

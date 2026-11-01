@@ -84,7 +84,7 @@
     <string name="prompts_template_blank">Trống</string>
     <string name="prompts_template_blank_desc">Bắt đầu với một gợi ý hệ thống trống có thể chỉnh sửa.</string>
     <string name="prompts_template_default">Mặc định</string>
-    <string name="prompts_template_default_desc">Sử dụng gợi ý mặc định của Agora với ngữ cảnh thời gian chạy, bộ nhớ, tìm kiếm web, shell và hướng dẫn tệp thiết bị.</string>
+    <string name="prompts_template_default_desc">Dùng quy tắc trả lời mặc định của Agora, hướng dẫn công cụ, danh mục kỹ năng và bộ nhớ đang hoạt động.</string>
     <string name="prompts_duplicate">Tạo bản sao</string>
     <string name="prompts_duplicate_title">Bản sao %1$s</string>
     <string name="prompts_empty_preview">Gợi ý trống</string>
@@ -196,12 +196,10 @@
     <string name="tool_call_display_mode">Khối suy nghĩ &amp; công cụ</string>
     <string name="tool_call_display_mode_timeline">Dòng thời gian</string>
     <string name="tool_call_display_mode_grouped_timeline">Nhóm lại</string>
-    <string name="tool_call_display_mode_compact">Thu gọn</string>
     <string name="tool_call_display_mode_timeline_desc">Hiển thị câu trả lời, suy nghĩ và khối công cụ theo thứ tự thời gian</string>
     <string name="tool_call_display_mode_grouped_timeline_desc">Giữ thứ tự dòng thời gian nhưng gộp các khối suy nghĩ, công cụ và hình ảnh liên tiếp</string>
     <string name="auto_expand_active_group">Tự động mở rộng nhóm đang hoạt động</string>
     <string name="auto_expand_active_group_desc">Tự động mở rộng nhóm suy luận và công cụ hiện tại, rồi thu gọn khi mô hình chuyển sang bước tiếp theo.</string>
-    <string name="tool_call_display_mode_compact_desc">Nhóm các khối suy nghĩ và công cụ phía trên câu trả lời</string>
 
     <!-- Settings - Web Search Page -->
     <string name="web_search_title">Tìm kiếm Web</string>
@@ -540,6 +538,6 @@
     <string name="install_guide_help">Trợ giúp</string>
     <string name="install_guide_open_terminal">Mở terminal</string>
     <string name="install_guide_run_command">Sao chép và chạy lệnh</string>
-    <string name="conch_guide_finish">Quay lại Thêm thiết bị. Nhập địa chỉ dịch vụ và khóa API từ trình cài đặt, đặt tên rồi lưu.</string>
-    <string name="filo_guide_finish">Khi được hỏi, chọn tài khoản Windows dùng cho ứng dụng gốc. Quay lại Thêm thiết bị, nhập URL dịch vụ có thể truy cập và mã truy cập rồi lưu. localhost chỉ hoạt động trên máy tính đó.</string>
+    <string name="conch_guide_finish">Thêm thiết bị bằng địa chỉ dịch vụ và khóa API do trình cài đặt hiển thị.</string>
+    <string name="filo_guide_finish">Khi được hỏi, chọn tài khoản Windows và các nguồn. Sau đó thêm thiết bị bằng URL dịch vụ và mã truy cập do trình cài đặt hiển thị.</string>
 </resources>

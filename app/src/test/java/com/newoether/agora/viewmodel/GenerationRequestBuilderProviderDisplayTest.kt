@@ -378,6 +378,7 @@ class GenerationRequestBuilderProviderDisplayTest {
         every { settings.openAiServiceTierEnabled } returns MutableStateFlow(false)
         every { settings.openAiServiceTier } returns MutableStateFlow("auto")
         every { settings.webSearchEnabled } returns MutableStateFlow(true)
+        every { settings.phoneUse } returns MutableStateFlow(com.newoether.agora.phone.PhoneUseSettings())
         every { settings.shellEnabled } returns MutableStateFlow(true)
         every { settings.askUserEnabled } returns MutableStateFlow(true)
         every { settings.askUserTimeoutMinutes } returns MutableStateFlow(5)
@@ -495,7 +496,7 @@ class GenerationRequestBuilderProviderDisplayTest {
         verify { fixture.memoryManager.getActiveMemory() }
     }
     @Test
-    fun `active memory is frozen for every provider pass of one run`() = runTest {
+    fun `active memory and skill catalog are frozen for every provider pass of one run`() = runTest {
         val fixture = RequestBuilderFixture(
             providerName = Constants.PROVIDER_OPENAI,
             lowContextModeEnabled = false,
@@ -506,8 +507,9 @@ class GenerationRequestBuilderProviderDisplayTest {
             modelId = fixture.modelId,
         )
         val resolver = requireNotNull(snapshot.config.requestResolver)
-        // A tool call edits active memory mid-run; later passes must keep the captured text.
+        // Tool calls edit active memory and skills mid-run; later passes keep the captured text.
         every { fixture.memoryManager.getActiveMemory() } returns "edited mid-run"
+        every { fixture.skillManager.catalog() } returns "- edited.md: edited mid-run"
         val config = com.newoether.agora.api.ProviderConfig(apiKey = "key", modelId = "model")
         val first = resolver.resolve(emptyList(), config)
         val second = resolver.resolve(emptyList(), config)
@@ -629,6 +631,7 @@ internal class RequestBuilderFixture(
     lowContextModeEnabled: Boolean,
     compactPreserveSystemPrompt: Boolean = false,
     accessActiveMemory: Boolean = true,
+    phoneReady: suspend (String) -> Boolean = { false },
 ) {
     companion object {
         const val COMPACT_PROMPT = "compact prompt"
@@ -705,11 +708,13 @@ internal class RequestBuilderFixture(
         every { settings.openAiServiceTierEnabled } returns MutableStateFlow(false)
         every { settings.openAiServiceTier } returns MutableStateFlow("auto")
         every { settings.webSearchEnabled } returns MutableStateFlow(true)
+        every { settings.phoneUse } returns MutableStateFlow(com.newoether.agora.phone.PhoneUseSettings())
         every { settings.shellEnabled } returns MutableStateFlow(true)
         every { settings.askUserEnabled } returns MutableStateFlow(true)
         every { settings.askUserTimeoutMinutes } returns MutableStateFlow(5)
         every { settings.todoEnabled } returns MutableStateFlow(true)
         every { settings.subagentToolsEnabled } returns MutableStateFlow(true)
+        every { settings.subagentDeleteEnabled } returns MutableStateFlow(false)
         every { settings.localLowContextModeEnabled } returns MutableStateFlow(false)
         every { settings.contextCompactModel } returns MutableStateFlow(null)
         every { settings.contextCompactPrompt } returns MutableStateFlow(COMPACT_PROMPT)
@@ -776,6 +781,7 @@ internal class RequestBuilderFixture(
             providerRegistry = providerRegistry,
             ragManager = ragManager,
             appContext = appContext,
+            phoneReady = phoneReady,
         )
     }
 }

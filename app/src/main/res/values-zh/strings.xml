@@ -189,6 +189,8 @@
     <string name="conversation_read_empty">所选分支中没有消息。</string>
     <string name="conversation_read_page">页面：消息 %1$d-%2$d</string>
     <string name="conversation_read_more">使用更高的 offset 查看更多消息。</string>
+    <string name="conversation_tools_more">此消息还有更多工具调用（tool_offset：%1$d）。</string>
+    <string name="conversation_details_error">无法读取已保存的消息详情（%1$s）。</string>
 
     <string name="tool_call_failed">工具调用失败</string>
     <string name="database_incompatible">数据库不兼容</string>
@@ -866,6 +868,12 @@
     <string name="tool_waited_agents">已结束等待子代理</string>
     <string name="tool_listed_agents">已列出子代理</string>
     <string name="tool_stopped_agent">已停止子代理</string>
+    <string name="tool_delete_agent">删除子代理</string>
+    <string name="tool_deleting_agent">正在删除子代理…</string>
+    <string name="tool_deleted_agent">已删除子代理</string>
+    <string name="subagents_allow_delete">允许删除子代理</string>
+    <string name="subagents_allow_delete_desc">允许父对话永久删除空闲的子代理以释放名额。运行中的子代理和未交付的结果不会被删除。</string>
+    <string name="subagent_deleted_by_parent">此子代理已被其父对话删除。</string>
     <string name="tool_todo_empty">待办清单为空</string>
     <string name="tool_agents_empty">暂无子代理</string>
     <string name="tool_agent_results_empty">未返回子代理结果</string>

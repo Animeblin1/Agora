@@ -28,36 +28,9 @@ import com.newoether.agora.model.OpenAiServiceTiers
 import com.newoether.agora.model.apiModelName
 import com.newoether.agora.util.Constants
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-
-internal fun buildPromptRuntimeValues(
-    now: java.util.Date,
-    modelId: String,
-    activeMemory: String,
-    skillCatalog: String,
-): Map<String, String> {
-    val timeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-    val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-    val sentDateFormat = java.text.SimpleDateFormat(
-        PredefinedVariables.SENT_DATE_PATTERN,
-        java.util.Locale.US,
-    )
-    return mapOf(
-        PredefinedVariables.TIME to timeFormat.format(now),
-        PredefinedVariables.DATE to dateFormat.format(now),
-        PredefinedVariables.SENT_TIME to timeFormat.format(now),
-        PredefinedVariables.SENT_DATE to sentDateFormat.format(now),
-        PredefinedVariables.CURRENT_MODEL_ID to modelId,
-        PredefinedVariables.MESSAGE_MODEL_ID to "",
-        PredefinedVariables.MODEL_ID to modelId,
-        PredefinedVariables.ACTIVE_MEMORY to activeMemory,
-        PredefinedVariables.SKILL_CATALOG to skillCatalog,
-    )
-}
 
 /**
  * Stateless builder for the LLM generation request. Extracted from ChatViewModel.
@@ -71,6 +44,7 @@ class GenerationRequestBuilder(
     private val providerRegistry: ProviderRegistry,
     private val ragManager: RagManager,
     private val appContext: Context,
+    private val phoneReady: suspend (String) -> Boolean = { false },
 ) {
     data class ProviderKey(val providerName: String, val apiKey: String)
 
@@ -268,7 +242,9 @@ class GenerationRequestBuilder(
         conversationOverride: ChatEntity? = null,
         resolvedPromptOverride: ResolvedPrompt? = null,
         conversationSettingsOverride: ConversationSettings? = null,
+        automationCaller: Boolean = false,
     ): GenerationAdmissionSnapshot {
+        settings.awaitInitialLoad()
         providerRegistry.awaitInitialSync()
         val selectedModelId = providerRegistry.canonicalModelId(modelId)
         val providerName = providerRegistry.providerForModel(selectedModelId)
@@ -295,6 +271,7 @@ class GenerationRequestBuilder(
             effectiveSettings = effectiveSettings,
             currentId = conversationId,
             applyLowContextMode = true,
+            automationCaller = automationCaller,
             includeSkillCatalog =
                 settings.accessSkills.value &&
                     !(
@@ -334,6 +311,7 @@ class GenerationRequestBuilder(
             currentId = conversationId,
             applyLowContextMode = false,
             includeSkillCatalog = false,
+            phoneToolsEnabled = false,
         )
         val automaticCompact = AutomaticCompactConfig(
             enabled = settings.contextCompactEnabled.value,
@@ -402,13 +380,22 @@ class GenerationRequestBuilder(
             selectedModelId = selectedModelId,
             config = ordinaryConfig,
             context = context.copy(
+                automationCaller = automationCaller,
                 subagentToolsEnabled = context.subagentToolsEnabled && !isSubagent,
                 accessPastConversations = context.accessPastConversations && !isSubagent,
                 webSearchApiKeys = context.webSearchApiKeys.toMap(),
                 shellDevices = context.shellDevices.toList(),
             ),
             providerInstances = providerInstances,
-            automaticCompact = automaticCompact,
+            automaticCompact = automaticCompact.copy(
+                mainModelId = ordinaryConfig.modelId,
+                mainImageTranscriptionEnabled = context.imageTranscriptionEnabled,
+                userPrepend = ordinaryConfig.userPrepend,
+                userPostpend = ordinaryConfig.userPostpend,
+                assistantPrepend = ordinaryConfig.assistantPrepend,
+                assistantPostpend = ordinaryConfig.assistantPostpend,
+                mainPromptTemplate = ordinaryConfig.promptTemplate,
+            ),
             titleGenerationEnabled = titleGenerationEnabled,
         )
     }
@@ -477,7 +464,7 @@ class GenerationRequestBuilder(
         )
     }
 
-    private fun buildGenerationPair(
+    private suspend fun buildGenerationPair(
         providerName: String,
         modelId: String,
         activeKey: String,
@@ -488,6 +475,8 @@ class GenerationRequestBuilder(
         currentId: String,
         applyLowContextMode: Boolean,
         includeSkillCatalog: Boolean,
+        automationCaller: Boolean = false,
+        phoneToolsEnabled: Boolean = true,
     ): Pair<GenerationConfig, GenerationContext> {
         val lowContextModeEnabled =
             applyLowContextMode &&
@@ -552,10 +541,18 @@ class GenerationRequestBuilder(
         val enabledModelIds = settings.enabledModels.value.toSet()
         val subagentModelIds = settings.subagentEnabledModels.value.orEmpty()
             .intersect(enabledModelIds).sorted()
+        val phoneConfig = settings.phoneUse.value
         val genCtx = GenerationContext(
+            phoneEnabled = phoneToolsEnabled && phoneConfig.enabled,
+            phoneMode = phoneConfig.mode,
+            phoneAllowAutomation = phoneConfig.allowAutomation,
+            phoneReady = phoneToolsEnabled && phoneConfig.enabled && !lowContextModeEnabled &&
+                (!automationCaller || phoneConfig.allowAutomation) && phoneReady(phoneConfig.mode),
+            automationCaller = automationCaller,
             conversationId = currentId,
             todoEnabled = settings.todoEnabled.value,
             subagentToolsEnabled = settings.subagentToolsEnabled.value,
+            subagentDeleteEnabled = settings.subagentDeleteEnabled.value,
             enabledModelIds = enabledModelIds.sorted(),
             subagentModelIds = subagentModelIds,
             subagentRecommendedModel = settings.subagentRecommendedModel.value
@@ -663,6 +660,8 @@ class GenerationRequestBuilder(
         // stored active memory so turning the tools off cannot erase context. It is frozen here,
         // once per Run, rather than re-read on every Provider pass.
         val activeMemory = withContext(Dispatchers.IO) { memoryManager.getActiveMemory() }
+        // The skill catalog is frozen with it, once per Run.
+        val skillCatalog = if (settings.accessSkills.value) skillManager.catalog() else ""
         GenerationPromptTemplate(
             systemItems = entry?.resolvedSystemItems?.toList().orEmpty(),
             userItems = entry?.resolvedUserItems?.toList()
@@ -670,6 +669,7 @@ class GenerationRequestBuilder(
             assistantItems = entry?.resolvedAssistantItems?.toList()
                 ?: PredefinedVariables.normalizeMessageTemplate(emptyList()),
             activeMemory = activeMemory,
+            skillCatalog = skillCatalog,
         )
     }
 
@@ -699,7 +699,12 @@ class GenerationRequestBuilder(
             assistantPostpend = resolved.assistantPostpend,
         )
         ProviderRequestInput(
-            messages = prepareMessages(projectedMessages, providerTokenBudget, costs = costs),
+            messages = prepareMessages(
+                projectedMessages,
+                providerTokenBudget,
+                includeAssistantReasoning = providerConfig.includeAssistantReasoning,
+                costs = costs,
+            ),
             systemPrompt = resolved.systemPrompt,
         )
     }
@@ -707,55 +712,8 @@ class GenerationRequestBuilder(
     private suspend fun resolvePromptTemplate(
         promptTemplate: GenerationPromptTemplate,
         activeModel: String,
-    ): ResolvedPrompt = withContext(Dispatchers.Default) {
-        coroutineScope {
-            val includeSkillCatalog = settings.accessSkills.value
-            val skillCatalogDeferred = async {
-                if (includeSkillCatalog) skillManager.catalog() else ""
-            }
-            val modelId = ModelId.parse(
-                providerRegistry.canonicalModelId(activeModel),
-            ).modelName
-            val runtimeValues = buildPromptRuntimeValues(
-                now = java.util.Date(),
-                modelId = modelId,
-                activeMemory = promptTemplate.activeMemory,
-                skillCatalog = skillCatalogDeferred.await()
-                    .takeIf { includeSkillCatalog }
-                    .orEmpty(),
-            )
-            val perMessageValues = runtimeValues.filterKeys {
-                it !in PredefinedVariables.PER_MESSAGE_VARS
-            }
-
-            fun resolveMessageTemplate(items: List<com.newoether.agora.data.PromptTemplateItem>): Pair<String?, String?> {
-                val parts = PredefinedVariables.splitMessageTemplate(items)
-                val before = PredefinedVariables.compile(
-                    parts.beforePrompt,
-                    perMessageValues,
-                    emptyMap(),
-                ).takeIf(String::isNotEmpty)
-                val after = PredefinedVariables.compile(
-                    parts.afterPrompt,
-                    perMessageValues,
-                    emptyMap(),
-                ).takeIf(String::isNotEmpty)
-                return before to after
-            }
-
-            val userTemplate = resolveMessageTemplate(promptTemplate.userItems)
-            val assistantTemplate = resolveMessageTemplate(promptTemplate.assistantItems)
-            ResolvedPrompt(
-                systemPrompt = PredefinedVariables.compile(
-                    promptTemplate.systemItems,
-                    runtimeValues,
-                    emptyMap(),
-                ).takeIf(String::isNotEmpty),
-                userPrepend = userTemplate.first,
-                userPostpend = userTemplate.second,
-                assistantPrepend = assistantTemplate.first,
-                assistantPostpend = assistantTemplate.second,
-            )
-        }
-    }
+    ): ResolvedPrompt = resolveGenerationPromptTemplate(
+        promptTemplate = promptTemplate,
+        modelId = providerRegistry.canonicalModelId(activeModel),
+    )
 }

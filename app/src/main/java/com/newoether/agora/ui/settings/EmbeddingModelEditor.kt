@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.Check
@@ -33,9 +34,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -159,6 +162,7 @@ internal fun EmbeddingModelEditor(
     var showGgufError by remember(initial.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val resources by rememberUpdatedState(LocalResources.current)
 
     DisposableEffect(lifecycle) {
         onDispose { lifecycle.close() }
@@ -227,7 +231,7 @@ internal fun EmbeddingModelEditor(
             if (lifecycle.closed) return@testConnection
             isTesting = false
             if (result == null || !result.startsWith("OK")) {
-                viewModel.emitSnackbar(context.getString(R.string.embedding_test_failed, result ?: "Failed"))
+                viewModel.emitSnackbar(resources.getString(R.string.embedding_test_failed, result ?: "Failed"))
                 return@testConnection
             }
             if (isNew) {
@@ -425,17 +429,17 @@ internal fun EmbeddingModelEditor(
                     title = stringResource(R.string.embedding_model_label),
                     items = buildList {
                         add {
-                            SettingsIconContent(icon = Icons.Default.AutoAwesome) {
+                            SettingsIconContent(icon = Icons.Default.Tag) {
                                 if (isNew) {
                                     McpLabeledField(
-                                        label = stringResource(R.string.embedding_model_label),
+                                        label = stringResource(R.string.model_id_label),
                                         value = draft.modelName,
                                         onValueChange = { draft = draft.copy(modelName = it) },
                                         placeholder = stringResource(R.string.embedding_model_id_hint),
                                     )
                                 } else {
                                     ReadOnlyField(
-                                        stringResource(R.string.embedding_model_label),
+                                        stringResource(R.string.model_id_label),
                                         initial.remoteModelName,
                                         stringResource(R.string.embedding_model_locked_desc),
                                     )
@@ -449,7 +453,8 @@ internal fun EmbeddingModelEditor(
                     title = stringResource(R.string.embedding_model_file),
                     items = listOf {
                         ModelImportItem(
-                            title = draft.localFileName.ifBlank { stringResource(R.string.embedding_import_title) },
+                            title = stringResource(R.string.embedding_import_title),
+                            filePath = draft.localFilePath,
                             description = stringResource(R.string.embedding_import_desc),
                             icon = Icons.Default.AutoAwesome,
                             importing = isImporting,

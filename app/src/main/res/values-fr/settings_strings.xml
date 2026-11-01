@@ -84,7 +84,7 @@
     <string name="prompts_template_blank">Vide</string>
     <string name="prompts_template_blank_desc">Commencer avec une instruction système modifiable vide.</string>
     <string name="prompts_template_default">Par défaut</string>
-    <string name="prompts_template_default_desc">Utiliser le prompt par défaut d’Agora avec le contexte d’exécution, la mémoire, la recherche web, le shell et les règles d’accès aux fichiers de l’appareil.</string>
+    <string name="prompts_template_default_desc">Utiliser les règles de réponse par défaut d’Agora, les consignes des outils, le catalogue de compétences et la mémoire active.</string>
     <string name="prompts_duplicate">Dupliquer</string>
     <string name="prompts_duplicate_title">Copie de %1$s</string>
     <string name="prompts_empty_preview">Prompt vide</string>
@@ -200,12 +200,10 @@
     <string name="tool_call_display_mode">Blocs de réflexion et d\'outils</string>
     <string name="tool_call_display_mode_timeline">Chronologie</string>
     <string name="tool_call_display_mode_grouped_timeline">Groupé</string>
-    <string name="tool_call_display_mode_compact">Compact</string>
     <string name="tool_call_display_mode_timeline_desc">Afficher la réponse, la réflexion et les blocs d\'outils dans l\'ordre chronologique</string>
     <string name="tool_call_display_mode_grouped_timeline_desc">Conserver la chronologie mais fusionner les blocs consécutifs de réflexion, d\'outils et d\'images</string>
     <string name="auto_expand_active_group">Développer automatiquement le groupe actif</string>
     <string name="auto_expand_active_group_desc">Développe automatiquement le groupe de réflexion et d’outils actuel, puis le réduit lorsque le modèle poursuit.</string>
-    <string name="tool_call_display_mode_compact_desc">Regrouper les blocs de réflexion et d\'outils au-dessus de la réponse</string>
     <string name="interaction_feedback">Retour d\'interaction</string>
     <string name="stick_to_bottom">Rester en bas</string>
     <string name="stick_to_bottom_desc">Suivre automatiquement le nouveau contenu pendant la génération de la réponse.</string>
@@ -540,6 +538,6 @@
     <string name="install_guide_help">Aide</string>
     <string name="install_guide_open_terminal">Ouvrir le terminal</string>
     <string name="install_guide_run_command">Copier et exécuter la commande</string>
-    <string name="conch_guide_finish">Revenez à Ajouter un appareil. Saisissez l’adresse du service et la clé API fournies par l’installateur, choisissez un nom, puis enregistrez.</string>
-    <string name="filo_guide_finish">À l’invite, choisissez le compte Windows du client natif. Revenez à Ajouter un appareil, saisissez l’URL accessible du service et le jeton d’accès, puis enregistrez. localhost fonctionne uniquement sur l’ordinateur.</string>
+    <string name="conch_guide_finish">Ajoutez l’appareil avec l’adresse du service et la clé API fournies par l’installateur.</string>
+    <string name="filo_guide_finish">À l’invite, choisissez le compte Windows et les sources. Ajoutez ensuite l’appareil avec l’URL du service et le jeton d’accès fournis par l’installateur.</string>
 </resources>

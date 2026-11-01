@@ -308,6 +308,8 @@
     <string name="conversation_read_empty">No messages in the selected branch.</string>
     <string name="conversation_read_page">Page: messages %1$d-%2$d</string>
     <string name="conversation_read_more">Use a higher offset to see more messages.</string>
+    <string name="conversation_tools_more">More tool calls are available for this message (tool_offset: %1$d).</string>
+    <string name="conversation_details_error">Could not read stored message details (%1$s).</string>
 
     <!-- General -->
     <string name="back">Back</string>
@@ -854,6 +856,12 @@
     <string name="tool_waited_agents">Finished waiting for subagents</string>
     <string name="tool_listed_agents">Listed subagents</string>
     <string name="tool_stopped_agent">Stopped subagent</string>
+    <string name="tool_delete_agent">Delete Subagent</string>
+    <string name="tool_deleting_agent">Deleting subagent…</string>
+    <string name="tool_deleted_agent">Deleted subagent</string>
+    <string name="subagents_allow_delete">Allow Deleting Subagents</string>
+    <string name="subagents_allow_delete_desc">Let the parent conversation permanently delete its idle subagents to free slots. Running subagents and undelivered results are never deleted.</string>
+    <string name="subagent_deleted_by_parent">This subagent was deleted by its parent conversation.</string>
     <string name="tool_todo_empty">Todo list is empty</string>
     <string name="tool_agents_empty">No subagents</string>
     <string name="tool_agent_results_empty">No subagent results returned</string>

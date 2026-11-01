@@ -84,7 +84,7 @@
     <string name="prompts_template_blank">Em branco</string>
     <string name="prompts_template_blank_desc">Começar com um prompt de sistema editável vazio.</string>
     <string name="prompts_template_default">Padrão</string>
-    <string name="prompts_template_default_desc">Usar o prompt padrão do Agora com contexto de execução, memória, busca na web, shell e regras de acesso a arquivos do dispositivo.</string>
+    <string name="prompts_template_default_desc">Usar as regras de resposta padrão do Agora, orientações das ferramentas, catálogo de habilidades e memória ativa.</string>
     <string name="prompts_duplicate">Duplicar</string>
     <string name="prompts_duplicate_title">Cópia de %1$s</string>
     <string name="prompts_empty_preview">Prompt vazio</string>
@@ -200,12 +200,10 @@
     <string name="tool_call_display_mode">Blocos de raciocínio e ferramentas</string>
     <string name="tool_call_display_mode_timeline">Linha do tempo</string>
     <string name="tool_call_display_mode_grouped_timeline">Agrupado</string>
-    <string name="tool_call_display_mode_compact">Compacto</string>
     <string name="tool_call_display_mode_timeline_desc">Mostra resposta, raciocínio e blocos de ferramentas em ordem cronológica</string>
     <string name="tool_call_display_mode_grouped_timeline_desc">Mantém a ordem cronológica, mas mescla blocos consecutivos de raciocínio, ferramentas e imagens</string>
     <string name="auto_expand_active_group">Expandir automaticamente o grupo ativo</string>
     <string name="auto_expand_active_group_desc">Expande automaticamente o grupo atual de raciocínio e ferramentas e o recolhe quando o modelo avança.</string>
-    <string name="tool_call_display_mode_compact_desc">Agrupa blocos de raciocínio e ferramentas acima da resposta</string>
     <string name="interaction_feedback">Feedback de interação</string>
     <string name="stick_to_bottom">Manter no final</string>
     <string name="stick_to_bottom_desc">Acompanhe automaticamente o novo conteúdo enquanto uma resposta é gerada.</string>
@@ -540,6 +538,6 @@
     <string name="install_guide_help">Ajuda</string>
     <string name="install_guide_open_terminal">Abrir o terminal</string>
     <string name="install_guide_run_command">Copiar e executar o comando</string>
-    <string name="conch_guide_finish">Volte a Adicionar dispositivo. Insira o endereço do serviço e a chave API fornecidos pelo instalador, escolha um nome e salve.</string>
-    <string name="filo_guide_finish">Quando solicitado, escolha a conta Windows do cliente nativo. Volte a Adicionar dispositivo, insira a URL acessível do serviço e o token de acesso e salve. localhost só funciona no computador.</string>
+    <string name="conch_guide_finish">Adicione o dispositivo com o endereço do serviço e a chave API fornecidos pelo instalador.</string>
+    <string name="filo_guide_finish">Quando solicitado, escolha a conta Windows e as fontes. Depois, adicione o dispositivo com a URL do serviço e o token de acesso fornecidos pelo instalador.</string>
 </resources>

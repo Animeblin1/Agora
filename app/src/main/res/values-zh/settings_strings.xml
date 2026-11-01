@@ -97,7 +97,7 @@
     <string name="prompts_template_blank">空白</string>
     <string name="prompts_template_blank_desc">从空白的可编辑系统指令开始。</string>
     <string name="prompts_template_default">默认</string>
-    <string name="prompts_template_default_desc">使用 Agora 默认指令，包含运行时上下文、记忆、网页搜索、Shell 和设备文件访问规则。</string>
+    <string name="prompts_template_default_desc">使用 Agora 默认回复规则、工具指南、技能目录和活跃记忆。</string>
     <string name="prompts_duplicate">复制</string>
     <string name="prompts_duplicate_title">%1$s 副本</string>
     <string name="prompts_empty_preview">空指令</string>
@@ -449,12 +449,10 @@
     <string name="tool_call_display_mode">思考与工具块</string>
     <string name="tool_call_display_mode_timeline">时间线</string>
     <string name="tool_call_display_mode_grouped_timeline">分组</string>
-    <string name="tool_call_display_mode_compact">紧凑</string>
     <string name="tool_call_display_mode_timeline_desc">按时间顺序显示回答、思考和工具块</string>
     <string name="tool_call_display_mode_grouped_timeline_desc">保留时间顺序，但合并连续的思考、工具和图片块</string>
     <string name="auto_expand_active_group">自动展开当前分组</string>
     <string name="auto_expand_active_group_desc">自动展开当前思考与工具分组，并在模型进入下一阶段时收起。</string>
-    <string name="tool_call_display_mode_compact_desc">将思考和工具块聚合显示在回答上方</string>
     <string name="interaction_feedback">交互反馈</string>
     <string name="stick_to_bottom">始终贴底</string>
     <string name="stick_to_bottom_desc">回复生成期间自动跟随新增内容。</string>
@@ -553,10 +551,10 @@
     <string name="filo_guide_selected_user">选择运行原生客户端的 Windows 账户。使用 Codex Desktop 时，需先为该账户安装并完成初始化。</string>
     <string name="filo_guide_address_mapping">填写目标电脑可访问的 tailnet IPv4 服务 URL，localhost 仅能在目标电脑本机访问。</string>
     <string name="filo_guide_token_mapping">将安装器给出的访问令牌填入访问令牌字段，请妥善保管。</string>
-    <string name="filo_guide_scope">可用来源和操作取决于已安装的客户端及其公布的能力。Claude Code 需主动启用 Mod，不支持 Chat 和 Cowork。</string>
+    <string name="filo_guide_scope">安装程序会自动发现 Codex Desktop、Codex CLI、Claude Code 和 Claude Desktop，供你选择要接入的来源，并自动安装所需组件，包括 Claude Mod。已安装的来源离线时仍会显示。Claude Desktop 仅支持 Code，不支持 Chat 和 Cowork。</string>
     <string name="install_guide_help">帮助</string>
     <string name="install_guide_open_terminal">打开终端</string>
     <string name="install_guide_run_command">复制并执行命令</string>
-    <string name="conch_guide_finish">返回添加设备，填写安装程序给出的服务地址和 API 密钥，起个名称后保存。</string>
-    <string name="filo_guide_finish">按提示选择运行原生客户端的 Windows 账户。返回添加设备，填写可访问的服务 URL 和访问令牌后保存。localhost 仅在电脑本机可用。</string>
+    <string name="conch_guide_finish">用安装程序给出的服务地址和 API 密钥添加设备。</string>
+    <string name="filo_guide_finish">按提示选择 Windows 账户和来源，然后用安装程序给出的服务 URL 和访问令牌添加设备。</string>
 </resources>

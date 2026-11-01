@@ -44,6 +44,8 @@ class ChatRuntime(
     memoryManager: MemoryManager,
     skillManager: SkillManager,
     sandboxFactory: SandboxManagerFactory?,
+    phoneToolProvider: com.newoether.agora.tool.ToolProvider,
+    phoneReady: suspend (String) -> Boolean,
     automationToolProvider: AutomationToolProvider,
     subagentToolProvider: com.newoether.agora.tool.SubagentToolProvider,
     subagentManager: com.newoether.agora.automation.SubagentManager,
@@ -91,6 +93,7 @@ class ChatRuntime(
             context = appContext,
             sandboxFactory = sandboxFactory,
             additionalToolProviders = listOf(
+                phoneToolProvider,
                 automationToolProvider,
                 subagentToolProvider,
                 mcpToolProvider,
@@ -109,6 +112,7 @@ class ChatRuntime(
 
     /** Stateless request assembly shared by every command; context previews read it too. */
     internal val requestBuilder = GenerationRequestBuilder(
+        phoneReady = phoneReady,
         settings = settings,
         convRepo = conversations,
         memoryManager = memoryManager,
@@ -119,7 +123,7 @@ class ChatRuntime(
     )
 
     private val subagentMessageQueue = SubagentMessageQueue(
-        conversations, registry,
+        conversations, registry, executionCoordinator,
         prepareSnapshot = { id, run, model -> requestBuilder.captureAdmissionSnapshot(id, run, model) },
     )
 
@@ -167,7 +171,11 @@ class ChatRuntime(
         removeRuntime = registry::remove,
         stopGeneration = { conversationId, origin -> generationStop.stopAndAwait(conversationId, origin) },
         deletedElsewhereText = { appContext.getString(R.string.conversation_deleted_elsewhere) },
+        deletedByParentText = { appContext.getString(R.string.subagent_deleted_by_parent) },
     )
+
+    internal suspend fun deleteIdleSubagent(id: String, parentId: String): Boolean =
+        conversationLifecycle.deleteIdleSubagent(id, parentId)
 
     internal val conversationForkShare = ConversationForkShareController(
         service = ConversationForkShareService(

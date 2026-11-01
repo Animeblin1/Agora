@@ -97,7 +97,7 @@
     <string name="prompts_template_blank">Blank</string>
     <string name="prompts_template_blank_desc">Start with an empty editable system prompt.</string>
     <string name="prompts_template_default">Default</string>
-    <string name="prompts_template_default_desc">Use Agora\'s default prompt with runtime context, memory, web search, shell, and device-file guidance.</string>
+    <string name="prompts_template_default_desc">Use Agora\'s default response rules, tool guidance, skill catalog, and active memory.</string>
     <string name="prompts_duplicate">Duplicate</string>
     <string name="prompts_duplicate_title">%1$s Copy</string>
     <string name="prompts_empty_preview">Empty prompt</string>
@@ -209,12 +209,10 @@
     <string name="tool_call_display_mode">Thinking &amp; Tool Blocks</string>
     <string name="tool_call_display_mode_timeline">Timeline</string>
     <string name="tool_call_display_mode_grouped_timeline">Grouped</string>
-    <string name="tool_call_display_mode_compact">Compact</string>
     <string name="tool_call_display_mode_timeline_desc">Show answer, thinking, and tool blocks in chronological order</string>
     <string name="tool_call_display_mode_grouped_timeline_desc">Keep timeline order but merge consecutive thinking, tool, and image blocks</string>
     <string name="auto_expand_active_group">Auto-Expand Active Group</string>
     <string name="auto_expand_active_group_desc">Automatically expand the current thinking and tool group, then collapse it when the model moves on.</string>
-    <string name="tool_call_display_mode_compact_desc">Group thinking and tool blocks above the answer</string>
 
     <!-- Settings - Web Search Page -->
     <string name="web_search_title">Web Search</string>
@@ -553,10 +551,10 @@
     <string name="filo_guide_selected_user">Select the Windows account that runs the native client. Codex Desktop access requires it to be installed and initialized for that account.</string>
     <string name="filo_guide_address_mapping">Enter the target’s reachable tailnet IPv4 service URL. localhost works only on the target computer.</string>
     <string name="filo_guide_token_mapping">Copy the installer’s access token into Access token. Keep the token private.</string>
-    <string name="filo_guide_scope">Sources and controls depend on the installed clients and advertised capabilities. Claude Code requires its opted-in Mod. Chat and Cowork are not supported.</string>
+    <string name="filo_guide_scope">The installer detects Codex Desktop, Codex CLI, Claude Code, and Claude Desktop. Choose the sources to integrate; required components, including the Claude Mod, are installed automatically. Installed sources remain visible while offline. Claude Desktop supports Code only; Chat and Cowork are not supported.</string>
     <string name="install_guide_help">Help</string>
     <string name="install_guide_open_terminal">Open the Terminal</string>
     <string name="install_guide_run_command">Copy and Run the Command</string>
-    <string name="conch_guide_finish">Return to Add Device. Enter the installer’s service address and API key, choose a name, then save.</string>
-    <string name="filo_guide_finish">Choose the Windows account used by your native client when prompted. Return to Add Device, enter the reachable service URL and access token, then save. localhost only works on the computer.</string>
+    <string name="conch_guide_finish">Add the device with the service address and API key shown by the installer.</string>
+    <string name="filo_guide_finish">Choose the Windows account and sources when prompted. Then add the device with the service URL and access token shown by the installer.</string>
 </resources>

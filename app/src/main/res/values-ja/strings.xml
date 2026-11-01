@@ -271,6 +271,8 @@
     <string name="conversation_read_empty">選択したブランチにメッセージがありません。</string>
     <string name="conversation_read_page">ページ: メッセージ %1$d-%2$d</string>
     <string name="conversation_read_more">さらにメッセージを表示するには、より大きいオフセットを使用してください。</string>
+    <string name="conversation_tools_more">このメッセージにはさらにツール呼び出しがあります（tool_offset: %1$d）。</string>
+    <string name="conversation_details_error">保存されたメッセージの詳細を読み取れませんでした（%1$s）。</string>
 
     <!-- General -->
     <string name="back">戻る</string>
@@ -873,6 +875,12 @@
     <string name="tool_waited_agents">サブエージェントの待機を終了しました</string>
     <string name="tool_listed_agents">サブエージェント一覧を取得しました</string>
     <string name="tool_stopped_agent">サブエージェントを停止しました</string>
+    <string name="tool_delete_agent">サブエージェントを削除</string>
+    <string name="tool_deleting_agent">サブエージェントを削除中…</string>
+    <string name="tool_deleted_agent">サブエージェントを削除しました</string>
+    <string name="subagents_allow_delete">サブエージェントの削除を許可</string>
+    <string name="subagents_allow_delete_desc">親の会話がアイドル状態のサブエージェントを完全に削除して枠を空けられるようにします。実行中のサブエージェントや未配信の結果は削除されません。</string>
+    <string name="subagent_deleted_by_parent">このサブエージェントは親の会話によって削除されました。</string>
     <string name="tool_todo_empty">やることリストは空です</string>
     <string name="tool_agents_empty">サブエージェントはありません</string>
     <string name="tool_agent_results_empty">サブエージェントの結果は返されませんでした</string>
