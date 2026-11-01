@@ -42,7 +42,9 @@ jobs:
           ./gradlew :app:testFdroidDebugUnitTest verifyKotlinFileSize --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --stacktrace
 
       - name: Check Play flavor behavior
-        timeout-minutes: 5
+        # Cold-cache play-flavor kotlin compilation alone can exceed 5 minutes on
+        # a fresh runner; the timeout killed the step mid-compile (run #53).
+        timeout-minutes: 20
         run: |
           ./gradlew :app:testPlayDebugUnitTest --tests 'com.newoether.agora.sandbox.PlaySandboxFlavorTest' --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --stacktrace
 
