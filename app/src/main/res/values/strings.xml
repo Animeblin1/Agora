@@ -364,6 +364,16 @@
     <string name="provider_keys_summary">%1$d API key(s)</string>
     <string name="provider_connection">Connection</string>
     <string name="provider_anonymous_summary">Anonymous — no API key needed</string>
+    <string name="zen_core_title">OpenCode core</string>
+    <string name="zen_core_applied">Applied: %1$s</string>
+    <string name="zen_core_up_to_date">Latest (opencode2api): %1$s — up to date</string>
+    <string name="zen_core_available">Latest (opencode2api): %1$s — update available</string>
+    <string name="zen_core_check">Check for updates</string>
+    <string name="zen_core_update">Update core</string>
+    <string name="zen_core_checking">Checking…</string>
+    <string name="zen_core_apply">Apply %1$s</string>
+    <string name="zen_core_updated">Core updated to %1$s</string>
+    <string name="zen_core_unavailable">Could not read the latest core version</string>
     <string name="import_model_chat">Import GGUF Model</string>
     <string name="add_local_chat_model">Add Local Model</string>
     <string name="local_ctx_size">Context Size</string>
@@ -632,7 +642,7 @@
     <string name="shell_confirm_setting">Confirm Remote Shell Actions</string>
     <string name="shell_confirm_setting_desc">Ask before the assistant runs commands or writes files on remote SSH/Conch servers</string>
     <string name="shell_confirm_notification_channel">Command approval</string>
-    <string name="shell_confirm_notification_desc">Asks you to allow or deny a remote command while Agora is in the background</string>
+    <string name="shell_confirm_notification_desc">Asks you to allow or deny a remote command while Agora is in the background</string>
     <string name="ask_user_title">The assistant is asking</string>
     <string name="ask_user_send">Send</string>
     <string name="ask_user_next">Next</string>
@@ -673,7 +683,7 @@
     <string name="context_compact_select_available_model">Select an available model</string>
     <string name="context_compact_prompt_empty">Prompt cannot be empty</string>
     <string name="context_compact_retain_invalid">Enter a valid retained message count</string>
-    <string name="context_usage_messages">~%1$s / %2$s tokens</string>
+    <string name="context_usage_messages">~%1$s / %2$s tokens</string>
     <string name="context_part_system">System prompt</string>
     <string name="context_part_tools">Tools</string>
     <string name="context_part_messages">Messages</string>

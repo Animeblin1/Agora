@@ -356,4 +356,16 @@ class OpenCodeZenProviderTest {
         )
         assertEquals(emptyList<StreamEvent>(), zenEvents(OpenAiDelta()))
     }
+
+    @Test
+    fun zenHeadersFollowTheInAppCoreOverride() {
+        // The applied identity replaces the built-in pin on the wire.
+        val headers = zenHeaders(config(sessionId = "conv-1"), appVersion = "1.0", version = "2.2.0")
+        assertEquals("opencode/latest/2.2.0/cli", headers["User-Agent"])
+        // Without an override the built-in pin is sent.
+        assertEquals(
+            "opencode/latest/${OpenCodeZenProvider.OPENCODE_CLI_VERSION}/cli",
+            zenHeaders(config(sessionId = "conv-1"), appVersion = "1.0")["User-Agent"],
+        )
+    }
 }

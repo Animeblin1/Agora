@@ -288,6 +288,20 @@ private fun ProviderDetailSettingsList(
                 )
             }
 
+            // OpenCode Zen core: version status and in-app identity update.
+            if (currentName == Constants.PROVIDER_OPENCODE_ZEN) {
+                val zenCoreOverride by viewModel.settings.zenCoreVersion.collectAsState()
+                SettingsGroup(
+                    title = stringResource(R.string.zen_core_title),
+                    items = listOf {
+                        OpenCodeZenCoreCard(
+                            override = zenCoreOverride,
+                            onApply = { viewModel.settings.setZenCoreVersion(it) },
+                        )
+                    },
+                )
+            }
+
             // Local models
             if (isLocal) {
                 SettingsGroup(

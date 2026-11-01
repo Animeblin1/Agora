@@ -164,6 +164,8 @@ internal val AUTO_DELETE_ENABLED = booleanPreferencesKey("auto_delete_enabled")
 internal val AUTO_DELETE_PERIOD_HOURS = intPreferencesKey("auto_delete_period_hours")
 internal val LAST_BACKUP_TIMESTAMP = longPreferencesKey("last_backup_timestamp")
 internal val LAST_MODELS_FETCH_FINGERPRINT = stringPreferencesKey("last_models_fetch_fingerprint")
+/** The OpenCode CLI identity the Zen free lane runs with, when the user updated it in-app. */
+internal val ZEN_CORE_VERSION = stringPreferencesKey("zen_core_version")
 
 /** Persist the retired display value before any Settings flow is published. */
 internal val toolCallDisplayModeMigration = object : DataMigration<Preferences> {

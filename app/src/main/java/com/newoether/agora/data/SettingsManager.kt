@@ -66,6 +66,8 @@ class SettingsManager(private val context: Context) {
         it[CONTEXT_COMPACT_ENABLED] ?: DEFAULT_CONTEXT_COMPACT_ENABLED
     }
     val contextCompactModel: Flow<String?> = context.dataStore.data.map { it[CONTEXT_COMPACT_MODEL] }
+    /** The OpenCode CLI identity applied to Zen free-lane requests; null = the compile-time default. */
+    val zenCoreVersion: Flow<String?> = context.dataStore.data.map { it[ZEN_CORE_VERSION]?.takeIf(String::isNotBlank) }
     val contextCompactPrompt: Flow<String> = context.dataStore.data.map { pref ->
         pref[CONTEXT_COMPACT_PROMPT]?.takeIf { it.isNotBlank() } ?: BuiltInPrompts.CONTEXT_COMPACT_SYSTEM
     }
@@ -555,6 +557,11 @@ class SettingsManager(private val context: Context) {
     suspend fun saveContextCompactModel(model: String?) {
         context.dataStore.edit { prefs ->
             if (model == null) prefs.remove(CONTEXT_COMPACT_MODEL) else prefs[CONTEXT_COMPACT_MODEL] = model
+        }
+    }
+    suspend fun saveZenCoreVersion(version: String?) {
+        context.dataStore.edit { prefs ->
+            if (version.isNullOrBlank()) prefs.remove(ZEN_CORE_VERSION) else prefs[ZEN_CORE_VERSION] = version
         }
     }
     suspend fun saveContextCompactPrompt(prompt: String) {

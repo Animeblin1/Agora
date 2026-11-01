@@ -4,6 +4,8 @@ import com.newoether.agora.api.*
 import com.newoether.agora.api.util.resolvedThinking
 import com.newoether.agora.model.ThinkingProviderFamily
 import com.newoether.agora.util.Constants
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -38,8 +40,28 @@ import kotlinx.serialization.json.jsonObject
  * stays on `https://opencode.ai/zen/v1/models`, which answers the anonymous credential; only
  * generation moves to the inference base.
  */
+/**
+ * The opencode2api source file pinning the CLI version its v2 free lane runs as. The [VERSION]
+ * regex lifts it, so "update core" in the app means: read what the reference gateway tracks now.
+ */
+private const val GATEWAY_SOURCE_URL =
+    "https://raw.githubusercontent.com/jasonxu114514/opencode2api/main/internal/httpx/client.go"
+private val VERSION = Regex("""v2ClientVersion\s*=\s*"([0-9][0-9A-Za-z.]*)"""")
+
+internal object OpenCodeZenCoreRelease {
+    /** The CLI version the reference gateway currently claims; null when it cannot be read. */
+    suspend fun fetchLatestVersion(): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            HttpClient.fetchModels(GATEWAY_SOURCE_URL, callTimeoutMillis = 20_000L)
+                ?.let(VERSION::find)?.groupValues?.get(1)?.takeIf(String::isNotBlank)
+        }.getOrNull()
+    }
+}
+
 class OpenCodeZenProvider(
     private val appVersion: String = "?",
+    /** The CLI identity applied instead of [OPENCODE_CLI_VERSION]; set from SettingsRepository. */
+    private val coreVersion: () -> String? = { null },
 ) : BaseOpenAiProvider() {
     override val name: String = Constants.PROVIDER_OPENCODE_ZEN
     override val defaultBaseUrl: String = "https://opencode.ai/zen/v1"
@@ -69,7 +91,11 @@ class OpenCodeZenProvider(
         freeLaneRequest(request, config)
 
     override fun getExtraHeaders(config: ProviderConfig): Map<String, String> =
-        zenHeaders(config, appVersion)
+        zenHeaders(config, appVersion, activeCoreVersion)
+
+    /** The user-updated identity; falls back to the compile-time pin when none was applied. */
+    private val activeCoreVersion: String
+        get() = coreVersion()?.takeIf(String::isNotBlank) ?: OPENCODE_CLI_VERSION
 
     override suspend fun parseDeltaContent(
         delta: OpenAiDelta,
@@ -228,10 +254,14 @@ internal fun withFreeLaneGateTools(tools: List<ToolDefinition>?): List<ToolDefin
  * `x-opencode-request` header (403 `FreeTierError` since 2026-10-14). Dropping or changing any one of
  * them turns the request into a 403, so the client's header set is mirrored exactly.
  */
-internal fun zenHeaders(config: ProviderConfig, appVersion: String): Map<String, String> {
+internal fun zenHeaders(
+    config: ProviderConfig,
+    appVersion: String,
+    version: String = OpenCodeZenProvider.OPENCODE_CLI_VERSION,
+): Map<String, String> {
     val ids = OpenCodeZenIdentity.derive(config.sessionId)
     return buildMap {
-        put("User-Agent", "opencode/latest/${OpenCodeZenProvider.OPENCODE_CLI_VERSION}/cli")
+        put("User-Agent", "opencode/latest/$version/cli")
         put("Accept", "application/json, text/event-stream")
         put("x-opencode-client", "cli")
         put("x-opencode-session", ids.session)

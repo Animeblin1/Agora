@@ -148,7 +148,8 @@ class ProviderRegistry(
         Constants.PROVIDER_OLLAMA to OllamaProvider(),
         Constants.PROVIDER_OPEN_ROUTER to OpenRouterProvider(),
         Constants.PROVIDER_OPENCODE_GO to OpenCodeGoProvider(appVersion),
-        Constants.PROVIDER_OPENCODE_ZEN to OpenCodeZenProvider(appVersion),
+        // The Zen identity follows the in-app "core" update: the applied override, else the pin.
+        Constants.PROVIDER_OPENCODE_ZEN to OpenCodeZenProvider(appVersion) { settings.zenCoreVersion.value },
         Constants.PROVIDER_LOCAL to localProvider
     )
 
