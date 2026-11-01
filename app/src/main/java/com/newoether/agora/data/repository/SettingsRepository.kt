@@ -260,11 +260,7 @@ class SettingsRepository(
     val autoDeletePeriodHours: StateFlow<Int> = publication.hot(settingsManager.autoDeletePeriodHours, 168)
     val lastBackupTimestamp: StateFlow<Long> = publication.hot(settingsManager.lastBackupTimestamp, 0L)
 
-    // ── Write (fire-and-forget; read current state from own StateFlows) ──
-    //
-    // These setters launch on [scope] and read "current" list/map state from this
-    // repository's own `.value`, so callers no longer pass it in. Absorbed from the
-    // former `SettingsDelegate`; logic is byte-for-byte equivalent.
+    // ── Write (fire-and-forget; setters read current state from own StateFlows). ──
 
     // Model selection
     fun setSelectedModel(model: String) {
