@@ -884,4 +884,14 @@
     <string name="tool_todo_empty">A lista de tarefas está vazia</string>
     <string name="tool_agents_empty">Nenhum subagente</string>
     <string name="tool_agent_results_empty">Nenhum resultado de subagente retornado</string>
+    <string name="zen_core_title">Núcleo do OpenCode</string>
+    <string name="zen_core_applied">Aplicado: %1$s</string>
+    <string name="zen_core_up_to_date">Mais recente (opencode2api): %1$s — em dia</string>
+    <string name="zen_core_available">Mais recente (opencode2api): %1$s — atualização disponível</string>
+    <string name="zen_core_check">Verificar atualizações</string>
+    <string name="zen_core_update">Atualizar núcleo</string>
+    <string name="zen_core_checking">Verificando…</string>
+    <string name="zen_core_apply">Aplicar %1$s</string>
+    <string name="zen_core_updated">Núcleo atualizado para %1$s</string>
+    <string name="zen_core_unavailable">Não foi possível ler a versão mais recente do núcleo</string>
 </resources>

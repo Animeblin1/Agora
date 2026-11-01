@@ -884,4 +884,14 @@
     <string name="tool_todo_empty">قائمة المهام فارغة</string>
     <string name="tool_agents_empty">لا يوجد وكلاء فرعيون</string>
     <string name="tool_agent_results_empty">لم تُرجع أي نتائج من الوكلاء الفرعيين</string>
+    <string name="zen_core_title">نواة OpenCode</string>
+    <string name="zen_core_applied">المطبَّق: %1$s</string>
+    <string name="zen_core_up_to_date">الأحدث (opencode2api): %1$s — محدَّث</string>
+    <string name="zen_core_available">الأحدث (opencode2api): %1$s — تحديث متاح</string>
+    <string name="zen_core_check">التحقق من التحديثات</string>
+    <string name="zen_core_update">تحديث النواة</string>
+    <string name="zen_core_checking">جارٍ التحقق…</string>
+    <string name="zen_core_apply">تطبيق %1$s</string>
+    <string name="zen_core_updated">تم تحديث النواة إلى %1$s</string>
+    <string name="zen_core_unavailable">تعذر قراءة أحدث إصدار للنواة</string>
 </resources>

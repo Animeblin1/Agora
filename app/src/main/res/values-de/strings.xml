@@ -884,4 +884,14 @@
     <string name="tool_todo_empty">Aufgabenliste ist leer</string>
     <string name="tool_agents_empty">Keine Unteragenten</string>
     <string name="tool_agent_results_empty">Keine Ergebnisse von Unteragenten zurückgegeben</string>
+    <string name="zen_core_title">OpenCode-Kern</string>
+    <string name="zen_core_applied">Angewendet: %1$s</string>
+    <string name="zen_core_up_to_date">Neueste (opencode2api): %1$s — aktuell</string>
+    <string name="zen_core_available">Neueste (opencode2api): %1$s — Update verfügbar</string>
+    <string name="zen_core_check">Nach Updates suchen</string>
+    <string name="zen_core_update">Kern aktualisieren</string>
+    <string name="zen_core_checking">Wird geprüft …</string>
+    <string name="zen_core_apply">%1$s anwenden</string>
+    <string name="zen_core_updated">Kern auf %1$s aktualisiert</string>
+    <string name="zen_core_unavailable">Neueste Kernversion konnte nicht gelesen werden</string>
 </resources>

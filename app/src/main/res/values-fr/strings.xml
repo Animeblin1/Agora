@@ -884,4 +884,14 @@
     <string name="tool_todo_empty">La liste de tâches est vide</string>
     <string name="tool_agents_empty">Aucun sous-agent</string>
     <string name="tool_agent_results_empty">Aucun résultat de sous-agent renvoyé</string>
+    <string name="zen_core_title">Noyau OpenCode</string>
+    <string name="zen_core_applied">Appliqué : %1$s</string>
+    <string name="zen_core_up_to_date">Dernière (opencode2api) : %1$s — à jour</string>
+    <string name="zen_core_available">Dernière (opencode2api) : %1$s — mise à jour disponible</string>
+    <string name="zen_core_check">Rechercher des mises à jour</string>
+    <string name="zen_core_update">Mettre à jour le noyau</string>
+    <string name="zen_core_checking">Vérification…</string>
+    <string name="zen_core_apply">Appliquer %1$s</string>
+    <string name="zen_core_updated">Noyau mis à jour vers %1$s</string>
+    <string name="zen_core_unavailable">Impossible de lire la dernière version du noyau</string>
 </resources>

@@ -890,4 +890,14 @@
     <string name="tool_todo_empty">Danh sách việc cần làm trống</string>
     <string name="tool_agents_empty">Không có tác nhân phụ</string>
     <string name="tool_agent_results_empty">Không có kết quả nào từ tác nhân phụ được trả về</string>
+    <string name="zen_core_title">Lõi OpenCode</string>
+    <string name="zen_core_applied">Đã áp dụng: %1$s</string>
+    <string name="zen_core_up_to_date">Mới nhất (opencode2api): %1$s — đã cập nhật</string>
+    <string name="zen_core_available">Mới nhất (opencode2api): %1$s — có bản cập nhật</string>
+    <string name="zen_core_check">Kiểm tra cập nhật</string>
+    <string name="zen_core_update">Cập nhật lõi</string>
+    <string name="zen_core_checking">Đang kiểm tra…</string>
+    <string name="zen_core_apply">Áp dụng %1$s</string>
+    <string name="zen_core_updated">Đã cập nhật lõi lên %1$s</string>
+    <string name="zen_core_unavailable">Không thể đọc phiên bản lõi mới nhất</string>
 </resources>

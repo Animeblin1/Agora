@@ -884,4 +884,14 @@
     <string name="tool_todo_empty">할 일 목록이 비어 있습니다</string>
     <string name="tool_agents_empty">하위 에이전트가 없습니다</string>
     <string name="tool_agent_results_empty">반환된 하위 에이전트 결과가 없습니다</string>
+    <string name="zen_core_title">OpenCode 코어</string>
+    <string name="zen_core_applied">적용됨: %1$s</string>
+    <string name="zen_core_up_to_date">최신 (opencode2api): %1$s — 최신 상태</string>
+    <string name="zen_core_available">최신 (opencode2api): %1$s — 업데이트 가능</string>
+    <string name="zen_core_check">업데이트 확인</string>
+    <string name="zen_core_update">코어 업데이트</string>
+    <string name="zen_core_checking">확인 중…</string>
+    <string name="zen_core_apply">%1$s 적용</string>
+    <string name="zen_core_updated">코어가 %1$s(으)로 업데이트됨</string>
+    <string name="zen_core_unavailable">최신 코어 버전을 읽지 못했습니다</string>
 </resources>
