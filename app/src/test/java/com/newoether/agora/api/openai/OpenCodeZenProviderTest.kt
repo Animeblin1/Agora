@@ -169,7 +169,7 @@ class OpenCodeZenProviderTest {
         assertEquals(session, headers["X-Session-Id"])
         assertEquals("cli", headers["x-opencode-client"])
         // OpenCode CLI User-Agent shape (no OS/arch/runtime suffix).
-        assertEquals("opencode/latest/2.0.29/cli", headers["User-Agent"])
+        assertEquals("opencode/latest/2.1.1/cli", headers["User-Agent"])
         // The gateway's own correlation header is dropped (rejected with 403 by the lane).
         assertFalse(headers.containsKey("x-opencode-request"))
         // Bare 40-hex project id, not the gateway's `prj_` form.
@@ -276,20 +276,20 @@ class OpenCodeZenProviderTest {
 
     @Test
     fun aVerifiedIdOutranksDeprecationButNeverAPrice() {
-        // muse-spark-1.2-contributor-free is flagged deprecated upstream yet still answers; the
-        // verified roster is confirmed against the lane itself, so it wins over the flag.
+        // A roster id flagged deprecated upstream still answers; the verified roster tracks the
+        // live catalog, so it wins over the flag. A priced verdict is never overridden.
         val metadata = """
             {"opencode":{"models":{
-                "muse-spark-1.2-contributor-free":{"cost":{"input":0,"output":0},"status":"deprecated"},
+                "beam-free":{"cost":{"input":0,"output":0},"status":"deprecated"},
                 "big-pickle":{"cost":{"input":5,"output":25}}
             }}}
         """.trimIndent()
         val verdicts = OpenCodeZenFreeModels.parse(metadata)
-        assertEquals(DEPRECATED, verdicts["muse-spark-1.2-contributor-free"])
+        assertEquals(DEPRECATED, verdicts["beam-free"])
         assertEquals(PAID, verdicts["big-pickle"])
         assertTrue(
             OpenCodeZenFreeModels.verifiedFallback()
-                .contains("muse-spark-1.2-contributor-free"),
+                .contains("beam-free"),
         )
     }
 

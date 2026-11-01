@@ -113,7 +113,7 @@ class OpenCodeZenProvider(
         const val ANONYMOUS_BASE_URL = "https://opencode.ai/inference/v1"
 
         /** Version advertised in the CLI User-Agent. Tracks the latest OpenCode CLI the gate accepts. */
-        const val OPENCODE_CLI_VERSION = "2.0.29"
+        const val OPENCODE_CLI_VERSION = "2.1.1"
 
         /** Genuine OpenCode core tools the free lane expects on every request body. */
         val FREE_LANE_GATE_TOOLS: Set<String> = setOf("shell", "edit", "glob", "grep", "read")

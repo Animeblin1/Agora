@@ -41,7 +41,10 @@ internal object OpenCodeZenFreeModels {
     private const val TAG = "AgoraAPI"
 
     /**
-     * Ids verified against the anonymous lane with a real chat.
+     * Ids verified as offered by the lane (present in the live anonymous `/v1/models` roster,
+     * 2026-11-02). Chat-level verification is IP-quota-bound — the free tier answers every
+     * generation with 429 `FreeUsageLimitError` once the calling IP's budget is spent — so
+     * this roster tracks the catalog, not a completed chat.
      *
      * A floor for a cold or broken network, and the one thing that outranks a deprecation verdict:
      * these ids are confirmed by talking to the lane itself, and the metadata is known to flag models
@@ -50,11 +53,13 @@ internal object OpenCodeZenFreeModels {
      */
     private val VERIFIED_FREE_MODELS: Set<String> = setOf(
         "big-pickle",
+        "beam-free",
+        "flint-40b-free",
         "mimo-v2.6-flash-free",
-        "ling-3.0-flash-fin-free",
+        "nemotron-3.5-super-vl-free",
         "nemotron-3.5-lightning-free",
-        "nemotron-3-ultra-free",
-        "muse-spark-1.2-contributor-free",
+        "deepseek-v4.1-flash-free",
+        "glm-5.3-flash-free",
     )
 
     private val lock = Mutex()
