@@ -2,6 +2,8 @@ package com.newoether.agora.api.openai
 
 import android.content.Context
 import android.os.Process
+import com.newoether.agora.api.HttpClient
+import com.newoether.agora.util.DebugLog
 import com.newoether.agora.util.DebugLog
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -49,7 +51,7 @@ object OpenCodeZenBridge {
 
     @Volatile private var appContext: Context? = null
 
-    @Volatile private var process: Process? = null
+    @Volatile private var process: java.lang.Process? = null
 
     /** Child pid when the gateway was spawned from a memfd (updated binary). */
     @Volatile private var childPid: Int = -1
@@ -133,7 +135,7 @@ object OpenCodeZenBridge {
                 val outFile = File(dir, "gateway.bin")
                 outFile.writeBytes(elf)
                 versionFile(ctx).writeText(tag)
-                DebugLog.i(TAG, "Zen bridge updated to $tag (${elf.size} bytes)")
+                DebugLog.w(TAG, "Zen bridge updated to $tag (${elf.size} bytes)")
                 stop()
                 start()
                 tag
@@ -227,7 +229,7 @@ object OpenCodeZenBridge {
                 if (conn.responseCode == 200) {
                     conn.disconnect()
                     endpoint = BASE_URL to token
-                    DebugLog.i(TAG, "Zen bridge: serving on $BASE_URL")
+                    DebugLog.w(TAG, "Zen bridge: serving on $BASE_URL")
                     return@withContext true
                 }
                 conn.disconnect()

@@ -15,6 +15,7 @@ import com.newoether.agora.api.openai.GroqProvider
 import com.newoether.agora.api.openai.OpenAiProvider
 import com.newoether.agora.api.openai.OpenCodeGoProvider
 import com.newoether.agora.api.openai.OpenCodeZenProvider
+import com.newoether.agora.api.openai.OpenCodeZenBridge
 import com.newoether.agora.api.openai.OpenRouterProvider
 import com.newoether.agora.api.openai.QwenProvider
 import com.newoether.agora.data.CustomEndpointProtocol
@@ -149,7 +150,12 @@ class ProviderRegistry(
         Constants.PROVIDER_OPEN_ROUTER to OpenRouterProvider(),
         Constants.PROVIDER_OPENCODE_GO to OpenCodeGoProvider(appVersion),
         // The Zen identity follows the in-app "core" update: the applied override, else the pin.
-        Constants.PROVIDER_OPENCODE_ZEN to OpenCodeZenProvider(appVersion) { settings.zenCoreVersion.value },
+        // When the embedded bridge is serving, the provider routes free traffic through it.
+        Constants.PROVIDER_OPENCODE_ZEN to OpenCodeZenProvider(
+            appVersion,
+            { settings.zenCoreVersion.value },
+            { OpenCodeZenBridge.activeEndpoint() },
+        ),
         Constants.PROVIDER_LOCAL to localProvider
     )
 
