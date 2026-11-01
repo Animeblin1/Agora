@@ -895,7 +895,7 @@
     <string name="zen_core_updated">Noyau mis à jour vers %1$s</string>
     <string name="zen_core_unavailable">Impossible de lire la dernière version du noyau</string>
     <string name="zen_bridge_title">Pont OpenCode intégré</string>
-    <string name="zen_bridge_summary">Acheminer le trafic Zen gratuit via le pont intégré à l'application</string>
+    <string name="zen_bridge_summary">Acheminer le trafic Zen gratuit via le pont intégré à l\'application</string>
     <string name="zen_bridge_running">Pont en cours</string>
     <string name="zen_bridge_stopped">Pont arrêté</string>
     <string name="zen_bridge_version">Passerelle : %1$s</string>
