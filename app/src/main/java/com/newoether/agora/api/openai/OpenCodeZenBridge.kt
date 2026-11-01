@@ -213,7 +213,7 @@ object OpenCodeZenBridge {
                     .redirectErrorStream(true)
                     .start()
             } catch (e: Exception) {
-                DebugLog.w(TAG, "Zen bridge: spawn failed: ${e.message}")
+                DebugLog.w(TAG, "Zen bridge: spawn failed: ${e.javaClass.simpleName}")
                 return@withContext false
             }
         }
