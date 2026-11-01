@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Process
 import com.newoether.agora.api.HttpClient
 import com.newoether.agora.util.DebugLog
-import com.newoether.agora.util.DebugLog
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.math.BigInteger
