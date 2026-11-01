@@ -382,3 +382,4 @@ class OpenCodeZenProviderTest {
         assertEquals("https://opencode.ai/inference/v1", provider.chatEndpointBaseUrl(config()))
         assertEquals("public", provider.resolveApiKey(""))
     }
+}
