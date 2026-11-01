@@ -95,7 +95,9 @@ find_program(LLVM_OBJCOPY llvm-objcopy
 # ── Minimal JNI stub for proot ───────────────────────────
 # System.loadLibrary("agora_proot") triggers APK extraction of native libs.
 # Actual proot execution uses ProcessBuilder on libproot_exec.so (GNUmakefile-built).
-add_library(agora_proot SHARED proot_jni.cpp)
+# zenbridge_jni.cpp spawns the embedded Zen gateway from a memfd so release-updated
+# binaries can exec without filesystem W^X restrictions.
+add_library(agora_proot SHARED proot_jni.cpp zenbridge_jni.cpp)
 target_link_options(agora_proot PRIVATE
     -Wl,--build-id=none -Wl,--hash-style=gnu -Wl,--icf=all
 )

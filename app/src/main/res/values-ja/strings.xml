@@ -894,4 +894,10 @@
     <string name="zen_core_apply">%1$s を適用</string>
     <string name="zen_core_updated">コアを %1$s に更新しました</string>
     <string name="zen_core_unavailable">最新のコアバージョンを読み取れませんでした</string>
+    <string name="zen_bridge_title">組み込み OpenCode ブリッジ</string>
+    <string name="zen_bridge_summary">Zen 無料トラフィックをアプリ内蔵ブリッジへ経由させる</string>
+    <string name="zen_bridge_running">ブリッジ実行中</string>
+    <string name="zen_bridge_stopped">ブリッジ停止中</string>
+    <string name="zen_bridge_version">ゲートウェイ: %1$s</string>
+    <string name="zen_bridge_recheck">ゲートウェイの更新を確認</string>
 </resources>

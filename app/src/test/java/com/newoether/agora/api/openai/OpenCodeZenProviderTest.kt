@@ -368,4 +368,17 @@ class OpenCodeZenProviderTest {
             zenHeaders(config(sessionId = "conv-1"), appVersion = "1.0")["User-Agent"],
         )
     }
-}
+
+
+    @Test
+    fun theEmbeddedBridgeEndpointOverridesEveryBranch() {
+        val provider = OpenCodeZenProvider(appVersion = "1.0") { OpenCodeZenBridge.activeEndpoint() }
+        val bridged = OpenCodeZenProvider(appVersion = "1.0", bridge = { "http://127.0.0.1:1/v1" to "bridge-token" })
+        assertEquals("http://127.0.0.1:1/v1", bridged.chatEndpointBaseUrl(config()))
+        assertEquals("bridge-token", bridged.resolveApiKey(""))
+        // user key also yields to the bridge: the bundled gateway owns its own credential
+        assertEquals("bridge-token", bridged.resolveApiKey("user-key"))
+        // without a running bridge the normal branches still apply
+        assertEquals("https://opencode.ai/inference/v1", provider.chatEndpointBaseUrl(config()))
+        assertEquals("public", provider.resolveApiKey(""))
+    }

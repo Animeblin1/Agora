@@ -76,7 +76,6 @@ class SettingsRepository(
         publication.awaitInitialLoad()
     }
 
-    // ── Read StateFlows (eagerly shared) ──────────────────────
 
     val selectedModel: StateFlow<String> = publication.hot(settingsManager.selectedModel, Constants.EXAMPLE_MODEL_ID)
     val anthropicCacheEnabled: StateFlow<Boolean> = publication.hot(settingsManager.anthropicCacheEnabled, true)
@@ -134,6 +133,7 @@ class SettingsRepository(
     val titleGenerationModel: StateFlow<String?> = publication.hot(settingsManager.titleGenerationModel, null)
     /** Applied OpenCode CLI identity for Zen free-lane requests; null = built-in default. */
     val zenCoreVersion: StateFlow<String?> = publication.hot(settingsManager.zenCoreVersion, null)
+    val zenBridgeEnabled: StateFlow<Boolean> = publication.hot(settingsManager.zenBridgeEnabled, false)
     val titleGenerationPrompt: StateFlow<String> = publication.hot(settingsManager.titleGenerationPrompt, BuiltInPrompts.TITLE_GENERATION_SYSTEM)
     val titleGenerationNotificationsEnabled: StateFlow<Boolean> =
         publication.hot(settingsManager.titleGenerationNotificationsEnabled, true)
@@ -614,6 +614,7 @@ class SettingsRepository(
 
     fun setTitleGenerationModel(model: String?) = scope.launch { settingsManager.saveTitleGenerationModel(model) }
     fun setZenCoreVersion(version: String?) = scope.launch { settingsManager.saveZenCoreVersion(version) }
+    fun setZenBridgeEnabled(enabled: Boolean) = scope.launch { settingsManager.saveZenBridgeEnabled(enabled) }
     fun setTitleGenerationPrompt(prompt: String) = scope.launch { settingsManager.saveTitleGenerationPrompt(prompt) }
     fun setImageTranscriptionEnabled(enabled: Boolean) =
         scope.launch { settingsManager.saveImageTranscriptionEnabled(enabled) }

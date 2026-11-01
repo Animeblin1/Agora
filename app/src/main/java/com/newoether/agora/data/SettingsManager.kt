@@ -68,6 +68,8 @@ class SettingsManager(private val context: Context) {
     val contextCompactModel: Flow<String?> = context.dataStore.data.map { it[CONTEXT_COMPACT_MODEL] }
     /** The OpenCode CLI identity applied to Zen free-lane requests; null = the compile-time default. */
     val zenCoreVersion: Flow<String?> = context.dataStore.data.map { it[ZEN_CORE_VERSION]?.takeIf(String::isNotBlank) }
+    /** Whether Zen free-lane traffic goes through the embedded bundled gateway. */
+    val zenBridgeEnabled: Flow<Boolean> = context.dataStore.data.map { it[ZEN_BRIDGE_ENABLED] ?: false }
     val contextCompactPrompt: Flow<String> = context.dataStore.data.map { pref ->
         pref[CONTEXT_COMPACT_PROMPT]?.takeIf { it.isNotBlank() } ?: BuiltInPrompts.CONTEXT_COMPACT_SYSTEM
     }
@@ -148,10 +150,9 @@ class SettingsManager(private val context: Context) {
     val webSearchNumResults: Flow<Int> = context.dataStore.data.map { it[WEB_SEARCH_NUM_RESULTS] ?: 5 }
     val webSearchBaseUrl: Flow<String> = context.dataStore.data.map { it[WEB_SEARCH_BASE_URL] ?: "" }
 
-    // ── Image generation ──────────────────────────────────────
     val imageQuality = ImageQualitySettingsStore(context.dataStore)
     val imageGenEnabled: Flow<Boolean> = context.dataStore.data.map { it[IMAGE_GEN_ENABLED] ?: false }
-    // Selected image model "Provider:modelId" (null = none chosen). Creds reused from that provider.
+    // Image model "Provider:modelId" (null = none); creds reused from that provider.
     val imageGenModel: Flow<String?> = context.dataStore.data.map { it[IMAGE_GEN_MODEL] }
     val imageGenSize: Flow<String> = context.dataStore.data.map { it[IMAGE_GEN_SIZE] ?: "1024x1024" }
     val searchContextWindow: Flow<Int> = context.dataStore.data.map { it[SEARCH_CONTEXT_WINDOW] ?: 8 }
@@ -564,6 +565,9 @@ class SettingsManager(private val context: Context) {
             if (version.isNullOrBlank()) prefs.remove(ZEN_CORE_VERSION) else prefs[ZEN_CORE_VERSION] = version
         }
     }
+    suspend fun saveZenBridgeEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[ZEN_BRIDGE_ENABLED] = enabled }
+    }
     suspend fun saveContextCompactPrompt(prompt: String) {
         context.dataStore.edit { prefs ->
             if (prompt.isBlank()) prefs.remove(CONTEXT_COMPACT_PROMPT) else prefs[CONTEXT_COMPACT_PROMPT] = prompt
@@ -769,7 +773,6 @@ class SettingsManager(private val context: Context) {
         context.dataStore.edit { it[TOTAL_MESSAGES_SENT] = (it[TOTAL_MESSAGES_SENT] ?: 0) + 1 }
     }
 
-    // ── Auto Backup ───────────────────────────────────────────
     suspend fun saveAutoBackupEnabled(enabled: Boolean) = backupPreferenceStore.saveAutoBackupEnabled(enabled)
     suspend fun saveAutoBackupPeriodHours(hours: Int) = backupPreferenceStore.saveAutoBackupPeriodHours(hours)
     suspend fun saveAutoBackupCategories(categories: String) = backupPreferenceStore.saveAutoBackupCategories(categories)
@@ -781,13 +784,10 @@ class SettingsManager(private val context: Context) {
         modelPreferenceStore.saveLastModelsFetchFingerprint(fingerprint)
 
     /**
-     * Clears only settings that are portable across devices. Secrets, conversation-scoped
-     * overrides, local model files, sandbox state, onboarding/rating metadata, and auto-backup
-     * configuration are deliberately outside this reset boundary.
-     *
-     * Composite portable records (remote embedding models, shell devices, MCP servers, and the
-     * custom font) are rebuilt separately by the importer so device-local records and credentials
-     * can be retained or cleared according to their own import category.
+     * Clears only settings that are portable across devices; secrets, conversation-scoped
+     * overrides, local model files, sandbox state, and onboarding metadata stay out of the reset.
+     * Composite portable records are rebuilt separately by the importer so device-local
+     * records and credentials follow their own import category.
      */
     suspend fun resetPortableSettingsForImport() {
         context.dataStore.edit { prefs ->

@@ -894,4 +894,10 @@
     <string name="zen_core_apply">Aplicar %1$s</string>
     <string name="zen_core_updated">Núcleo actualizado a %1$s</string>
     <string name="zen_core_unavailable">No se pudo leer la última versión del núcleo</string>
+    <string name="zen_bridge_title">Puente OpenCode integrado</string>
+    <string name="zen_bridge_summary">Enrutar el tráfico gratuito de Zen por el puente integrado en la app</string>
+    <string name="zen_bridge_running">Puente en ejecución</string>
+    <string name="zen_bridge_stopped">Puente detenido</string>
+    <string name="zen_bridge_version">Pasarela: %1$s</string>
+    <string name="zen_bridge_recheck">Comprobar actualizaciones de la pasarela</string>
 </resources>

@@ -894,4 +894,10 @@
     <string name="zen_core_apply">%1$s 적용</string>
     <string name="zen_core_updated">코어가 %1$s(으)로 업데이트됨</string>
     <string name="zen_core_unavailable">최신 코어 버전을 읽지 못했습니다</string>
+    <string name="zen_bridge_title">내장 OpenCode 브리지</string>
+    <string name="zen_bridge_summary">Zen 무료 트래픽을 앱 내장 브리지로 우회</string>
+    <string name="zen_bridge_running">브리지 실행 중</string>
+    <string name="zen_bridge_stopped">브리지 중지됨</string>
+    <string name="zen_bridge_version">게이트웨이: %1$s</string>
+    <string name="zen_bridge_recheck">게이트웨이 업데이트 확인</string>
 </resources>

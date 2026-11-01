@@ -894,4 +894,10 @@
     <string name="zen_core_apply">%1$s anwenden</string>
     <string name="zen_core_updated">Kern auf %1$s aktualisiert</string>
     <string name="zen_core_unavailable">Neueste Kernversion konnte nicht gelesen werden</string>
+    <string name="zen_bridge_title">Embedded OpenCode-Bridge</string>
+    <string name="zen_bridge_summary">Zen-Free-Traffic über die integrierte Bridge im Paket leiten</string>
+    <string name="zen_bridge_running">Bridge läuft</string>
+    <string name="zen_bridge_stopped">Bridge gestoppt</string>
+    <string name="zen_bridge_version">Gateway: %1$s</string>
+    <string name="zen_bridge_recheck">Gateway-Updates prüfen</string>
 </resources>

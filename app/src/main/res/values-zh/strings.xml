@@ -887,4 +887,10 @@
     <string name="zen_core_apply">应用 %1$s</string>
     <string name="zen_core_updated">内核已更新到 %1$s</string>
     <string name="zen_core_unavailable">无法读取最新内核版本</string>
+    <string name="zen_bridge_title">内置 OpenCode 桥接</string>
+    <string name="zen_bridge_summary">将 Zen 免费流量经由应用内置网桥转发</string>
+    <string name="zen_bridge_running">网桥运行中</string>
+    <string name="zen_bridge_stopped">网桥已停止</string>
+    <string name="zen_bridge_version">网关：%1$s</string>
+    <string name="zen_bridge_recheck">检查网关更新</string>
 </resources>

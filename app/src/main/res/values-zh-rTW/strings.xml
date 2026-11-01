@@ -897,4 +897,10 @@
     <string name="zen_core_apply">套用 %1$s</string>
     <string name="zen_core_updated">核心已更新到 %1$s</string>
     <string name="zen_core_unavailable">無法讀取最新核心版本</string>
+    <string name="zen_bridge_title">內建 OpenCode 橋接</string>
+    <string name="zen_bridge_summary">將 Zen 免費流量經由應用內建橋接轉發</string>
+    <string name="zen_bridge_running">橋接執行中</string>
+    <string name="zen_bridge_stopped">橋接已停止</string>
+    <string name="zen_bridge_version">閘道器：%1$s</string>
+    <string name="zen_bridge_recheck">檢查閘道器更新</string>
 </resources>

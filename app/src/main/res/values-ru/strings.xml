@@ -331,6 +331,10 @@
     <string name="zen_core_apply">Применить %1$s</string>
     <string name="zen_core_updated">Ядро обновлено до %1$s</string>
     <string name="zen_core_unavailable">Не удалось прочитать последнюю версию ядра</string>
+    <string name="zen_bridge_title">Встроенный мост</string>
+    <string name="zen_bridge_summary">Пускает бесплатный трафик Zen через шлюз, встроенный в приложение. Прямой канал закрыт для сторонних клиентов; мост говорит официальным транспортом.</string>
+    <string name="zen_bridge_running">Мост работает — модели идут локально</string>
+    <string name="zen_bridge_stopped">Мост остановлен — прямой канал (может отклоняться)</string>
     <string name="import_model_chat">Импортировать модель GGUF</string>
     <string name="add_local_chat_model">Добавить локальную модель</string>
     <string name="local_ctx_size">Размер контекста</string>
@@ -894,4 +898,6 @@
     <string name="tool_todo_empty">Список задач пуст</string>
     <string name="tool_agents_empty">Нет субагентов</string>
     <string name="tool_agent_results_empty">Результаты субагентов не получены</string>
+    <string name="zen_bridge_version">Шлюз: %1$s</string>
+    <string name="zen_bridge_recheck">Проверить обновления шлюза</string>
 </resources>

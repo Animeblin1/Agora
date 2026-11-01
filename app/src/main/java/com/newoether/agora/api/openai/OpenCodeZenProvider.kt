@@ -62,6 +62,8 @@ class OpenCodeZenProvider(
     private val appVersion: String = "?",
     /** The CLI identity applied instead of [OPENCODE_CLI_VERSION]; set from SettingsRepository. */
     private val coreVersion: () -> String? = { null },
+    /** The embedded bridge endpoint as (baseUrl, token) when it is serving; null otherwise. */
+    private val bridge: () -> Pair<String, String>? = { OpenCodeZenBridge.activeEndpoint() },
 ) : BaseOpenAiProvider() {
     override val name: String = Constants.PROVIDER_OPENCODE_ZEN
     override val defaultBaseUrl: String = "https://opencode.ai/zen/v1"
@@ -70,8 +72,13 @@ class OpenCodeZenProvider(
      * Anonymous generation is admitted only on the inference base; a keyed request keeps the
      * Zen base its paid ids live on, and an explicitly configured base (a local proxy, for
      * instance) is never hijacked. Model discovery is unaffected and stays on the Zen base.
+     *
+     * The embedded bridge ([OpenCodeZenBridge]), when running, takes precedence over every
+     * other branch: the app's own transport cannot cross the free-lane gate, the bundled
+     * gateway's can.
      */
     override fun chatEndpointBaseUrl(config: ProviderConfig): String {
+        bridge()?.let { (url, _) -> return url }
         val configured = config.baseUrl?.trimEnd('/')?.ifBlank { null }
         if (config.apiKey.isBlank() && (configured == null || configured == defaultBaseUrl)) {
             return ANONYMOUS_BASE_URL
@@ -84,8 +91,10 @@ class OpenCodeZenProvider(
      * and [ANONYMOUS_KEY] is the credential it accepts. A user-supplied key still wins, so someone
      * with a real Zen key can use the paid ids on the Zen base.
      */
-    override fun resolveApiKey(apiKey: String): String =
-        apiKey.ifBlank { ANONYMOUS_KEY }
+    override fun resolveApiKey(apiKey: String): String {
+        bridge()?.let { (_, token) -> return token }
+        return apiKey.ifBlank { ANONYMOUS_KEY }
+    }
 
     override fun customizeRequest(request: OpenAiChatRequest, config: ProviderConfig): OpenAiChatRequest =
         freeLaneRequest(request, config)

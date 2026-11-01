@@ -894,4 +894,10 @@
     <string name="zen_core_apply">تطبيق %1$s</string>
     <string name="zen_core_updated">تم تحديث النواة إلى %1$s</string>
     <string name="zen_core_unavailable">تعذر قراءة أحدث إصدار للنواة</string>
+    <string name="zen_bridge_title">جسر OpenCode المدمج</string>
+    <string name="zen_bridge_summary">تشغيل حركة Zen المجانية عبر البوابة المدمجة في التطبيق</string>
+    <string name="zen_bridge_running">الجسر يعمل</string>
+    <string name="zen_bridge_stopped">الجسر متوقف</string>
+    <string name="zen_bridge_version">الشبّاك: %1$s</string>
+    <string name="zen_bridge_recheck">التحقق من تحديثات الشبّاك</string>
 </resources>

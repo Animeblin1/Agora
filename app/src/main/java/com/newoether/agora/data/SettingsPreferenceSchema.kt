@@ -166,6 +166,8 @@ internal val LAST_BACKUP_TIMESTAMP = longPreferencesKey("last_backup_timestamp")
 internal val LAST_MODELS_FETCH_FINGERPRINT = stringPreferencesKey("last_models_fetch_fingerprint")
 /** The OpenCode CLI identity the Zen free lane runs with, when the user updated it in-app. */
 internal val ZEN_CORE_VERSION = stringPreferencesKey("zen_core_version")
+/** Route Zen free-lane traffic through the embedded bundled gateway instead of the direct lane. */
+internal val ZEN_BRIDGE_ENABLED = booleanPreferencesKey("zen_bridge_enabled")
 
 /** Persist the retired display value before any Settings flow is published. */
 internal val toolCallDisplayModeMigration = object : DataMigration<Preferences> {

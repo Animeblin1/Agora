@@ -900,4 +900,10 @@
     <string name="zen_core_apply">Áp dụng %1$s</string>
     <string name="zen_core_updated">Đã cập nhật lõi lên %1$s</string>
     <string name="zen_core_unavailable">Không thể đọc phiên bản lõi mới nhất</string>
+    <string name="zen_bridge_title">Cầu OpenCode tích hợp</string>
+    <string name="zen_bridge_summary">Định tuyến lưu lượng Zen miễn phí qua cầu tích hợp trong ứng dụng</string>
+    <string name="zen_bridge_running">Cầu đang chạy</string>
+    <string name="zen_bridge_stopped">Cầu đã dừng</string>
+    <string name="zen_bridge_version">Gateway: %1$s</string>
+    <string name="zen_bridge_recheck">Kiểm tra cập nhật gateway</string>
 </resources>

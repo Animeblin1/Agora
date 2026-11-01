@@ -374,6 +374,12 @@
     <string name="zen_core_apply">Apply %1$s</string>
     <string name="zen_core_updated">Core updated to %1$s</string>
     <string name="zen_core_unavailable">Could not read the latest core version</string>
+    <string name="zen_bridge_title">Embedded bridge</string>
+    <string name="zen_bridge_summary">Route Zen free-lane traffic through the gateway bundled into the app. The direct lane is closed to third-party clients; the bridge speaks the official transport.</string>
+    <string name="zen_bridge_running">Bridge running — free models served locally</string>
+    <string name="zen_bridge_stopped">Bridge stopped — direct lane (may be refused)</string>
+    <string name="zen_bridge_version">Gateway: %1$s</string>
+    <string name="zen_bridge_recheck">Check gateway updates</string>
     <string name="import_model_chat">Import GGUF Model</string>
     <string name="add_local_chat_model">Add Local Model</string>
     <string name="local_ctx_size">Context Size</string>

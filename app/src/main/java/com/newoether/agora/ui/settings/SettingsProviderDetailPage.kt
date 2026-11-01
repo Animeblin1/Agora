@@ -288,15 +288,18 @@ private fun ProviderDetailSettingsList(
                 )
             }
 
-            // OpenCode Zen core: version status and in-app identity update.
+            // OpenCode Zen core: version status, in-app identity update, embedded bridge toggle.
             if (currentName == Constants.PROVIDER_OPENCODE_ZEN) {
                 val zenCoreOverride by viewModel.settings.zenCoreVersion.collectAsState()
+                val zenBridgeEnabled by viewModel.settings.zenBridgeEnabled.collectAsState()
                 SettingsGroup(
                     title = stringResource(R.string.zen_core_title),
                     items = listOf {
                         OpenCodeZenCoreCard(
                             override = zenCoreOverride,
+                            bridgeEnabled = zenBridgeEnabled,
                             onApply = { viewModel.settings.setZenCoreVersion(it) },
+                            onBridgeEnabled = { viewModel.settings.setZenBridgeEnabled(it) },
                         )
                     },
                 )

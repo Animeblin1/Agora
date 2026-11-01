@@ -69,6 +69,9 @@ class AppContainer(
 
     init {
         LocalModelRuntime.initialize(application.applicationInfo.nativeLibraryDir)
+        // Hands the context to the embedded Zen gateway; the bridge itself starts on demand
+        // (Zen settings toggle / first use) so a cold app launch pays no spawn cost.
+        com.newoether.agora.api.openai.OpenCodeZenBridge.init(application)
     }
 
     /** App-lifetime scope that backs the shared settings StateFlows.
