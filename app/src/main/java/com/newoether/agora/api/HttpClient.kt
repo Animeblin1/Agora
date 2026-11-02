@@ -176,6 +176,10 @@ object HttpClient {
     }
 
     private fun resolveProxy(host: String): java.net.Proxy {
+        // Loopback never belongs to a remote proxy: the embedded bridge at 127.0.0.1 would die
+        // behind SOCKS because the proxy would resolve 127.0.0.1 on its own machine.
+        val h = host.lowercase().trimStart('[').trimEnd(']')
+        if (h == "localhost" || h == "127.0.0.1" || h == "::1") return java.net.Proxy.NO_PROXY
         val cfg = proxyConfig ?: return java.net.Proxy.NO_PROXY
         if (isProxyBypassed(host, cfg.bypass)) return java.net.Proxy.NO_PROXY
         val type = if (cfg.type == ProxyType.SOCKS) java.net.Proxy.Type.SOCKS else java.net.Proxy.Type.HTTP
